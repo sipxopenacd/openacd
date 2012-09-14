@@ -38,7 +38,7 @@
 -include("agent.hrl").
 -include("queue.hrl").
 -include("cpx.hrl").
--include("commit_ver.hrl").
+% -include("commit_ver.hrl").
 
 -ifdef(TEST).
 	-include_lib("eunit/include/eunit.hrl").
