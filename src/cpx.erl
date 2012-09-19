@@ -160,7 +160,7 @@ start(_Type, StartArgs) ->
 				% 				?ERROR("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
 				% 		end
 				% end
-				{ok, [Plugins]} = file:consult("enabled_plugins"),
+				{ok, Plugins} = cpx:get_env(plugins, []),
                 start_plugin_apps(Plugins)
 			end),
 			{ok, Pid}
