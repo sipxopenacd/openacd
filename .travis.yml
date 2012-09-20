@@ -1,5 +1,5 @@
 before_script:
-  - cp rebar.config.template rebar.config
+  - cp rebar.config.travis rebar.config
 language: erlang
 notifications:
   email: false
