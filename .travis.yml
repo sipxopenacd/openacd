@@ -1,4 +1,4 @@
-before_script:
+before_install:
   - cp rebar.config.travis rebar.config
 language: erlang
 notifications:
