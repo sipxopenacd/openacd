@@ -8,6 +8,8 @@ its web UI and integrates tightly with [FreeSWITCH](http://freeswitch.org)
 for its VoIP components. The sister project
 [gen_smtp](http://github.com/Vagabond/gen_smtp) is used for email support.
 
+[![Build Status](https://secure.travis-ci.org/dannaaduna/oacd_core.png?branch=master)](http://travis-ci.org/dannaaduna/oacd_core)
+
 Feature Highlights
 ==================
 
