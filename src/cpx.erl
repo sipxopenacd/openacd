@@ -118,12 +118,12 @@
 -spec(start/2 :: (Type :: 'normal' | {'takeover', atom()} | {'failover', atom()}, StartArgs :: [any()]) -> {'ok', pid(), any()} | {'ok', pid()} | {'error', any()}).
 start(_Type, StartArgs) ->
 	io:format("Start args ~p~n", [StartArgs]),
-	io:format("All env: ~p~n", [application:get_all_env('OpenACD')]),
+	io:format("All env: ~p~n", [application:get_all_env(oacd_core)]),
 	crypto:start(),
 	%Nodes = lists:append([nodes(), [node()]]),
 	%mnesia:create_schema(Nodes),
 	%mnesia:start(),
-	case application:get_env('OpenACD', nodes) of
+	case application:get_env(oacd_core, nodes) of
 		{ok, Nodes} ->
 			lists:foreach(fun(Node) -> net_adm:ping(Node) end, Nodes),
 			case nodes() of
@@ -136,7 +136,7 @@ start(_Type, StartArgs) ->
 			ok;
 		_Else ->
 			Nodes = [node()],
-			application:set_env('OpenACD', nodes, Nodes)
+			application:set_env(oacd_core, nodes, Nodes)
 	end,
 	mnesia:change_table_copy_type(schema, node(), disc_copies),
 	mnesia:set_master_nodes(lists:umerge(Nodes, [node()])),
@@ -145,7 +145,7 @@ start(_Type, StartArgs) ->
 	add_plugin_paths(),
 	try cpx_supervisor:start_link(Nodes) of
 		{ok, Pid} ->
-			application:set_env('OpenACD', uptime, util:now()),
+			application:set_env(oacd_core, uptime, util:now()),
 			?NOTICE("Application OpenACD started sucessfully!", []),
 			% to not block the shell.
 			spawn(fun() ->
@@ -177,7 +177,7 @@ prep_stop(State) ->
 
 -spec(stop/1 :: (State :: any()) -> 'ok').
 stop(_State) ->
-	application:unset_env('OpenACD', uptime),
+	application:unset_env(oacd_core, uptime),
 	ok.
 
 %% ====
@@ -188,12 +188,12 @@ stop(_State) ->
 %% a default value.  These do.
 -spec(get_env/1 :: (Key :: any()) -> {'ok', any()} | 'undefined').
 get_env(Key) ->
-	application:get_env('OpenACD', Key).
+	application:get_env(oacd_core, Key).
 
 %% @doc @see gen_env/1
 -spec(get_env/2 :: (Key :: any(), Default :: any()) -> {'ok', any()}).
 get_env(Key, Default) ->
-	case application:get_env('OpenACD', Key) of
+	case application:get_env(oacd_core, Key) of
 		undefined ->
 			{ok, Default};
 		Out ->
@@ -202,11 +202,11 @@ get_env(Key, Default) ->
 
 -spec(get_key/1 :: (Key :: any()) -> {'ok', any()} | 'undefined').
 get_key(Key) ->
-	application:get_key('OpenACD', Key).
+	application:get_key(oacd_core, Key).
 
 -spec(get_key/2 :: (Key :: any(), Default :: any()) -> {'ok', any()}).
 get_key(Key, Default) ->
-	case application:get_key('OpenACD', Key) of
+	case application:get_key(oacd_core, Key) of
 		undefined ->
 			{ok, Default};
 		Out ->
@@ -227,23 +227,23 @@ merge_env() ->
 	end,
 	case mnesia:transaction(Fun) of
 		{aborted, {no_exists, {cpx_value, index}}} ->
-			application:set_env('OpenACD', locked_env, [uptime]),
+			application:set_env(oacd_core, locked_env, [uptime]),
 			ok;
 		{aborted, {no_exists, cpx_value}} ->
-			application:set_env('OpenACD', locked_env, [uptime]),
+			application:set_env(oacd_core, locked_env, [uptime]),
 			ok;
 		{atomic, Cpxdb} ->
-			Locked = [uptime | [Key || {Key, _} <- application:get_all_env('OpenACD')]],
-			application:set_env('OpenACD', locked_env, Locked),
+			Locked = [uptime | [Key || {Key, _} <- application:get_all_env(oacd_core)]],
+			application:set_env(oacd_core, locked_env, Locked),
 			merge_env(Cpxdb, Locked)
 	end.
 
 merge_env([], _LockedKeys) ->
 	ok;
 merge_env([{Key, Val} | T], Locked) ->
-	case application:get_env('OpenACD', Key) of
+	case application:get_env(oacd_core, Key) of
 		undefined ->
-			application:set_env('OpenACD', Key, Val),
+			application:set_env(oacd_core, Key, Val),
 			merge_env(T, Locked);
 		_ ->
 			merge_env(T, Locked)
@@ -323,7 +323,7 @@ unload_plugin(Plugin) ->
 			NewPlugins = lists:delete(Plugin, Plugins),
 			Appfile = atom_to_list(Plugin) ++ ".app",
 			file:delete(filename:join(PluginDir, Appfile)),
-			application:set_env('OpenACD', plugins, NewPlugins),
+			application:set_env(oacd_core, plugins, NewPlugins),
 			ok
 	end.
 
@@ -341,7 +341,7 @@ load_plugin(Plugin) ->
 					case file:make_symlink(Appfile, filename:join(PluginDir, atom_to_list(Plugin) ++ ".app")) of
 						ok ->
 							{ok, Plugins} = cpx:get_env(plugins, []),
-							application:set_env('OpenACD', plugins, lists:usort([Plugin | Plugins])),
+							application:set_env(oacd_core, plugins, lists:usort([Plugin | Plugins])),
 							start_plugin_app(Plugin);
 						Else ->
 							?INFO("Could not make link:  ~p", [Else]),
@@ -787,20 +787,20 @@ uptime() ->
 -spec(uptime/1 :: (Fallback :: boolean()) -> non_neg_integer() | 'stopped').
 uptime(Fallback) ->
 	Apps = application:which_applications(),
-	Fun = fun({'OpenACD', _, _}) -> true; (_) -> false end,
+	Fun = fun({oacd_core, _, _}) -> true; (_) -> false end,
 	Running = lists:any(Fun, Apps),
 	case Running of
 		false ->
 			stopped;
 		true ->
-			case {application:get_env('OpenACD', uptime), Fallback} of
+			case {application:get_env(oacd_core, uptime), Fallback} of
 				{undefined, false} ->
 					io:format("The uptime is not available for this node.~nYou can call cpx:uptime(true) to set the uptime to now~n"),
 					0;
 				{undefined, true} ->
 					io:format("The uptime was not available, so resetting it as requested~n"),
 					Now = util:now(),
-					application:set_env('OpenACD', uptime, Now),
+					application:set_env(oacd_core, uptime, Now),
 					0;
 				{{ok, Time}, _} ->
 					Out = util:now() - Time,
@@ -1050,7 +1050,7 @@ start_plugins(Dir) ->
 			Appfiles = filelib:wildcard("*.app", Dir),
 			Plugins = verify_apps(Appfiles, Dir),
 			load_plugin_envs(Plugins),
-			application:set_env('OpenACD', plugins, Plugins),
+			application:set_env(oacd_core, plugins, Plugins),
 			start_plugin_apps(Plugins)
 	end.
 
@@ -1172,7 +1172,7 @@ add_plugin_paths(PluginDir) ->
 %	start_plugin_apps(Plugins, Dir, []).
 %
 %start_plugin_apps([], _, Apps) ->
-%	application:set_env('OpenACD', plugins_started, Apps);
+%	application:set_env(oacd_core, plugins_started, Apps);
 %start_plugin_apps(["deps" | Tail], Dir, Apps) ->
 %	start_plugin_apps(Tail, Dir, Apps);
 %start_plugin_apps([Plugin | Tail], Dir, AccApps) ->

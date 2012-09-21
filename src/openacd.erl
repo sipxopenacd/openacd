@@ -28,6 +28,6 @@ my_apps() -> [
 	errd,
 	gen_smtp,
 	sasl,
-	'OpenACD'
+	oacd_core
 ].
 
