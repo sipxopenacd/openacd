@@ -12,7 +12,7 @@ function timeSince(timestamp){
 	if(isNaN(timestamp)){
 		return timestamp;
 	}
-	
+
 	var now = Math.floor(new Date().getTime() / 1000);
 	var elapsed = now - timestamp;
 	if(elapsed < 60){
@@ -88,22 +88,22 @@ dojo.addOnLoad(function(){
 		}
 		node.innerHTML += ":";
 	});
-			   
+
 	dojo.parser.parse();
 
 	var logoutdiv = dojo.byId('logoutButtonDiv');
 	dojo.place(logoutdiv, dojo.byId('main_tablist'), 'first');
 	//dojo.set(logoutdiv, 'class', 'rightFloater')
-	
+
 	var agentsSkillRefreshHandle = dojo.subscribe("skills/init", function(data){
 		var skillsCallback = function(selectNode){
 			selectNode.name = 'skills';
 			dojo.place(selectNode, dojo.byId('agentSkills'), 'only');
 			var out = new dijit.form.MultiSelect({}, selectNode);
 		};
-		
+
 		skills.createSelect(skillsCallback, [], [], ['_brand', '_queue']);
-				
+
 		skills.refreshTree(dojo.byId('skillsList'));
 	});
 
@@ -125,8 +125,8 @@ dojo.addOnLoad(function(){
 						//ditching it sinse this will ususally be "this is a funciton" error
 						//Prolly should test that first instead of shoving it to a try/catch.
 					}
-				}	
-				dijit.byId('skillAtom').set('disabled', true);	
+				}
+				dijit.byId('skillAtom').set('disabled', true);
 				dijit.byId('skillSubmit').onClick = function(){
 					skills.updateSkill('editSkill', 'skillsList');
 				}
@@ -151,14 +151,14 @@ dojo.addOnLoad(function(){
 				dijit.byId('queueName').set('value', queues.tree.store.getValue(item, 'name'));
 				dijit.byId('queueOldName').set('value', queues.tree.store.getValue(item, 'name'));
 				dijit.byId('queueGroup').set('displayedValue', queues.tree.store.getValue(item, 'group'));
-				
+
 				var skillsSelected = queues.tree.store.getValues(item, 'skills');
-				
+
 				var skillsCallback = function(select){
 					select.name = 'skills';
 					dojo.place(select, dojo.byId('queueSkillsDiv'), 'only');
 				};
-				
+
 				skills.createSelect(skillsCallback, skillsSelected, ['_agent', '_profile'], ['_profile']);
 				/*var options = dojo.query('> optgroup > option', dijit.byId('queueSkills').domNode);
 				for(var i = 0; i < options.length; i++){
@@ -167,7 +167,7 @@ dojo.addOnLoad(function(){
 				dijit.byId('queueWeight').set('value', queues.tree.store.getValue(item, 'weight'));
 				var recipe = queues.tree.store.getValue(item, 'recipe') ? queues.tree.store.getValue(item, 'recipe')._value : [];
 				dijit.byId('queueRecipe').setValue(recipe);
-				
+
 				var gitem = queues.store.query({type:'group', name:queues.tree.store.getValue(item, 'group')})[0];
 				//var gitem = gitems[0];
 				dijit.byId("queueGroupRecipeDisplay").setValue(gitem.recipe._value);
@@ -180,11 +180,11 @@ dojo.addOnLoad(function(){
 				}
 				var qgSkillsSelected = gitem.skills;
 				skills.createSelect(scb, qgSkillsSelected, ['_agent', '_profile'], ['_profile']);
-				
+
 				dijit.byId('queueSubmit').onClick = function(){
 					queues.setQueue(queues.tree.store.getValue(item, 'name'), dijit.byId('editQueueForm'), dijit.byId('queueRecipe'), 'queuesList');
 				};
-				
+
 				dijit.byId('queueDropButton').onClick = function(){
 					queues.deleteQueue(queues.tree.store.getValue(item, 'name'), 'queuesList');
 				};
@@ -196,7 +196,7 @@ dojo.addOnLoad(function(){
 				dijit.byId("queueGroupSort").set('value', queues.tree.store.getValue(item, 'sort'));
 				//var rec = queues.fromStoreToObj(item.recipe);
 				var skillsSelected = queues.tree.store.getValues(item, 'skills');
-				
+
 				var skillsCallback = function(select){
 					select.name = 'skills';
 					select.id = "queueGroupSkills";
@@ -224,10 +224,15 @@ dojo.addOnLoad(function(){
 	var moduleTreeRefreshHandle = dojo.subscribe("modules/tree/refreshed", function(data){
 		dojo.connect(modules.tree, "onClick", function(item){
 			modules.activeNode = modules.store.getValue(item, 'node');
-			var node = modules.store.getValue(item, 'node');		
+			var node = modules.store.getValue(item, 'node');
 			if(item.type[0] == "conf"){
 				dojo.requireLocalization("admin", modules.store.getValue(item, 'name'));
-				dijit.byId("moduleConf").set('href', "openacd/modules/" + modules.store.getValue(item, 'name') + ".html");
+				console.log(modules.store);
+				var href = modules.store.getValue(item, 'href');
+				if (href == null) {
+					href = "openacd/modules/" + modules.store.getValue(item, 'name') + ".html";
+				}
+				dijit.byId("moduleConf").set('href', href);
 				dijit.byId("moduleMain").selectChild("moduleConf");
 			} else {
 				dijit.byId("moduleMain").selectChild("moduleNodeInfo");
@@ -260,13 +265,13 @@ dojo.addOnLoad(function(){
 					dijit.byId("agentProfileName").set('disabled', false);
 				}
 				dijit.byId('agentsMain').selectChild('agentProfileEditor');
-				
+
 				var skillCallback = function(selectNode){
 					selectNode.name = 'skills';
 					dojo.place(selectNode, dojo.byId('agentProfileSkills'), 'only');
 					//var out = new dijit.form.MultiSelect(selectNode);
 				};
-				
+
 				var selectedSkills = [];
 				var profileSkills = item.skills;
 				for(var i = 0; i < profileSkills.length; i++){
@@ -276,11 +281,11 @@ dojo.addOnLoad(function(){
 					}
 					selectedSkills.push(val);
 				}
-				
+
 				var expanded = ['_queue', '_brand'];
-				
+
 				skills.createSelect(skillCallback, selectedSkills, ['_brand', '_queue'], expanded);
-				
+
 				dijit.byId("agentsDestroyButton").onClick = function(){
 					var name = item.name;
 					dojo.xhrGet({
@@ -325,9 +330,9 @@ dojo.addOnLoad(function(){
 							}
 							selectedSkills.push(val);
 						}
-						
+
 						var expandSkills = ['_queue', '_brand'];
-						
+
 						skills.createSelect(skillCallback, selectedSkills, ['_queue', '_brand'], expandSkills);
 						dijit.byId('agentSubmit').onClick = function(){
 							agents.updateAgent('editAgent', 'agentsList');
@@ -337,7 +342,7 @@ dojo.addOnLoad(function(){
 						console.warn("getting agent errored", res);
 					}
 				});
-			
+
 				dijit.byId('agentsMain').selectChild('agentEditor');
 				dijit.byId('agentsDestroyButton').onClick = function(){
 					var id = item.id;
@@ -360,7 +365,7 @@ dojo.addOnLoad(function(){
 
 	dojo.addOnLoad(function(){
 		var nlsStrings = dojo.i18n.getLocalization("admin", "labels");
-		
+
 		var loginform = dijit.byId("loginform");
 		dojo.connect(loginform, "onSubmit", function(e){
 			e.preventDefault();
@@ -423,9 +428,9 @@ dojo.addOnLoad(function(){
 			}
 		});
 	//	var theForm = dijit.byId("editSkillPane");
-		// another dojo.connect syntax: call a function directly	
+		// another dojo.connect syntax: call a function directly
 	//	dojo.connect(theForm,"onsubmit",setSkill);
-		
+
 		dojo.xhrGet({
 			url:"/checkcookie",
 			handleAs:"json",
@@ -456,7 +461,7 @@ dojo.addOnLoad(function(){
 				}
 			}
 		});
-		
+
 		/*dijit.byId("queueSkills").skillUpdateHandler = dojo.subscribe("skills/init", function(data){
 			var callback = function(select){
 				dojo.place(select, dojo.byId("queuesSkillsDiv"), "only");
