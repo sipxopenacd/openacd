@@ -1,4 +1,4 @@
-{application, 'OpenACD', [
+{application, 'oacd_core', [
 	{description, "Call queuing and routing system"},
 	{vsn, "2.0.0"},
 	{modules, []},
