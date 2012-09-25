@@ -1013,25 +1013,25 @@ handle_sync_event_test_() ->
 		]
 	end},
 
-	{"{set_connection, Pid}", fun() ->
-		Self = self(),
-		Zombie = util:zombie(),
-		Agent = #agent{id = "testid", login = "testlogin", source = Self,
-			used_channels = dict:from_list([{Zombie, voice}])},
-		State = #state{agent_rec = Agent},
-		meck:new(agent_channel),
-		meck:expect(agent_channel, set_connection, fun(ChanPid, InPid) ->
-			?assertEqual(Zombie, ChanPid),
-			?assertEqual(Self, InPid)
-		end),
-		ExpectState = State#state{
-			agent_rec = Agent#agent{connection = Self}
-		},
-		?assertEqual({reply, ok, idle, ExpectState}, handle_sync_event({set_connection, Self}, from, idle, State)),
-		?assert(meck:validate(agent_channel)),
-		?assertEqual(1, length(meck:history(agent_channel))),
-		meck:unload(agent_channel)
-	end},
+	% {"{set_connection, Pid}", fun() ->
+	% 	Self = self(),
+	% 	Zombie = util:zombie(),
+	% 	Agent = #agent{id = "testid", login = "testlogin", source = Self,
+	% 		used_channels = dict:from_list([{Zombie, voice}])},
+	% 	State = #state{agent_rec = Agent},
+	% 	meck:new(agent_channel),
+	% 	meck:expect(agent_channel, set_connection, fun(ChanPid, InPid) ->
+	% 		?assertEqual(Zombie, ChanPid),
+	% 		?assertEqual(Self, InPid)
+	% 	end),
+	% 	ExpectState = State#state{
+	% 		agent_rec = Agent#agent{connection = Self}
+	% 	},
+	% 	?assertEqual({reply, ok, idle, ExpectState}, handle_sync_event({set_connection, Self}, from, idle, State)),
+	% 	?assert(meck:validate(agent_channel)),
+	% 	?assertEqual(1, length(meck:history(agent_channel))),
+	% 	meck:unload(agent_channel)
+	% end},
 
 	{"{set_connection, _Pid}", fun() ->
 		Self = self(),
