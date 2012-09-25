@@ -2532,7 +2532,7 @@ parse_path(Path) ->
 				["", "clients", Client, Action] ->
 					{api, {clients, Client, Action}};
 				["", "openacd", "modules", ModStr, "config" | RelPath] = R ->
-					case catch get_managed_mod_prop(list_to_existing_atom(ModStr), docroot) of
+					case catch get_managed_mod_prop(list_to_existing_atom(ModStr), web_docroot) of
 						DocRoot when is_list(DocRoot) ->
 							{file, {filename:join(RelPath), DocRoot}};
 						_ ->
