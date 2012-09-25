@@ -2354,6 +2354,22 @@ api({modules, _Node, "email_media_manager", "new"}, ?COOKIE, Post) ->
 			Json = {struct, [{success, false}, {message, list_to_binary(lists:flatten(io_lib:format("~p", [Reason])))}]},
 			{200, [], mochijson2:encode(Json)}
 	end;
+api({modules, NodeStr, ModStr, CmdStr}, ?COOKIE, Post) ->
+	try
+		Mod = list_to_existing_atom(ModStr),
+		Cmd = list_to_existing_atom(CmdStr),
+		Node = list_to_existing_atom(NodeStr),
+		case get_managed_mod_prop(Mod, web_handle) of
+			{M, F} ->
+				M:F(Cmd, Node, Post);
+			Fun when is_function(Fun, 3) ->
+				Fun(Cmd, Node, Post);
+			undefined ->
+				{404, [], <<"api command not found">>}
+		end
+	catch
+		error:badarg -> {404, [], <<"api command not found">>}
+	end;
 
 % =====
 % clients => *
@@ -3164,12 +3180,8 @@ list_to_terms(List, Location, Acc) ->
 get_managed_mod_prop(Mod, Key) ->
 	{ok, MLists} = cpx_hooks:trigger_hooks(get_cpx_managed, [], all),
 	Managed = lists:flatten(MLists),
-	case proplists:get_value(Mod, Managed)  of
-		Props when is_list(Props) ->
-			proplists:get_value(Key, Props);
-		_ ->
-			undefined
-	end.
+	Props = proplists:get_value(Mod, Managed, []),
+	proplists:get_value(Key, Props).
 
 %% =====
 %% tests
