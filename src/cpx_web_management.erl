@@ -3115,7 +3115,7 @@ encode_modules_confs(Node, [{cpx_supervisor, BadConf} | Tail], Acc) ->
 	encode_modules_confs(Node, Tail, [Json | Acc]);
 encode_modules_confs(Node, [{Mod, Conf} | Tail], Acc) when is_record(Conf, cpx_conf) ->
 	Json = {struct, [
-		{<<"name">>, list_to_binary(atom_to_list(Conf#cpx_conf.module_name))},
+		{<<"name">>, list_to_binary(atom_to_list(Conf#cpx_conf.id))},
 		{<<"enabled">>, true},
 		{<<"type">>, <<"conf">>},
 		{<<"id">>, list_to_binary(atom_to_list(Node) ++ "/" ++ atom_to_list(Mod))},
