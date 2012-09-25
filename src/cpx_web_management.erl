@@ -1046,7 +1046,7 @@ api({modules, "poll"}, ?COOKIE, _Post) ->
 	{ok, Appnodes} = application:get_env(nodes),
 	Nodes = lists:filter(fun(N) -> lists:member(N, Appnodes) end, [node() | nodes()]),
 	F = fun(Node) ->
-		{Node, [
+		BuiltIns = [
 			{cpx_monitor_grapher, rpc:call(Node, cpx_supervisor, get_conf, [cpx_monitor_grapher], 2000)},
 			{cpx_monitor_passive, rpc:call(Node, cpx_supervisor, get_conf, [cpx_monitor_passive], 2000)},
 			{cpx_supervisor, rpc:call(Node, cpx_supervisor, get_value, [archivepath], 2000)},
@@ -1065,7 +1065,12 @@ api({modules, "poll"}, ?COOKIE, _Post) ->
 			{agent_web_listener, rpc:call(Node, cpx_supervisor, get_conf, [agent_web_listener], 2000)},
 			{agent_tcp_listener, rpc:call(Node, cpx_supervisor, get_conf, [agent_tcp_listener], 2000)},
 			{agent_dialplan_listener, rpc:call(Node, cpx_supervisor, get_conf, [agent_dialplan_listener], 2000)}
-		]}
+		],
+		{ok, MLists} = cpx_hooks:trigger_hooks(get_cpx_managed, [], all),
+		Managed = lists:flatten(MLists),
+		External = [{Mod, rpc:call(Node, cpx_supervisor, get_conf, [Mod], 2000), external} || {Mod, _} <- Managed],
+
+		{Node, BuiltIns ++ External}
 	end,
 	Rpcs = lists:map(F, Nodes),
 	Json = encode_modules(Rpcs, []),
@@ -3136,25 +3141,34 @@ encode_modules_confs(Node, [{cpx_supervisor, BadConf} | Tail], Acc) ->
 		{<<"node">>, list_to_binary(atom_to_list(Node))}
 	]},
 	encode_modules_confs(Node, Tail, [Json | Acc]);
-encode_modules_confs(Node, [{Mod, Conf} | Tail], Acc) when is_record(Conf, cpx_conf) ->
+encode_modules_confs(Node, [{Mod, Conf} | Tail], Acc) ->
+	encode_modules_confs(Node, [{Mod, Conf, internal} | Tail], Acc);
+encode_modules_confs(Node, [{Mod, Conf, Type} | Tail], Acc) when is_record(Conf, cpx_conf) ->
 	Json = {struct, [
 		{<<"name">>, list_to_binary(atom_to_list(Conf#cpx_conf.id))},
 		{<<"enabled">>, true},
 		{<<"type">>, <<"conf">>},
 		{<<"id">>, list_to_binary(atom_to_list(Node) ++ "/" ++ atom_to_list(Mod))},
 		{<<"start">>, list_to_binary(atom_to_list(Conf#cpx_conf.start_function))},
-		{<<"node">>, list_to_binary(atom_to_list(Node))}
+		{<<"node">>, list_to_binary(atom_to_list(Node))},
+		{<<"href">>, get_href(Mod, Type)}
 	]},
 	encode_modules_confs(Node, Tail, [Json | Acc]);
-encode_modules_confs(Node, [{Mod, undefined} | Tail], Acc) ->
+encode_modules_confs(Node, [{Mod, undefined, Type} | Tail], Acc) ->
 	Json = {struct, [
 		{<<"name">>, list_to_binary(atom_to_list(Mod))},
 		{<<"enabled">>, false},
 		{<<"type">>, <<"conf">>},
 		{<<"id">>, list_to_binary(atom_to_list(Node) ++ "/" ++ atom_to_list(Mod))},
-		{<<"node">>, list_to_binary(atom_to_list(Node))}
+		{<<"node">>, list_to_binary(atom_to_list(Node))},
+		{<<"href">>, get_href(Mod, Type)}
 	]},
 	encode_modules_confs(Node, Tail, [Json | Acc]).
+
+get_href(Mod, internal) ->
+	list_to_binary(lists:flatten(["openacd/modules/", atom_to_list(Mod), ".html"]));
+get_href(Mod, _) ->
+	list_to_binary(lists:flatten(["openacd/modules/", atom_to_list(Mod), "/config/config.html"])).
 
 list_to_terms(List) ->
 	list_to_terms(List, 1, []).
