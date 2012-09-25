@@ -14,7 +14,7 @@
 %%
 %%	The Original Code is OpenACD.
 %%
-%%	The Initial Developers of the Original Code is 
+%%	The Initial Developers of the Original Code is
 %%	Andrew Thompson and Micah Warren.
 %%
 %%	All portions of the code written by the Initial Developers are Copyright
@@ -40,16 +40,16 @@
 
 -type(loglevels() :: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency').
 
--ifdef(TEST).
--define(DEBUG(Message, Args), ?debugFmt("[~p][~p][~p]~n	DEBUG: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(INFO(Message, Args), ?debugFmt("[~p][~p][~p]~n	INFO: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(NOTICE(Message, Args), ?debugFmt("[~p][~p][~p]~n	NOTICE: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(WARNING(Message, Args), ?debugFmt("[~p][~p][~p]~n	WARNING: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(ERROR(Message, Args), ?debugFmt("[~p][~p][~p]~n	ERROR: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(CRITICAL(Message, Args), ?debugFmt("[~p][~p][~p]~n	CRITICAL: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(ALERT(Message, Args), ?debugFmt("[~p][~p][~p]~n	ALERT: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--define(EMERGENCY(Message, Args), ?debugFmt("[~p][~p][~p]~n	EMERGENCY: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
--else.
+% -ifdef(TEST).
+% -define(DEBUG(Message, Args), ?debugFmt("[~p][~p][~p]~n	DEBUG: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(INFO(Message, Args), ?debugFmt("[~p][~p][~p]~n	INFO: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(NOTICE(Message, Args), ?debugFmt("[~p][~p][~p]~n	NOTICE: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(WARNING(Message, Args), ?debugFmt("[~p][~p][~p]~n	WARNING: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(ERROR(Message, Args), ?debugFmt("[~p][~p][~p]~n	ERROR: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(CRITICAL(Message, Args), ?debugFmt("[~p][~p][~p]~n	CRITICAL: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(ALERT(Message, Args), ?debugFmt("[~p][~p][~p]~n	ALERT: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -define(EMERGENCY(Message, Args), ?debugFmt("[~p][~p][~p]~n	EMERGENCY: ~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
+% -else.
 -define(DEBUG(Message, Args), cpxlog:debug(now(), ?MODULE, ?LINE, self(), Message, Args)).
 -define(INFO(Message, Args), cpxlog:info(now(), ?MODULE, ?LINE, self(), Message, Args)).
 -define(NOTICE(Message, Args), cpxlog:notice(now(), ?MODULE, ?LINE, self(), Message, Args)).
@@ -58,7 +58,7 @@
 -define(CRITICAL(Message, Args), cpxlog:critical(now(), ?MODULE, ?LINE, self(), Message, Args)).
 -define(ALERT(Message, Args), cpxlog:alert(now(), ?MODULE, ?LINE, self(), Message, Args)).
 -define(EMERGENCY(Message, Args), cpxlog:emergency(now(), ?MODULE, ?LINE, self(), Message, Args)).
--endif.
+% -endif.
 
 -ifdef(TEST).
 -define(CONSOLE(Message, Args), ?debugFmt("[~p][~p][~p]~n	~s~n", [erlang:localtime(), node(), self(), lists:flatten(io_lib:format(Message, Args))])).
