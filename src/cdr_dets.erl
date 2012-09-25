@@ -129,7 +129,7 @@ load_to_file(InFile, OutFile) ->
 init(Opts) ->
 	Logdir = case proplists:get_value(logdir, Opts, dynamic) of
 		dynamic ->
-			case application:get_env('OpenACD', webdir_dynamic) of
+			case application:get_env(oacd_core, webdir_dynamic) of
 				undefined ->
 					"www/dynamic";
 				{ok, WebDirDyn} ->

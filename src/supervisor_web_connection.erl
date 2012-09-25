@@ -607,7 +607,7 @@ handle_call({supervisor, get_motd}, _From, State) ->
 	end,
 	{reply, {200, [], mochijson2:encode({struct, [{success, true}, {<<"result">>, Motd}]})}, State};
 handle_call({supervisor, {set_motd, Message, Node}}, _From, State) ->
-	{ok, Appnodes} = application:get_env('OpenACD', nodes),
+	{ok, Appnodes} = application:get_env(oacd_core, nodes),
 	Nodes = case Node of
 		<<"system">> -> Appnodes;
 		_ -> [list_to_existing_atom(binary_to_list(N)) || N <- Appnodes, atom_to_list(N) == binary_to_list(Node)]
