@@ -2531,6 +2531,13 @@ parse_path(Path) ->
 					{api, {clients, Action}};
 				["", "clients", Client, Action] ->
 					{api, {clients, Client, Action}};
+				["", "openacd", "modules", ModStr, "config" | RelPath] = R ->
+					case catch get_managed_mod_prop(list_to_existing_atom(ModStr), docroot) of
+						DocRoot when is_list(DocRoot) ->
+							{file, {filename:join(RelPath), DocRoot}};
+						_ ->
+							{api, R}
+					end;
 				Allothers ->
 					Adminpath = string:concat(util:priv_dir("www/admin"), Path),
 					Contribpath = string:concat(util:priv_dir("www/contrib"), Path),
@@ -3151,6 +3158,17 @@ list_to_terms(List, Location, Acc) ->
 		{more, Continuation} ->
 			?NOTICE("list to term ending early.  ~p", [Continuation]),
 			list_to_terms([], Location, Acc)
+	end.
+
+-spec get_managed_mod_prop(Mod :: atom(), Key :: atom()) -> any().
+get_managed_mod_prop(Mod, Key) ->
+	{ok, MLists} = cpx_hooks:trigger_hooks(get_cpx_managed, [], all),
+	Managed = lists:flatten(MLists),
+	case proplists:get_value(Mod, Managed)  of
+		Props when is_list(Props) ->
+			proplists:get_value(Key, Props);
+		_ ->
+			undefined
 	end.
 
 %% =====
