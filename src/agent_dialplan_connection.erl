@@ -50,7 +50,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--type(state() :: #state{}).
+% -type(state() :: #state{}).
 
 %% API
 -spec(start/2 :: (AgentRec :: #agent{}, SelfKillTime :: 'undefined' | non_neg_integer()) -> {'ok', pid()}).

@@ -149,19 +149,23 @@ start(_Type, StartArgs) ->
 			?NOTICE("Application OpenACD started sucessfully!", []),
 			% to not block the shell.
 			spawn(fun() ->
-				% case cpx:get_env(plugin_dir) of
-				% 	undefined ->
-				% 		?INFO("No plugins to load, no plugin dir", []);
-				% 	{ok, PluginDir} ->
-				% 		case filelib:ensure_dir(filename:join(PluginDir, "touch")) of
-				% 			ok ->
-				% 				start_plugins(PluginDir);
-				% 			{error, Error} ->
-				% 				?ERROR("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
-				% 		end
-				% end
-				{ok, Plugins} = cpx:get_env(plugins, []),
-                start_plugin_apps(Plugins)
+				case cpx:get_env(plugin_dir) of
+					undefined ->
+						?INFO("No plugin dir", []);
+					{ok, PluginDir} ->
+						case filelib:ensure_dir(filename:join(PluginDir, "touch")) of
+							ok ->
+								start_plugins(PluginDir);
+							{error, Error} ->
+								?ERROR("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
+						end
+				end,
+				case cpx:get_env(plugins, []) of
+					undefined ->
+						?INFO("No plugins to load", []);
+					{ok, Plugins} ->
+                		start_plugin_apps(Plugins)
+                end
 			end),
 			{ok, Pid}
 	catch
