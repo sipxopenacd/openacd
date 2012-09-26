@@ -166,7 +166,7 @@
 %%====================================================================
 
 start() ->
-	Store = case application:get_env('OpenACD', agent_auth_storage) of
+	Store = case application:get_env(oacd_core, agent_auth_storage) of
 		{ok, St} -> St;
 		undefined -> agent_auth_mnesia
 	end,

@@ -222,7 +222,7 @@
 
 -spec(start/0 :: () -> any()).
 start() ->
-	Store = case application:get_env('OpenACD', call_queue_config_storage) of
+	Store = case application:get_env(oacd_core, call_queue_config_storage) of
 		{ok, St} -> St;
 		undefined -> ?DEFAULT_STORAGE
 	end,

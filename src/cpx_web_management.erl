@@ -1043,10 +1043,10 @@ api({queues, "queue", "new"}, ?COOKIE = Cookie, Post) ->
 % TODO this function is ugly.  It's used to populate the modules list,
 % but the result of the rpc call is not used ever.
 api({modules, "poll"}, ?COOKIE, _Post) ->
-	{ok, Appnodes} = application:get_env('OpenACD', nodes),
+	{ok, Appnodes} = application:get_env(nodes),
 	Nodes = lists:filter(fun(N) -> lists:member(N, Appnodes) end, [node() | nodes()]),
 	F = fun(Node) ->
-		{Node, [
+		BuiltIns = [
 			{cpx_monitor_grapher, rpc:call(Node, cpx_supervisor, get_conf, [cpx_monitor_grapher], 2000)},
 			{cpx_monitor_passive, rpc:call(Node, cpx_supervisor, get_conf, [cpx_monitor_passive], 2000)},
 			{cpx_supervisor, rpc:call(Node, cpx_supervisor, get_value, [archivepath], 2000)},
@@ -1065,7 +1065,12 @@ api({modules, "poll"}, ?COOKIE, _Post) ->
 			{agent_web_listener, rpc:call(Node, cpx_supervisor, get_conf, [agent_web_listener], 2000)},
 			{agent_tcp_listener, rpc:call(Node, cpx_supervisor, get_conf, [agent_tcp_listener], 2000)},
 			{agent_dialplan_listener, rpc:call(Node, cpx_supervisor, get_conf, [agent_dialplan_listener], 2000)}
-		]}
+		],
+		{ok, MLists} = cpx_hooks:trigger_hooks(get_cpx_managed, [], all),
+		Managed = lists:flatten(MLists),
+		External = [{Mod, rpc:call(Node, cpx_supervisor, get_conf, [Mod], 2000), external} || {Mod, _} <- Managed],
+
+		{Node, BuiltIns ++ External}
 	end,
 	Rpcs = lists:map(F, Nodes),
 	Json = encode_modules(Rpcs, []),
@@ -1535,7 +1540,7 @@ api({modules, Node, "cpx_monitor_grapher", "get"}, ?COOKIE, _Post) ->
 		#cpx_conf{start_args = [Args]} ->
 			Rrdpath = list_to_binary(proplists:get_value(rrd_dir, Args, "rrd")),
 			Protoimagepath = list_to_binary(proplists:get_value(image_dir, Args, "rrd path")),
-			Dynamic = case application:get_env('OpenACD', webdir_dynamic) of
+			Dynamic = case application:get_env(webdir_dynamic) of
 				undefined ->
 					<<"../www/dynamic">>;
 				{ok, WebDirDyn} ->
@@ -1570,7 +1575,7 @@ api({modules, Node, "cpx_monitor_grapher", "update"}, ?COOKIE, Post) ->
 				"rrd path" ->
 					Rrdpath;
 				"Dynamic Files" ->
-					case application:get_env('OpenACD', webdir_dynamic) of
+					case application:get_env(webdir_dynamic) of
 						undefined ->
 							"../www/dynamic";
 						{ok, WebDirDyn} ->
@@ -1616,7 +1621,7 @@ api({modules, Node, "cpx_monitor_passive", "update"}, ?COOKIE, Post) ->
 			Convert = fun({struct, Props}) ->
 				Fileout = case proplists:get_value(<<"outputdir">>, Props) of
 					<<"dynamic">> ->
-						case application:get_env('OpenACD', webdir_dynamic) of
+						case application:get_env(webdir_dynamic) of
 							undefined ->
 								util:priv_dir("www/dynamic");
 							{ok, WebDirDyn} ->
@@ -2354,6 +2359,22 @@ api({modules, _Node, "email_media_manager", "new"}, ?COOKIE, Post) ->
 			Json = {struct, [{success, false}, {message, list_to_binary(lists:flatten(io_lib:format("~p", [Reason])))}]},
 			{200, [], mochijson2:encode(Json)}
 	end;
+api({modules, NodeStr, ModStr, CmdStr}, ?COOKIE, Post) ->
+	try
+		Mod = list_to_existing_atom(ModStr),
+		Cmd = list_to_existing_atom(CmdStr),
+		Node = list_to_existing_atom(NodeStr),
+		case get_managed_mod_prop(Mod, web_handle) of
+			{M, F} ->
+				M:F(Cmd, Node, Post);
+			Fun when is_function(Fun, 3) ->
+				Fun(Cmd, Node, Post);
+			undefined ->
+				{404, [], <<"api command not found">>}
+		end
+	catch
+		error:badarg -> {404, [], <<"api command not found">>}
+	end;
 
 % =====
 % clients => *
@@ -2483,7 +2504,7 @@ parse_path(Path) ->
 			case util:string_split(Path, "/") of
 				["", "dynamic" | Tail] ->
 					File = string:join(Tail, "/"),
-					Dynamic = case application:get_env('OpenACD', webdir_dynamic) of
+					Dynamic = case application:get_env(webdir_dynamic) of
 						undefined ->
 							util:priv_dir("www/dynamic");
 						{ok, WebDirDyn} ->
@@ -2531,6 +2552,13 @@ parse_path(Path) ->
 					{api, {clients, Action}};
 				["", "clients", Client, Action] ->
 					{api, {clients, Client, Action}};
+				["", "openacd", "modules", ModStr, "config" | RelPath] = R ->
+					case catch get_managed_mod_prop(list_to_existing_atom(ModStr), web_docroot) of
+						DocRoot when is_list(DocRoot) ->
+							{file, {filename:join(RelPath), DocRoot}};
+						_ ->
+							{api, R}
+					end;
 				Allothers ->
 					Adminpath = string:concat(util:priv_dir("www/admin"), Path),
 					Contribpath = string:concat(util:priv_dir("www/contrib"), Path),
@@ -3113,25 +3141,34 @@ encode_modules_confs(Node, [{cpx_supervisor, BadConf} | Tail], Acc) ->
 		{<<"node">>, list_to_binary(atom_to_list(Node))}
 	]},
 	encode_modules_confs(Node, Tail, [Json | Acc]);
-encode_modules_confs(Node, [{Mod, Conf} | Tail], Acc) when is_record(Conf, cpx_conf) ->
+encode_modules_confs(Node, [{Mod, Conf} | Tail], Acc) ->
+	encode_modules_confs(Node, [{Mod, Conf, internal} | Tail], Acc);
+encode_modules_confs(Node, [{Mod, Conf, Type} | Tail], Acc) when is_record(Conf, cpx_conf) ->
 	Json = {struct, [
-		{<<"name">>, list_to_binary(atom_to_list(Conf#cpx_conf.module_name))},
+		{<<"name">>, list_to_binary(atom_to_list(Conf#cpx_conf.id))},
 		{<<"enabled">>, true},
 		{<<"type">>, <<"conf">>},
 		{<<"id">>, list_to_binary(atom_to_list(Node) ++ "/" ++ atom_to_list(Mod))},
 		{<<"start">>, list_to_binary(atom_to_list(Conf#cpx_conf.start_function))},
-		{<<"node">>, list_to_binary(atom_to_list(Node))}
+		{<<"node">>, list_to_binary(atom_to_list(Node))},
+		{<<"href">>, get_href(Mod, Type)}
 	]},
 	encode_modules_confs(Node, Tail, [Json | Acc]);
-encode_modules_confs(Node, [{Mod, undefined} | Tail], Acc) ->
+encode_modules_confs(Node, [{Mod, undefined, Type} | Tail], Acc) ->
 	Json = {struct, [
 		{<<"name">>, list_to_binary(atom_to_list(Mod))},
 		{<<"enabled">>, false},
 		{<<"type">>, <<"conf">>},
 		{<<"id">>, list_to_binary(atom_to_list(Node) ++ "/" ++ atom_to_list(Mod))},
-		{<<"node">>, list_to_binary(atom_to_list(Node))}
+		{<<"node">>, list_to_binary(atom_to_list(Node))},
+		{<<"href">>, get_href(Mod, Type)}
 	]},
 	encode_modules_confs(Node, Tail, [Json | Acc]).
+
+get_href(Mod, internal) ->
+	list_to_binary(lists:flatten(["openacd/modules/", atom_to_list(Mod), ".html"]));
+get_href(Mod, _) ->
+	list_to_binary(lists:flatten(["openacd/modules/", atom_to_list(Mod), "/config/config.html"])).
 
 list_to_terms(List) ->
 	list_to_terms(List, 1, []).
@@ -3152,6 +3189,13 @@ list_to_terms(List, Location, Acc) ->
 			?NOTICE("list to term ending early.  ~p", [Continuation]),
 			list_to_terms([], Location, Acc)
 	end.
+
+-spec get_managed_mod_prop(Mod :: atom(), Key :: atom()) -> any().
+get_managed_mod_prop(Mod, Key) ->
+	{ok, MLists} = cpx_hooks:trigger_hooks(get_cpx_managed, [], all),
+	Managed = lists:flatten(MLists),
+	Props = proplists:get_value(Mod, Managed, []),
+	proplists:get_value(Key, Props).
 
 %% =====
 %% tests

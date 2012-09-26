@@ -226,7 +226,7 @@ set_value(Key, Value) ->
 	F = fun() ->
 		mnesia:write(#cpx_value{key = Key, value = Value})
 	end,
-	{ok, Locked} = application:get_env('OpenACD', locked_env),
+	{ok, Locked} = application:get_env(oacd_core, locked_env),
 	case lists:member(Key, Locked) of
 		true ->
 			?WARNING("Env ~s only changed in database due to being in static config file.", [Key]),
@@ -261,7 +261,7 @@ drop_value(Key) ->
 	F = fun() ->
 		mnesia:delete({cpx_value, Key})
 	end,
-	{ok, Locked} = application:get_env('OpenACD', locked_env),
+	{ok, Locked} = application:get_env(oacd_core, locked_env),
 	case lists:member(Key, Locked) of
 		true ->
 			?WARNING("Setting ~s only removed from database since it also exists in static config.", [Key]),

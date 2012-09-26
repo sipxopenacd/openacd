@@ -61,7 +61,7 @@ start() ->
 	Out = gen_event:start({local, cpxlog}),
 	case lists:member(cpxlog_error_logger_redirect, gen_event:which_handlers(error_logger)) of
 		false ->
-			case application:get_env('OpenACD', logmsg_maxsize) of
+			case application:get_env(oacd_core, logmsg_maxsize) of
 				{ok, LogSize} ->
 					ok = gen_event:add_sup_handler(error_logger, cpxlog_error_logger_redirect, [LogSize]);
 				_ ->
@@ -73,13 +73,13 @@ start() ->
 		true -> ok
 	end,
 
-	case application:get_env('OpenACD', console_loglevel) of
+	case application:get_env(oacd_core, console_loglevel) of
 		{ok, LogLevel} ->
 			gen_event:add_handler(cpxlog, cpxlog_terminal, [LogLevel]);
 		_ ->
 			gen_event:add_handler(cpxlog, cpxlog_terminal, [])
 	end,
-	case application:get_env('OpenACD', logfiles) of
+	case application:get_env(oacd_core, logfiles) of
 		{ok, Files} ->
 			gen_event:add_handler(cpxlog, cpxlog_file, [Files]);
 		_ ->
@@ -94,7 +94,7 @@ start_link() ->
 	Out = gen_event:start_link({local, cpxlog}),
 	case lists:member(cpxlog_error_logger_redirect, gen_event:which_handlers(error_logger)) of
 		false ->
-			case application:get_env('OpenACD', logmsg_maxsize) of
+			case application:get_env(oacd_core, logmsg_maxsize) of
 				{ok, LogSize} ->
 					ok = gen_event:add_sup_handler(error_logger, cpxlog_error_logger_redirect, [LogSize]);
 				_ ->
@@ -106,13 +106,13 @@ start_link() ->
 		true -> ok
 	end,
 
-	case application:get_env('OpenACD', console_loglevel) of
+	case application:get_env(oacd_core, console_loglevel) of
 		{ok, LogLevel} ->
 			gen_event:add_sup_handler(cpxlog, cpxlog_terminal, [LogLevel]);
 		_ ->
 			gen_event:add_sup_handler(cpxlog, cpxlog_terminal, [])
 	end,
-	case application:get_env('OpenACD', logfiles) of
+	case application:get_env(oacd_core, logfiles) of
 		{ok, Files} ->
 			gen_event:add_sup_handler(cpxlog, cpxlog_file, [Files]);
 		_ ->

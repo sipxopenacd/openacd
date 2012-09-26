@@ -395,7 +395,7 @@ get_unsummarized() ->
 %% @private
 init([Call]) ->
 	?NOTICE("Starting new CDR handler for ~s", [Call#call.id]),
-	Nodes = case application:get_env('OpenACD', nodes) of
+	Nodes = case application:get_env(oacd_core, nodes) of
 		undefined ->
 			[node()];
 		{ok, List} ->
