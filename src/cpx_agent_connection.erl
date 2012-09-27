@@ -1036,7 +1036,7 @@ handle_cast({arbitrary_command, Channel, Command, Props}, State) when is_binary(
 		none ->
 			{ok, undefined, State};
 		{ChanPid, _ChanData} ->
-			Props0 = [{<<"command">>, Command}, {<<"channelid">>, binary_to_list(pid_to_list(ChanPid))} | Props],
+			Props0 = [{<<"command">>, Command}, {<<"channelid">>, list_to_binary(pid_to_list(ChanPid))} | Props],
 			{ok, {struct, Props0}, State}
 	end;
 
