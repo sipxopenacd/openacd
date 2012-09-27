@@ -405,7 +405,7 @@ precall(_Msg, _From, State) ->
 
 precall({mediapush, From, Callrec, Data}, #state{state_data = #call{source = From}, agent_connection = Conn} = State) when is_pid(Conn) ->
 	Self = self(),
-	gen_server:cast(Conn, {mediapush, Self, Callrec, Data}),
+	conn_cast(Conn, {mediapush, Self, Callrec, Data}),
 	{next_state, precall, State};
 
 precall(_Msg, State) ->
@@ -461,7 +461,7 @@ oncall(_Msg, _From, State) ->
 
 oncall({mediapush, From, Callrec, Data}, #state{state_data = #call{source = From}, agent_connection = Conn} = State) when is_pid(Conn) ->
 	Self = self(),
-	gen_server:cast(Conn, {mediapush, Self, Callrec, Data}),
+	conn_cast(Conn, {mediapush, Self, Callrec, Data}),
 	{next_state, oncall, State};
 
 oncall(_Msg, State) ->
@@ -544,17 +544,17 @@ handle_sync_event(query_state, _From, StateName, State) ->
 	{reply, {ok, StateName}, StateName, State};
 
 handle_sync_event({set_connection, Pid}, _From, StateName, #state{agent_connection = _AgentConn} = State) ->
-	gen_server:cast(Pid, {set_channel, self(), StateName, State#state.state_data}),
+	conn_cast(Pid, {set_channel, self(), StateName, State#state.state_data}),
 	case cpx_supervisor:get_value(motd) of
 		{ok, Motd} ->
-			gen_server:cast(Pid, {blab, Motd});
+			conn_cast(Pid, {blab, Motd});
 		_ ->
 			ok
 	end,
 	{reply, ok, StateName, State#state{agent_connection = Pid}};
 
 handle_sync_event({url_pop, URL, Name}, _From, StateName, #state{agent_connection = Connection} = State) when is_pid(Connection) ->
-	gen_server:cast(Connection, {url_pop, URL, Name}),
+	conn_cast(Connection, {url_pop, URL, Name}),
 	{reply, ok, StateName, State};
 
 handle_sync_event(_Event, _From, StateName, State) ->
