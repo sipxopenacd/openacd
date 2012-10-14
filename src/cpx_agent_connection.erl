@@ -169,11 +169,9 @@
 	{success, true}, {result, Struct}]})).
 
 -record(state, {
-	salt :: any(),
 	agent :: #agent{},
 	channels = dict:new() :: dict(),
-	connection :: pid(),
-	supervisor_state :: any()
+	connection :: pid()
 }).
 
 -record(channel_state, {
