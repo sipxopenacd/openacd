@@ -334,96 +334,109 @@ encode_cast(State, Cast) ->
 			{error, unhandled}
 	end.
 
+handle_json(State, Bin) ->
+	Resp = case ejrpc2:handle_req(cpx_agent_rpc, Bin, [{preargs, [State]}]) of
+		ok -> undefined;
+		{ok, R} -> R
+	end,
+
+	E = receive
+		{'$cpx_agent_rpc', exit} -> exit
+		after 0 -> ok
+	end,
+
+	{E, Resp, State}.
+
 %% @doc After unwrapping the binary that will hold json, and connection
 %% should call this.
--spec(handle_json/2 :: (State :: #state{}, Json :: json()) ->
-	{'ok', json(), #state{}} | {'error', any(), #state{}} |
-	{'exit', json(), #state{}}).
-handle_json(State, {struct, Json}) ->
-	Agent = State#state.agent,
-	SecurityLevel = Agent#agent.security_level,
-	ThisModBin = list_to_binary(atom_to_list(?MODULE)),
-	ModBin = proplists:get_value(<<"module">>, Json, ThisModBin),
-	ReqId = proplists:get_value(<<"request_id">>, Json),
-	ModRes = try binary_to_existing_atom(ModBin, utf8) of
-		ModAtom ->
-			{ok, ModAtom}
-	catch
-		error:badarg ->
-			{error, bad_module}
-	end,
-	FuncBin = proplists:get_value(<<"function">>, Json, <<"undefined">>),
-	FuncRes = try binary_to_existing_atom(FuncBin, utf8) of
-		FuncAtom ->
-			{ok, FuncAtom}
-	catch
-		error:badarg ->
-			{error, bad_function}
-	end,
-	Args = case proplists:get_value(<<"args">>, Json, []) of
-		ArgsList when is_list(ArgsList) -> ArgsList;
-		Term -> [Term]
-	end,
-	case {ModRes, FuncRes} of
-		{{error, bad_module}, _} ->
-			{ok, ?reply_err(ReqId, <<"no such module">>, <<"MODULE_NOEXISTS">>), State};
-		{_, {error, bad_function}} ->
-			{ok, ?reply_err(ReqId, <<"no such function">>, <<"FUNCTION_NOEXISTS">>), State};
-		{{ok, Mod}, {ok, Func}} ->
-			Attrs = Mod:module_info(attributes),
-			AgentApiFuncs = proplists:get_value(agent_api_functions, Attrs, []),
-			SupApiFuncs = proplists:get_value(supervisor_api_functions, Attrs, []),
-			Arity = length(Args) + 1,
-			InAgentApi = lists:member({Func, Arity}, AgentApiFuncs),
-			InSupApi = lists:member({Func, Arity}, SupApiFuncs),
-			HasSupPriv = lists:member(SecurityLevel, [supervisor, admin]),
-			case InAgentApi or (HasSupPriv and InSupApi) of
-				false ->
-					case cpx_hooks:trigger_hooks(agent_api_call, [State, Mod, Func, Args]) of
-						{error, unhandled} ->
-							{ok, ?reply_err(ReqId, <<"no such function">>, <<"FUNCTION_NOEXISTS">>), State};
-						{ok, HookRes} ->
-							case HookRes of
-								'exit' ->
-									{exit, ?simple_success(ReqId), State};
-								{'exit', ResultJson} ->
-									{exit, ?reply_success(ReqId, ResultJson), State};
-								ok ->
-									{ok, ?simple_success(ReqId), State};
-								{ok, ResultJson} ->
-									{ok, ?reply_success(ReqId, ResultJson), State};
-								{error, Msg, Code} ->
-									{ok, ?reply_err(ReqId, Msg, Code), State};
-								Else ->
-									ErrMsg = list_to_binary(io_lib:format("~p", [Else])),
-									{ok, ?reply_err(ReqId, ErrMsg, <<"UNKNOWN_ERROR">>), State}
-							end
-					end;
-				true ->
-					try apply(Mod, Func, [State | Args]) of
-						'exit' ->
-							{exit, ?simple_success(ReqId), State};
-						{'exit', ResultJson} ->
-							{exit, ?reply_success(ReqId, ResultJson), State};
-						ok ->
-							{ok, ?simple_success(ReqId), State};
-						{ok, ResultJson} ->
-							{ok, ?reply_success(ReqId, ResultJson), State};
-						{error, Msg, Code} ->
-							{ok, ?reply_err(ReqId, Msg, Code), State};
-						Else ->
-							ErrMsg = list_to_binary(io_lib:format("~p", [Else])),
-							{ok, ?reply_err(ReqId, ErrMsg, <<"UNKNOWN_ERROR">>), State}
-					catch
-						What:Why ->
-							ErrMsg = list_to_binary(io_lib:format("error occured:  ~p:~p", [What, Why])),
-							{ok, ?reply_err(ReqId, ErrMsg, <<"UNKNOWN_ERROR">>), State}
-					end
-			end
-	end;
+% -spec(handle_json/2 :: (State :: #state{}, Json :: json()) ->
+% 	{'ok', json(), #state{}} | {'error', any(), #state{}} |
+% 	{'exit', json(), #state{}}).
+% handle_json(State, {struct, Json}) ->
+% 	Agent = State#state.agent,
+% 	SecurityLevel = Agent#agent.security_level,
+% 	ThisModBin = list_to_binary(atom_to_list(?MODULE)),
+% 	ModBin = proplists:get_value(<<"module">>, Json, ThisModBin),
+% 	ReqId = proplists:get_value(<<"request_id">>, Json),
+% 	ModRes = try binary_to_existing_atom(ModBin, utf8) of
+% 		ModAtom ->
+% 			{ok, ModAtom}
+% 	catch
+% 		error:badarg ->
+% 			{error, bad_module}
+% 	end,
+% 	FuncBin = proplists:get_value(<<"function">>, Json, <<"undefined">>),
+% 	FuncRes = try binary_to_existing_atom(FuncBin, utf8) of
+% 		FuncAtom ->
+% 			{ok, FuncAtom}
+% 	catch
+% 		error:badarg ->
+% 			{error, bad_function}
+% 	end,
+% 	Args = case proplists:get_value(<<"args">>, Json, []) of
+% 		ArgsList when is_list(ArgsList) -> ArgsList;
+% 		Term -> [Term]
+% 	end,
+% 	case {ModRes, FuncRes} of
+% 		{{error, bad_module}, _} ->
+% 			{ok, ?reply_err(ReqId, <<"no such module">>, <<"MODULE_NOEXISTS">>), State};
+% 		{_, {error, bad_function}} ->
+% 			{ok, ?reply_err(ReqId, <<"no such function">>, <<"FUNCTION_NOEXISTS">>), State};
+% 		{{ok, Mod}, {ok, Func}} ->
+% 			Attrs = Mod:module_info(attributes),
+% 			AgentApiFuncs = proplists:get_value(agent_api_functions, Attrs, []),
+% 			SupApiFuncs = proplists:get_value(supervisor_api_functions, Attrs, []),
+% 			Arity = length(Args) + 1,
+% 			InAgentApi = lists:member({Func, Arity}, AgentApiFuncs),
+% 			InSupApi = lists:member({Func, Arity}, SupApiFuncs),
+% 			HasSupPriv = lists:member(SecurityLevel, [supervisor, admin]),
+% 			case InAgentApi or (HasSupPriv and InSupApi) of
+% 				false ->
+% 					case cpx_hooks:trigger_hooks(agent_api_call, [State, Mod, Func, Args]) of
+% 						{error, unhandled} ->
+% 							{ok, ?reply_err(ReqId, <<"no such function">>, <<"FUNCTION_NOEXISTS">>), State};
+% 						{ok, HookRes} ->
+% 							case HookRes of
+% 								'exit' ->
+% 									{exit, ?simple_success(ReqId), State};
+% 								{'exit', ResultJson} ->
+% 									{exit, ?reply_success(ReqId, ResultJson), State};
+% 								ok ->
+% 									{ok, ?simple_success(ReqId), State};
+% 								{ok, ResultJson} ->
+% 									{ok, ?reply_success(ReqId, ResultJson), State};
+% 								{error, Msg, Code} ->
+% 									{ok, ?reply_err(ReqId, Msg, Code), State};
+% 								Else ->
+% 									ErrMsg = list_to_binary(io_lib:format("~p", [Else])),
+% 									{ok, ?reply_err(ReqId, ErrMsg, <<"UNKNOWN_ERROR">>), State}
+% 							end
+% 					end;
+% 				true ->
+% 					try apply(Mod, Func, [State | Args]) of
+% 						'exit' ->
+% 							{exit, ?simple_success(ReqId), State};
+% 						{'exit', ResultJson} ->
+% 							{exit, ?reply_success(ReqId, ResultJson), State};
+% 						ok ->
+% 							{ok, ?simple_success(ReqId), State};
+% 						{ok, ResultJson} ->
+% 							{ok, ?reply_success(ReqId, ResultJson), State};
+% 						{error, Msg, Code} ->
+% 							{ok, ?reply_err(ReqId, Msg, Code), State};
+% 						Else ->
+% 							ErrMsg = list_to_binary(io_lib:format("~p", [Else])),
+% 							{ok, ?reply_err(ReqId, ErrMsg, <<"UNKNOWN_ERROR">>), State}
+% 					catch
+% 						What:Why ->
+% 							ErrMsg = list_to_binary(io_lib:format("error occured:  ~p:~p", [What, Why])),
+% 							{ok, ?reply_err(ReqId, ErrMsg, <<"UNKNOWN_ERROR">>), State}
+% 					end
+% 			end
+% 	end;
 
-handle_json(State, _InvalidJson) ->
-	{error, invalid_json, State}.
+% handle_json(State, _InvalidJson) ->
+% 	{error, invalid_json, State}.
 
 %% =======================================================================
 %% Agent connection api
