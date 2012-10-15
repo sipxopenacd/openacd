@@ -40,6 +40,8 @@
 	get_clients/1,
 	get_skills/1,
 	get_node/1,
+	get_profile/1,
+	get_connection_info/1,
 	get_release_codes/1,
 	go_available/1,
 	go_released/1,
@@ -64,19 +66,24 @@ get_skills(St) ->
 	APid = cpx_conn_state:get(St, agent_pid),
 	Ss = agent:get_skills(APid),
 
-	Es = lists:reverse(lists:foldl(
-		fun(At, Acc) when is_atom(At) -> [At|Acc];
-			({'_brand', Client}, Acc) -> [{[{client, l2b(Client)}]}|Acc];
-			({'_node', Node}, Acc) -> [{[{node, Node}]}|Acc];
-			({'_profile', Profile}, Acc) -> [{[{profile, l2b(Profile)}]}|Acc];
-			({'_queue', Queue}, Acc) -> [{[{queue, l2b(Queue)}]}|Acc];
-			(_, Acc) -> Acc
-		end, [], Ss)),
+	Es = skills_to_entries(Ss),
 	{[{skills, Es}]}.
 
 get_node(St) ->
 	APid = cpx_conn_state:get(St, agent_pid),
 	{[{node, node(APid)}]}.
+
+get_connection_info(St) ->
+	A = cpx_conn_state:get(St, agent),
+	{[{username, l2b(A#agent.login)},
+		{profile, l2b(A#agent.profile)},
+		{skills, skills_to_entries(A#agent.skills)},
+		{node, node(A#agent.source)},
+		{time, util:now()}]}.
+
+get_profile(St) ->
+	APid = cpx_conn_state:get(St, agent_pid),
+	{[{profile, l2b(agent:get_profile(APid))}]}.
 
 get_release_codes(_St) ->
 	Rs = agent_auth:get_releases(),
@@ -131,6 +138,16 @@ relopt_entry(#release_opt{id=Id, label=Label, bias=B}) ->
 		_ -> neutral
 	end,
 	{[{id, l2b(Id)}, {name, l2b(Label)}, {bias, Bias}]}.
+
+skills_to_entries(Skills) ->
+	lists:reverse(lists:foldl(
+		fun(At, Acc) when is_atom(At) -> [At|Acc];
+			({'_brand', Client}, Acc) -> [{[{client, l2b(Client)}]}|Acc];
+			({'_node', Node}, Acc) -> [{[{node, Node}]}|Acc];
+			({'_profile', Profile}, Acc) -> [{[{profile, l2b(Profile)}]}|Acc];
+			({'_queue', Queue}, Acc) -> [{[{queue, l2b(Queue)}]}|Acc];
+			(_, Acc) -> Acc
+		end, [], Skills)).
 
 %% Errors
 
@@ -235,7 +252,17 @@ agent_info_test_() ->
 			{'_node', 'server1.openacd.com'},
 			{'_profile', "tech_team"},
 			{'_queue', "dsl_support"},
-			{unknown, should, notbepresent}])
+			{unknown, should, notbepresent}]),
+		meck:expect(agent, get_profile, 1, "tech_team"),
+
+		meck:expect(agent, dump_state, 1,
+			#agent{login="agent",
+				profile="tech_team",
+				skills=[english, support, '_all'],
+				source=t_apid()}),
+
+		meck:new(util),
+		meck:expect(util, now, 0, 123)
 	end, fun(_) ->
 		meck:unload(agent)
 	end, [{"get_skills", fun() ->
@@ -248,6 +275,17 @@ agent_info_test_() ->
 	end}, {"get_node", fun() ->
 		?assertEqual({[{node, node()}]},
 			get_node(t_st()))
+	end}, {"get_profile", fun() ->
+		?assertEqual({[{profile, <<"tech_team">>}]},
+			get_profile(t_st()))
+	end}, {"get_connection_info", fun() ->
+		?assertEqual({[
+			{username, <<"agent">>},
+			{profile, <<"tech_team">>},
+			{skills, [english, support, '_all']},
+			{node, node()},
+			{time, 123}]},
+		get_connection_info(t_st()))
 	end}]}.
 
 -endif.
