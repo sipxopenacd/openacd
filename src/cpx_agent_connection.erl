@@ -170,8 +170,7 @@
 
 -record(state, {
 	agent :: #agent{},
-	channels = dict:new() :: dict(),
-	connection :: pid()
+	channels = dict:new() :: dict()
 }).
 
 -record(channel_state, {
