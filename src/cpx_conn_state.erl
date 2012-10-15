@@ -43,7 +43,9 @@ new(#agent{source=APid}) ->
 	#state{agent_pid = APid}.
 
 get(#state{agent_pid=APid}, agent_pid) ->
-	APid.
+	APid;
+get(#state{agent_pid=APid}, agent) ->
+	agent:dump_state(APid).
 
 -ifdef(TEST).
 
@@ -52,5 +54,19 @@ new_test() ->
 	St = new(#agent{login="agent", source=APid}),
 
 	?assertEqual(APid, get(St, agent_pid)).
+
+get_agent_rec_test_() ->
+	APid = spawn(fun() -> ok end),
+	A = #agent{login="agent", profile="tech", source=APid},
+	A2 = A#agent{profile="corp"},
+	{setup, fun() ->
+		meck:new(agent),
+		meck:expect(agent, dump_state, 1, A2)
+	end, fun(_) ->
+		meck:unload(agent)
+	end,[fun() ->
+		St = new(A),
+		?assertEqual(A2, get(St, agent))
+	end]}.
 
 -endif.
