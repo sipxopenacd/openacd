@@ -38,7 +38,10 @@
 -export([logout/1,
 	get_queues/1,
 	get_clients/1,
-	get_release_codes/1]).
+	get_release_codes/1,
+	go_available/1,
+	go_released/1,
+	go_released/2]).
 
 logout(_St) ->
 	send_exit(),
@@ -67,6 +70,29 @@ get_release_codes(_St) ->
 	end,
 	{[{codes, [RtoEntry(R) || R <- Rs]}]}.
 
+go_available(St) ->
+	APid = cpx_conn_state:get(St, agent_pid),
+	agent:set_release(APid, none),
+	{[{state, available}]}.
+
+go_released(St) ->
+	APid = cpx_conn_state:get(St, agent_pid),
+	agent:set_release(APid, default),
+	%% TODO define default release in header
+	{[{state, released}, {release, {[{id, default}, {name, default}, {bias, negative}]}}]}.
+
+go_released(St, RelIdBin) ->
+	Rs = agent_auth:get_releases(), %% Better if agent_auth has a get_release
+	RelId = b2l(RelIdBin),
+	case [X || X <- Rs, X#release_opt.id=:=RelId] of
+		[R] ->
+			APid = cpx_conn_state:get(St, agent_pid),
+			agent:set_release(APid, {R#release_opt.id, R#release_opt.label, R#release_opt.bias}),
+			{[{state, released}, {release, relopt_entry(R)}]};
+		_ ->
+			err(invalid_rel)
+	end.
+
 %% Internal
 
 send_exit() ->
@@ -75,10 +101,29 @@ send_exit() ->
 l2b(L) ->
 	list_to_binary(L).
 
+b2l(B) ->
+	binary_to_list(B).
+
+relopt_entry(#release_opt{id=Id, label=Label, bias=B}) ->
+	Bias = case B of
+		N when N < 0 -> negative;
+		N when N > 0 -> positive;
+		_ -> neutral
+	end,
+	{[{id, l2b(Id)}, {name, l2b(Label)}, {bias, Bias}]}.
+
+%% Errors
+
+err(invalid_rel) ->
+	{error, 4001, <<"Invalid/Missing release code">>}.
+
 -ifdef(TEST).
 
+t_apid() ->
+	erlang:list_to_pid("<0.1.2>").
+
 t_st() ->
-	cpx_conn_state:new().
+	cpx_conn_state:new(#agent{login="agent", source=t_apid()}).
 
 assert_exit() ->
 	Exit = receive
@@ -129,6 +174,37 @@ agent_auth_apis_test_() ->
 			{[{id, <<"relopt2">>}, {name, <<"Release 2">>}, {bias, neutral}]},
 			{[{id, <<"relopt3">>}, {name, <<"Release 3">>}, {bias, positive}]}]}]},
 			get_release_codes(t_st()))
+	end}]}.
+
+release_change_test_() ->
+	{setup, fun() ->
+		meck:new(agent),
+		meck:expect(agent, set_release, 2, ok),
+
+		meck:new(agent_auth),
+		meck:expect(agent_auth, get_releases, 0, [
+			#release_opt{id="relopt1", label="Release 1", bias=-1},
+			#release_opt{id="relopt2", label="Release 2", bias=0},
+			#release_opt{id="relopt3", label="Release 3", bias=1}
+		])
+	end, fun(_) ->
+		meck:unload(agent_auth),
+		meck:unload(agent)
+	end, [{"go_available", fun() ->
+		?assertEqual({[{state, available}]},
+			go_available(t_st())),
+		?assert(meck:called(agent, set_release, [t_apid(), none]))
+	end}, {"go_released/0", fun() ->
+		?assertEqual({[{state, released}, {release, {[{id, default}, {name, default}, {bias, negative}]}}]},
+			go_released(t_st())),
+		?assert(meck:called(agent, set_release, [t_apid(), default]))
+	end}, {"go_released/1 - existing state", fun() ->
+		?assertEqual({[{state, released}, {release, {[{id, <<"relopt1">>}, {name, <<"Release 1">>}, {bias, negative}]}}]},
+			go_released(t_st(), <<"relopt1">>)),
+		?assert(meck:called(agent, set_release, [t_apid(), {"relopt1", "Release 1", -1}]))
+	end}, {"go_released/1 - undefined state", fun() ->
+		?assertEqual(err(invalid_rel),
+			go_released(t_st(), <<"relopt99">>))
 	end}]}.
 
 -endif.
