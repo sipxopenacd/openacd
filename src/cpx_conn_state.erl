@@ -31,17 +31,26 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--export([new/0]).
+-include("agent.hrl").
 
+-export([new/1, get/2]).
 
--record(state, {}).
+-record(state, {
+	agent_pid :: pid()
+}).
 
-new() ->
-	#state{}.
+new(#agent{source=APid}) ->
+	#state{agent_pid = APid}.
+
+get(#state{agent_pid=APid}, agent_pid) ->
+	APid.
 
 -ifdef(TEST).
 
 new_test() ->
-	?assertEqual(#state{}, new()).
+	APid = spawn(fun() -> ok end),
+	St = new(#agent{login="agent", source=APid}),
+
+	?assertEqual(APid, get(St, agent_pid)).
 
 -endif.

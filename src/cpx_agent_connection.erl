@@ -309,9 +309,7 @@ start(Username) ->
 %% seed the state.
 -spec(init/1 :: (Agent :: #agent{}) -> {'ok', #state{}}).
 init(Agent) ->
-	#agent{used_channels = Channels, connection = Conn} = Agent,
-	% TODO used_channels likely lacks what we want
-	{ok, #state{agent = Agent, channels = Channels, connection = Conn}}.
+	{ok, cpx_conn_state:new(Agent)}.
 
 %% @doc Pull the agent record out of the state.
 -spec(get_agent/1 :: (State :: #state{}) -> 'undefined' | #agent{}).
