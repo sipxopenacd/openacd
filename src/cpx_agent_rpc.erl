@@ -38,6 +38,7 @@
 -export([logout/1,
 	get_queues/1,
 	get_clients/1,
+	get_skills/1,
 	get_release_codes/1,
 	go_available/1,
 	go_released/1,
@@ -57,6 +58,20 @@ get_clients(_St) ->
 	end,
 	Clients = call_queue_config:get_clients(),
 	{[{clients, [ClientToEntry(Cl) || Cl <- Clients]}]}.
+
+get_skills(St) ->
+	APid = cpx_conn_state:get(St, agent_pid),
+	Ss = agent:get_skills(APid),
+
+	Es = lists:reverse(lists:foldl(
+		fun(At, Acc) when is_atom(At) -> [At|Acc];
+			({'_brand', Client}, Acc) -> [{[{client, l2b(Client)}]}|Acc];
+			({'_node', Node}, Acc) -> [{[{node, Node}]}|Acc];
+			({'_profile', Profile}, Acc) -> [{[{profile, l2b(Profile)}]}|Acc];
+			({'_queue', Queue}, Acc) -> [{[{queue, l2b(Queue)}]}|Acc];
+			(_, Acc) -> Acc
+		end, [], Ss)),
+	{[{skills, Es}]}.
 
 get_release_codes(_St) ->
 	Rs = agent_auth:get_releases(),
@@ -205,6 +220,26 @@ release_change_test_() ->
 	end}, {"go_released/1 - undefined state", fun() ->
 		?assertEqual(err(invalid_rel),
 			go_released(t_st(), <<"relopt99">>))
+	end}]}.
+
+agent_info_test_() ->
+	{setup, fun() ->
+		meck:new(agent),
+		meck:expect(agent, get_skills, 1, [english, support, '_all',
+			{'_brand', "Client 1"},
+			{'_node', 'server1.openacd.com'},
+			{'_profile', "tech_team"},
+			{'_queue', "dsl_support"},
+			{unknown, should, notbepresent}])
+	end, fun(_) ->
+		meck:unload(agent)
+	end, [{"get_skills", fun() ->
+		?assertEqual({[{skills, [english, support, '_all',
+			{[{'client', <<"Client 1">>}]},
+			{[{'node', 'server1.openacd.com'}]},
+			{[{'profile', <<"tech_team">>}]},
+			{[{'queue', <<"dsl_support">>}]}]}]},
+			get_skills(t_st()))
 	end}]}.
 
 -endif.
