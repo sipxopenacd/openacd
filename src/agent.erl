@@ -95,6 +95,7 @@
 	set_release/2,
 	add_skills/2,
 	remove_skills/2,
+	get_skills/1,
 	change_profile/2,
 	query_state/1,
 	dump_state/1,
@@ -183,6 +184,10 @@ add_skills(Apid, Skills) when is_list(Skills), is_pid(Apid) ->
 -spec(remove_skills/2 :: (Apid :: pid(), Skills :: [atom() | {atom(), any()}]) -> 'ok').
 remove_skills(Apid, Skills) when is_list(Skills), is_pid(Apid) ->
 	gen_fsm:sync_send_all_state_event(Apid, {remove_skills, Skills}).
+
+-spec(get_skills/1 :: (Apid :: pid()) -> [atom() | {atom(), any()}]).
+get_skills(Apid) when is_pid(Apid) ->
+	gen_fsm:sync_send_all_state_event(Apid, get_skills).
 
 -spec(change_profile/2 :: (Apid :: pid(), Profile :: string()) -> 'ok' | {'error', 'unknown_profile'}).
 change_profile(Apid, Profile) ->
@@ -360,7 +365,8 @@ released(Msg, State) ->
 % ======================================================================
 % HANDLE_SYNC_EVENT
 % ======================================================================
-
+handle_sync_event(get_skills, _From, StateName, #state{agent_rec = #agent{skills = Skills}} = State) ->
+	{reply, Skills, StateName, State};
 handle_sync_event({set_connection, Pid}, _From, StateName, #state{agent_rec = #agent{connection = undefined} = Agent} = State) ->
 	link(Pid),
 	dict:map(fun(ChanPid, V) ->
