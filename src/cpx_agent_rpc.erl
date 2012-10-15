@@ -39,6 +39,7 @@
 	get_queues/1,
 	get_clients/1,
 	get_skills/1,
+	get_node/1,
 	get_release_codes/1,
 	go_available/1,
 	go_released/1,
@@ -72,6 +73,10 @@ get_skills(St) ->
 			(_, Acc) -> Acc
 		end, [], Ss)),
 	{[{skills, Es}]}.
+
+get_node(St) ->
+	APid = cpx_conn_state:get(St, agent_pid),
+	{[{node, node(APid)}]}.
 
 get_release_codes(_St) ->
 	Rs = agent_auth:get_releases(),
@@ -240,6 +245,9 @@ agent_info_test_() ->
 			{[{'profile', <<"tech_team">>}]},
 			{[{'queue', <<"dsl_support">>}]}]}]},
 			get_skills(t_st()))
+	end}, {"get_node", fun() ->
+		?assertEqual({[{node, node()}]},
+			get_node(t_st()))
 	end}]}.
 
 -endif.
