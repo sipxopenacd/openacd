@@ -97,6 +97,7 @@
 	remove_skills/2,
 	get_skills/1,
 	change_profile/2,
+	get_profile/1,
 	query_state/1,
 	dump_state/1,
 	register_rejected/1,
@@ -192,6 +193,10 @@ get_skills(Apid) when is_pid(Apid) ->
 -spec(change_profile/2 :: (Apid :: pid(), Profile :: string()) -> 'ok' | {'error', 'unknown_profile'}).
 change_profile(Apid, Profile) ->
 	gen_fsm:sync_send_all_state_event(Apid, {change_profile, Profile}).
+
+-spec(get_profile/1 :: (Apid :: pid()) -> Profile :: string()).
+get_profile(Apid) ->
+	gen_fsm:sync_send_all_state_event(Apid, get_profile).
 
 %% @doc Returns `{ok, Statename :: atom()}', where `Statename' is the current state of the agent at `Pid'.
 -spec(query_state/1 :: (Pid :: pid()) -> {'ok', atom()}).
@@ -437,7 +442,8 @@ handle_sync_event({change_profile, Profile}, _From, StateName, #state{agent_rec 
 		_ ->
 			{reply, {error, unknown_profile}, StateName, State}
 	end;
-
+handle_sync_event(get_profile, _From, StateName, #state{agent_rec = Agent} = State) ->
+	{reply, Agent#agent.profile, StateName, State};
 handle_sync_event({set_endpoint, Module, Data}, _From, StateName, #state{agent_rec = Agent, original_endpoints = OEnds} = State) ->
 	case priv_set_endpoint(Agent, Module, Data) of
 		{ok, NewAgent} ->
