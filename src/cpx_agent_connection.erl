@@ -186,6 +186,7 @@
 	init/1,
 	encode_cast/2,
 	handle_json/2,
+	handle_json/3,
 	get_agent/1
 ]).
 -export([
@@ -332,7 +333,10 @@ encode_cast(State, Cast) ->
 	end.
 
 handle_json(State, Bin) ->
-	Resp = case ejrpc2:handle_req(cpx_agent_rpc, Bin, [{preargs, [State]}]) of
+	handle_json(State, Bin, []).
+
+handle_json(State, Bin, Mods) ->
+	Resp = case ejrpc2:handle_req([cpx_agent_rpc|Mods], Bin, [{preargs, [State]}]) of
 		ok -> undefined;
 		{ok, R} -> R
 	end,
