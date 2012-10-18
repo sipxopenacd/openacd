@@ -39,6 +39,9 @@
 	agent_pid :: pid()
 }).
 
+-type state() :: #state{}.
+-export_type([state/0]).
+
 new(#agent{source=APid}) ->
 	#state{agent_pid = APid}.
 
