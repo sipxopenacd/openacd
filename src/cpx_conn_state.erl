@@ -36,17 +36,20 @@
 -export([new/1, get/2]).
 
 -record(state, {
-	agent_pid :: pid()
+	agent_pid :: pid(),
+	agent_login :: erlang:error({undefined, login}) | string()
 }).
 
 -type state() :: #state{}.
 -export_type([state/0]).
 
-new(#agent{source=APid}) ->
-	#state{agent_pid = APid}.
+new(#agent{source=APid, login=Login}) ->
+	#state{agent_pid = APid, agent_login=Login}.
 
 get(#state{agent_pid=APid}, agent_pid) ->
 	APid;
+get(#state{agent_login=ALogin}, agent_login) ->
+	ALogin;
 get(#state{agent_pid=APid}, agent) ->
 	agent:dump_state(APid).
 
@@ -54,9 +57,11 @@ get(#state{agent_pid=APid}, agent) ->
 
 new_test() ->
 	APid = spawn(fun() -> ok end),
-	St = new(#agent{login="agent", source=APid}),
+	ALogin = "agent",
+	St = new(#agent{login=ALogin, source=APid}),
 
-	?assertEqual(APid, get(St, agent_pid)).
+	?assertEqual(APid, get(St, agent_pid)),
+	?assertEqual(ALogin, get(St, agent_login)).
 
 get_agent_rec_test_() ->
 	APid = spawn(fun() -> ok end),
