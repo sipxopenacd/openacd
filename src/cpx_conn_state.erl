@@ -33,11 +33,12 @@
 
 -include("agent.hrl").
 
--export([new/1, get/2]).
+-export([new/1, get/2, set/3]).
 
 -record(state, {
 	agent_pid :: pid(),
-	agent_login :: erlang:error({undefined, login}) | string()
+	agent_login :: erlang:error({undefined, login}) | string(),
+	channels = dict:new() :: dict()
 }).
 
 -type state() :: #state{}.
@@ -51,7 +52,12 @@ get(#state{agent_pid=APid}, agent_pid) ->
 get(#state{agent_login=ALogin}, agent_login) ->
 	ALogin;
 get(#state{agent_pid=APid}, agent) ->
-	agent:dump_state(APid).
+	agent:dump_state(APid);
+get(#state{channels=Channels}, channels) ->
+	Channels.
+
+set(State, channels, Channels) ->
+	State#state{channels = Channels}.
 
 -ifdef(TEST).
 
