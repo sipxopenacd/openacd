@@ -1104,14 +1104,14 @@ handle_cast({set_release, Release, Time}, State) ->
 	]},
 	{ok, Json, State};
 
-handle_cast({set_channel, Pid, StateName, Statedata}, State) ->
+handle_cast({set_channel, Pid, StateName, Call}, State) ->
 	Headjson = {struct, [
 		{<<"command">>, <<"setchannel">>},
 		{<<"state">>, StateName},
-		{<<"statedata">>, encode_statedata(Statedata)},
+		{<<"statedata">>, encode_call(Call)},
 		{<<"channelid">>, list_to_binary(pid_to_list(Pid))}
 	]},
-	{ok, State0} = update_channels(Pid, {StateName, Statedata}, State),
+	{ok, State0} = update_channels(Pid, {StateName, Call}, State),
 	{ok, Headjson, State0};
 
 handle_cast({channel_died, Pid, NewAvail}, State) ->
@@ -1199,23 +1199,8 @@ handle_monitor_event(Message, State) ->
 	end,
 	{ok, Json, State}.
 
-%% @doc Encode the given data into a structure suitable for mochijson2:encode
--spec(encode_statedata/1 ::
-	(Callrec :: #call{}) -> json();
-	(Clientrec :: #client{}) -> json();
-	({'onhold', Holdcall :: #call{}, 'calling', any()}) -> json();
-	({Relcode :: string(), Bias :: non_neg_integer()}) -> json();
-	('default') -> {'struct', [{binary(), 'default'}]};
-	(List :: string()) -> binary();
-	({}) -> 'false').
-encode_statedata(Callrec) when is_record(Callrec, call) ->
-%	case Callrec#call.client of
-%		Clientrec when is_record(Clientrec, client) ->
-%			Brand = Clientrec#client.label;
-%		_ ->
-%			Brand = "unknown client"
-%	end,
-	Clientrec = Callrec#call.client,
+encode_call(Call) ->
+	Clientrec = Call#call.client,
 	Client = case Clientrec#client.label of
 		undefined ->
 			<<"unknown client">>;
@@ -1223,38 +1208,56 @@ encode_statedata(Callrec) when is_record(Callrec, call) ->
 			list_to_binary(Else)
 	end,
 	{struct, [
-		{<<"callerid">>, list_to_binary(element(1, Callrec#call.callerid) ++ " " ++ element(2, Callrec#call.callerid))},
+		{<<"callerid">>, list_to_binary(element(1, Call#call.callerid) ++ " " ++ element(2, Call#call.callerid))},
 		{<<"brandname">>, Client},
-		{<<"ringpath">>, Callrec#call.ring_path},
-		{<<"mediapath">>, Callrec#call.media_path},
-		{<<"callid">>, list_to_binary(Callrec#call.id)},
-		{<<"source_module">>, Callrec#call.source_module},
-		{<<"type">>, Callrec#call.type}]};
-encode_statedata(Clientrec) when is_record(Clientrec, client) ->
-	Label = case Clientrec#client.label of
-		undefined ->
-			undefined;
-		Else ->
-			list_to_binary(Else)
-	end,
-	{struct, [
-		{<<"brandname">>, Label}]};
-encode_statedata({onhold, Holdcall, calling, Calling}) ->
-	Holdjson = encode_statedata(Holdcall),
-	Callingjson = encode_statedata(Calling),
-	{struct, [
-		{<<"onhold">>, Holdjson},
-		{<<"calling">>, Callingjson}]};
-encode_statedata({_, default, _}) ->
-	{struct, [{<<"reason">>, default}]};
-encode_statedata({_, ring_fail, _}) ->
-	{struct, [{<<"reason">>, ring_fail}]};
-encode_statedata({_, Reason, _}) ->
-	{struct, [{<<"reason">>, list_to_binary(Reason)}]};
-encode_statedata(List) when is_list(List) ->
-	list_to_binary(List);
-encode_statedata({}) ->
-	false.
+		{<<"ringpath">>, Call#call.ring_path},
+		{<<"mediapath">>, Call#call.media_path},
+		{<<"callid">>, list_to_binary(Call#call.id)},
+		{<<"source_module">>, Call#call.source_module},
+		{<<"type">>, Call#call.type}]}.
+
+%% @doc Encode the given data into a structure suitable for mochijson2:encode
+% -spec(encode_statedata/1 ::
+% 	(Callrec :: #call{}) -> json();
+% 	(Clientrec :: #client{}) -> json();
+% 	({'onhold', Holdcall :: #call{}, 'calling', any()}) -> json();
+% 	({Relcode :: string(), Bias :: non_neg_integer()}) -> json();
+% 	('default') -> {'struct', [{binary(), 'default'}]};
+% 	(List :: string()) -> binary();
+% 	({}) -> 'false').
+% encode_statedata(Callrec) when is_record(Callrec, call) ->
+%	case Callrec#call.client of
+%		Clientrec when is_record(Clientrec, client) ->
+%			Brand = Clientrec#client.label;
+%		_ ->
+%			Brand = "unknown client"
+%	end,
+%
+% encode_statedata(Clientrec) when is_record(Clientrec, client) ->
+% 	Label = case Clientrec#client.label of
+% 		undefined ->
+% 			undefined;
+% 		Else ->
+% 			list_to_binary(Else)
+% 	end,
+% 	{struct, [
+% 		{<<"brandname">>, Label}]};
+% encode_statedata({onhold, Holdcall, calling, Calling}) ->
+% 	Holdjson = encode_statedata(Holdcall),
+% 	Callingjson = encode_statedata(Calling),
+% 	{struct, [
+% 		{<<"onhold">>, Holdjson},
+% 		{<<"calling">>, Callingjson}]};
+% encode_statedata({_, default, _}) ->
+% 	{struct, [{<<"reason">>, default}]};
+% encode_statedata({_, ring_fail, _}) ->
+% 	{struct, [{<<"reason">>, ring_fail}]};
+% encode_statedata({_, Reason, _}) ->
+% 	{struct, [{<<"reason">>, list_to_binary(Reason)}]};
+% encode_statedata(List) when is_list(List) ->
+% 	list_to_binary(List);
+% encode_statedata({}) ->
+% 	false.
 
 
 extract_groups(Stats) ->
