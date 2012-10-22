@@ -769,14 +769,17 @@ inivr(Msg, {#base_state{ callback = Callback, callrec = Call} = BaseState,
 %%--------------------------------------------------------------------
 
 inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
-		cook = Requester}, _Timeout}}, {Requester, _Tag}, {
+		cook = Requester, skills = ESkills}, _Timeout} = _QCall}, {Requester, _Tag}, {
 		#base_state{callrec = Call} = BaseState,
 		Internal}) ->
+	?DEBUG("Queued call: ~p", [_QCall]),
 	ClientOpts = Call#call.client#client.options,
 	TimeoutSec = proplists:get_value("ringout", ClientOpts, 60),
 	Timeout = TimeoutSec * 1000,
-	?INFO("Trying to ring ~p with ~p with timeout ~p", [Agent, Call#call.id, Timeout]),
-	try agent:prering(Apid, Call) of
+	Call1 = Call#call{skills = ESkills},
+	BaseState1 = BaseState#base_state{callrec = Call1},
+	?INFO("Trying to ring ~p with ~p with timeout ~p", [Agent, Call1#call.id, Timeout]),
+	try agent:prering(Apid, Call1) of
 		{ok, RPid} ->
 			Rmon = erlang:monitor(process, RPid),
 			Tref = gen_fsm:send_event_after(Timeout, {{'$gen_media', ringout}, undefined}),
@@ -787,17 +790,17 @@ inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
 				ring_mon = Rmon, cook = Requester, cook_mon = CookMon,
 				ringout = Tref
 			},
-			{reply, ok, inqueue_ringing, {BaseState, NewInternal}};
+			{reply, ok, inqueue_ringing, {BaseState1, NewInternal}};
 		RingErr ->
-			?INFO("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call#call.id]),
-			{reply, invalid, inqueue, {BaseState, Internal}}
+			?INFO("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call1#call.id]),
+			{reply, invalid, inqueue, {BaseState1, Internal}}
 	catch
 		exit:{noproc, {gen_fsm, sync_send_event, _TheArgs}} ->
 			?WARNING("Agent ~p is a dead pid", [Apid]),
-			{reply, invalid, inqueue, {BaseState, Internal}};
+			{reply, invalid, inqueue, {BaseState1, Internal}};
 		exit:{max_ringouts, {gen_fsm, sync_send_event, _TheArgs}} ->
 			?DEBUG("Max ringouts reached for agent ~p", [Apid]),
-			{reply, invalid, inqueue, {BaseState, Internal}}
+			{reply, invalid, inqueue, {BaseState1, Internal}}
 	end;
 
 inqueue({{'$gen_media', ring}, {{_Agent, Apid}, QCall, _Timeout}}, _From, State) ->
