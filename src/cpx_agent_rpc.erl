@@ -35,6 +35,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-import(cpx_json_util, [l2b/1, b2l/1]).
+
 -export([logout/1,
 	get_queues/1,
 	get_clients/1,
@@ -66,7 +68,7 @@ get_skills(St) ->
 	APid = cpx_conn_state:get(St, agent_pid),
 	Ss = agent:get_skills(APid),
 
-	Es = skills_to_entries(Ss),
+	Es = cpx_json_util:enc_skills(Ss),
 	{[{skills, Es}]}.
 
 get_node(St) ->
@@ -77,7 +79,7 @@ get_connection_info(St) ->
 	A = cpx_conn_state:get(St, agent),
 	{[{username, l2b(A#agent.login)},
 		{profile, l2b(A#agent.profile)},
-		{skills, skills_to_entries(A#agent.skills)},
+		{skills, cpx_json_util:enc_skills(A#agent.skills)},
 		{node, node(A#agent.source)},
 		{time, util:now()}]}.
 
@@ -125,12 +127,6 @@ go_released(St, RelIdBin) ->
 send_exit() ->
 	self() ! {'$cpx_agent_rpc', exit}.
 
-l2b(L) ->
-	list_to_binary(L).
-
-b2l(B) ->
-	binary_to_list(B).
-
 relopt_entry(#release_opt{id=Id, label=Label, bias=B}) ->
 	Bias = case B of
 		N when N < 0 -> negative;
@@ -138,16 +134,6 @@ relopt_entry(#release_opt{id=Id, label=Label, bias=B}) ->
 		_ -> neutral
 	end,
 	{[{id, l2b(Id)}, {name, l2b(Label)}, {bias, Bias}]}.
-
-skills_to_entries(Skills) ->
-	lists:reverse(lists:foldl(
-		fun(At, Acc) when is_atom(At) -> [At|Acc];
-			({'_brand', Client}, Acc) -> [{[{client, l2b(Client)}]}|Acc];
-			({'_node', Node}, Acc) -> [{[{node, Node}]}|Acc];
-			({'_profile', Profile}, Acc) -> [{[{profile, l2b(Profile)}]}|Acc];
-			({'_queue', Queue}, Acc) -> [{[{queue, l2b(Queue)}]}|Acc];
-			(_, Acc) -> Acc
-		end, [], Skills)).
 
 %% Errors
 
@@ -247,12 +233,7 @@ release_change_test_() ->
 agent_info_test_() ->
 	{setup, fun() ->
 		meck:new(agent),
-		meck:expect(agent, get_skills, 1, [english, support, '_all',
-			{'_brand', "Client 1"},
-			{'_node', 'server1.openacd.com'},
-			{'_profile', "tech_team"},
-			{'_queue', "dsl_support"},
-			{unknown, should, notbepresent}]),
+		meck:expect(agent, get_skills, 1, [english, support]),
 		meck:expect(agent, get_profile, 1, "tech_team"),
 
 		meck:expect(agent, dump_state, 1,
@@ -266,11 +247,7 @@ agent_info_test_() ->
 	end, fun(_) ->
 		meck:unload(agent)
 	end, [{"get_skills", fun() ->
-		?assertEqual({[{skills, [english, support, '_all',
-			{[{'client', <<"Client 1">>}]},
-			{[{'node', 'server1.openacd.com'}]},
-			{[{'profile', <<"tech_team">>}]},
-			{[{'queue', <<"dsl_support">>}]}]}]},
+		?assertEqual({[{skills, [english, support]}]},
 			get_skills(t_st()))
 	end}, {"get_node", fun() ->
 		?assertEqual({[{node, node()}]},
