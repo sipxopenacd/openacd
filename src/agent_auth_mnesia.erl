@@ -608,7 +608,7 @@ query_nodes([Node | Tail], Time, Func, Acc) ->
 %% @doc Take the plaintext username and password and attempt to
 %% authenticate the agent.
 -type(profile_name() :: string()).
--spec(auth/2 :: (Username :: string(), Password :: string()) -> {ok, 'deny'} | {ok, {'allow', string(), skill_list(), security_level(), profile_name()}} | pass).
+-spec(auth/2 :: (Username :: string(), Password :: string()) -> {ok, 'deny'} | {ok, {'allow', string(), skills(), security_level(), profile_name()}} | pass).
 auth(Username, Password) ->
 	Extended = case get_agent(Username) of
 		{ok, Rec} ->
@@ -691,7 +691,7 @@ build_tables() ->
 %% erlang:md5'ed.  `Security' is either `agent', `supervisor', or `admin'.
 %% @deprecated Use {@link cache/2} instead.
 -type(profile() :: string()).
--type(profile_data() :: {profile(), skill_list()} | profile() | skill_list()).
+-type(profile_data() :: {profile(), skills()} | profile() | skills()).
 -spec(cache/6 ::	(Id :: string(), Username :: string(), Password :: string(), Profile :: profile_data(), Security :: 'agent' | 'supervisor' | 'admin', Extended :: [{atom(), any()}]) ->
 						{'atomic', 'ok'} | {'aborted', any()}).
 cache(Id, Username, Password, {Profile, Skills}, Security, Extended) ->
@@ -828,7 +828,7 @@ destroy(login, Value) ->
 %% @private
 % Checks the `Username' and prehashed `Password' using the given `Salt' for the cached password.
 % internally called by the auth callback; there should be no need to call this directly (aside from tests).
--spec(local_auth/2 :: (Username :: string(), Password :: string()) -> {'ok', {'allow', string(), skill_list(), security_level(), profile_name()}} | {'ok', 'deny'} | pass).
+-spec(local_auth/2 :: (Username :: string(), Password :: string()) -> {'ok', {'allow', string(), skills(), security_level(), profile_name()}} | {'ok', 'deny'} | pass).
 local_auth(Username, BasePassword) ->
 	Password = util:bin_to_hexstr(erlang:md5(BasePassword)),
 	F = fun() ->

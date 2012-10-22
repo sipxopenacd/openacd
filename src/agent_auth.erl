@@ -94,7 +94,7 @@
 %% return a response, a denial is returned.
 %%
 %% Args :: [Username :: string(), Password :: string()]
-%% Returns :: 'deny' | {'allow', string(), skill_list(), security_level(),
+%% Returns :: 'deny' | {'allow', string(), skills(), security_level(),
 %% profile_name()}).
 %%
 %% === auth_agent_success ===
@@ -442,7 +442,7 @@ get_extended_prop({_, _} = U, Prop) ->
 %% @doc Take the plaintext username and password and attempt to
 %% authenticate the agent.
 -type(profile_name() :: string()).
--spec(auth/2 :: (Username :: string(), Password :: string()) -> 'deny' | {'allow', string(), skill_list(), security_level(), profile_name()}).
+-spec(auth/2 :: (Username :: string(), Password :: string()) -> 'deny' | {'allow', string(), skills(), security_level(), profile_name()}).
 auth(Username, Password) ->
 	case cpx_hooks:trigger_hooks(auth_agent, [Username, Password], first) of
 		{ok, deny} -> deny;

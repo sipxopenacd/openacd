@@ -52,7 +52,6 @@
 -type(time_avail() :: integer()).
 -type(channels() :: [channel_category()]).
 -type(endpoints() :: [atom()]). % list of media modules.
--type(skills() :: skill_list()).
 -type(agent_cache() :: {agent_pid(), agent_id(), time_avail(), skills(),
 	channels(), endpoints()}).
 -type(agent_entry() :: {#agent_key{}, #agent_cache{}}).

@@ -14,7 +14,7 @@
 %%
 %%	The Original Code is OpenACD.
 %%
-%%	The Initial Developers of the Original Code is 
+%%	The Initial Developers of the Original Code is
 %%	Andrew Thompson and Micah Warren.
 %%
 %%	All portions of the code written by the Initial Developers are Copyright
@@ -38,7 +38,7 @@
 -type(release_id() :: string()).
 -type(release_code() :: {release_id(), release_label(), release_bias()}).
 -type(skill() :: atom() | {atom(), any()}).
--type(skill_list() :: [skill()]).
+-type(skills() :: [skill()]).
 
 %% used in connections
 -type(json() :: {struct, [{binary(), json()}]} | binary() | integer() | float() | [json()]).
@@ -59,8 +59,8 @@
 	used_channels = dict:new(),
 	endpoints = dict:new(),
 	ring_channel = none :: 'none' | any(),
-	%state = released :: 'idle' | 'ringing' | 'precall' | 'oncall' | 'outgoing' | 'released' | 'warmtransfer' | 'wrapup',	
-	%oldstate = released :: 'idle' | 'ringing' | 'precall' | 'oncall' | 'outgoing' | 'released' | 'warmtransfer' | 'wrapup',	
+	%state = released :: 'idle' | 'ringing' | 'precall' | 'oncall' | 'outgoing' | 'released' | 'warmtransfer' | 'wrapup',
+	%oldstate = released :: 'idle' | 'ringing' | 'precall' | 'oncall' | 'outgoing' | 'released' | 'warmtransfer' | 'wrapup',
 	%statedata = {"default", default, -1} ::	{} |		% when state is idle
 						%#call{} |	% when state is ringing, oncall, outgoing, or wrapup
 						%any() |	% state = precall
@@ -76,7 +76,7 @@
 	log_pid :: 'undefined' | pid(),
 	security_level = agent :: 'agent' | 'supervisor' | 'admin'
 }).
-	
+
 %% statedata's structure is dependant on the state atom.
 %% proposed structures:
 %% idle :: {}
@@ -108,8 +108,8 @@
 	timestamp = util:now() :: pos_integer()
 }).
 
--type(profile_option() :: 
-	'hidden' | 
+-type(profile_option() ::
+	'hidden' |
 	'isolated' |
 	{'queues', [string()]} |
 	{'profiles', [string()]} |
@@ -180,9 +180,9 @@
 	agent :: string(),
 	old_profile :: string(),
 	new_profile :: string(),
-	skills :: skill_list(),
-	dropped_skills :: skill_list(),
-	gained_skills :: skill_list()
+	skills :: skills(),
+	dropped_skills :: skills(),
+	gained_skills :: skills()
 }).
 
 %% A representation of an agent channel moving from one state to another.
