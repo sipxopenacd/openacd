@@ -1210,6 +1210,7 @@ encode_call(Call) ->
 	{struct, [
 		{<<"callerid">>, list_to_binary(element(1, Call#call.callerid) ++ " " ++ element(2, Call#call.callerid))},
 		{<<"brandname">>, Client},
+		{<<"skills">>, cpx_json_util:enc_skills(Call#call.skills)},
 		{<<"ringpath">>, Call#call.ring_path},
 		{<<"mediapath">>, Call#call.media_path},
 		{<<"callid">>, list_to_binary(Call#call.id)},
