@@ -35,7 +35,7 @@
 
 -export([new/1, get/2, set/3,
 	get_channel_pid_by_id/2, get_id_by_channel_pid/2,
-	store_channel/2]).
+	store_channel/2, remove_channel/2]).
 
 -record(state, {
 	agent_pid :: pid(),
@@ -90,6 +90,15 @@ store_channel(St, Pid) ->
 			{Id, St1}
 	end.
 
+-spec remove_channel(state(), pid()) -> {binary() | none, state()}.
+remove_channel(St, Pid) ->
+	case lists:keytake(Pid, 2, St#state.channels) of
+		{value, {ChanId, _}, Chans} ->
+			{ChanId, St#state{channels = Chans}};
+		_ ->
+			{none, St}
+	end.
+
 %% Internal
 -spec count_to_id(non_neg_integer()) -> binary().
 count_to_id(Id) ->
@@ -130,6 +139,8 @@ channel_test() ->
 	Pid1 = spawn(fun() -> ok end),
 	Pid2 = spawn(fun() -> ok end),
 
+	Pid3 = spawn(fun() -> ok end),
+
 	?assertEqual(none, get_id_by_channel_pid(St, Pid1)),
 	?assertEqual(none, get_channel_pid_by_id(St, <<"ch1">>)),
 
@@ -140,7 +151,12 @@ channel_test() ->
 	?assertEqual(<<"ch2">>, Id2),
 
 	?assertEqual(Id1, get_id_by_channel_pid(St2, Pid1)),
-	?assertEqual(Pid2, get_channel_pid_by_id(St2, Id2)).
+	?assertEqual(Pid2, get_channel_pid_by_id(St2, Id2)),
+
+	{Id1, St3} = remove_channel(St2, Pid1),
+	{none, St4} = remove_channel(St3, Pid3),
+
+	?assertEqual(none, get_id_by_channel_pid(St4, Pid1)).
 
 
 -endif.
