@@ -47,7 +47,8 @@
 	get_release_codes/1,
 	go_available/1,
 	go_released/1,
-	go_released/2]).
+	go_released/2,
+	end_wrapup/2]).
 
 logout(_St) ->
 	send_exit(),
@@ -122,6 +123,17 @@ go_released(St, RelIdBin) ->
 			err(invalid_rel)
 	end.
 
+end_wrapup(St, ChanId) ->
+	case cpx_conn_state:get_channel_pid_by_id(St, ChanId) of
+		ChanPid when is_pid(ChanPid) ->
+			case agent_channel:end_wrapup(ChanPid) of
+				ok -> {[{state, stopped}, {channel, ChanId}]};
+				_ -> err(invalid_state_change)
+			end;
+		_ ->
+			err(channel_not_found)
+	end.
+
 %% Internal
 
 send_exit() ->
@@ -138,15 +150,24 @@ relopt_entry(#release_opt{id=Id, label=Label, bias=B}) ->
 %% Errors
 
 err(invalid_rel) ->
-	{error, 4001, <<"Invalid/Missing release code">>}.
+	{error, 4001, <<"Invalid/Missing release code">>};
+err(channel_not_found) ->
+	{error, 4002, <<"Channel not found">>};
+err(invalid_state_change) ->
+	{error, 4003, <<"Invalid state change">>}.
 
 -ifdef(TEST).
 
 t_apid() ->
 	erlang:list_to_pid("<0.1.2>").
 
+t_cpid() ->
+	erlang:list_to_pid("<0.1.3>").
+
 t_st() ->
-	cpx_conn_state:new(#agent{login="agent", source=t_apid()}).
+	St = cpx_conn_state:new(#agent{login="agent", source=t_apid()}),
+	{_, St2} = cpx_conn_state:store_channel(St, t_cpid()),
+	St2.
 
 assert_exit() ->
 	Exit = receive
@@ -263,6 +284,24 @@ agent_info_test_() ->
 			{node, node()},
 			{time, 123}]},
 		get_connection_info(t_st()))
+	end}]}.
+
+end_wrapup_test_() ->
+	{setup, fun() ->
+		meck:new(agent_channel)
+	end, fun(_) ->
+		meck:unload(agent_channel)
+	end, [{"success", fun() ->
+		ChId = <<"ch1">>,
+		St = t_st(),
+		meck:expect(agent_channel, end_wrapup, 1, ok),
+		?assertEqual({[{state, stopped}, {channel, ChId}]}, end_wrapup(St, ChId)),
+		?assert(meck:called(agent_channel, end_wrapup, [t_cpid()], self()))
+	end}, {"invalid end wrapup", fun() ->
+		meck:expect(agent_channel, end_wrapup, 1, invalid),
+		?assertEqual(err(invalid_state_change), end_wrapup(t_st(), <<"ch1">>))
+	end}, {"channel not found", fun() ->
+		?assertEqual(err(channel_not_found), end_wrapup(t_st(), <<"ch999">>))
 	end}]}.
 
 -endif.
