@@ -48,6 +48,7 @@
 	go_available/1,
 	go_released/1,
 	go_released/2,
+	hangup/2,
 	end_wrapup/2]).
 
 logout(_St) ->
@@ -123,16 +124,21 @@ go_released(St, RelIdBin) ->
 			err(invalid_rel)
 	end.
 
+hangup(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:set_state(ChanPid, wrapup) of
+			ok -> {[{state, wrapup}, {channel, ChanId}]};
+			_ -> err(invalid_state_change)
+		end
+	end).
+
 end_wrapup(St, ChanId) ->
-	case cpx_conn_state:get_channel_pid_by_id(St, ChanId) of
-		ChanPid when is_pid(ChanPid) ->
-			case agent_channel:end_wrapup(ChanPid) of
-				ok -> {[{state, stopped}, {channel, ChanId}]};
-				_ -> err(invalid_state_change)
-			end;
-		_ ->
-			err(channel_not_found)
-	end.
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:end_wrapup(ChanPid) of
+			ok -> {[{state, stopped}, {channel, ChanId}]};
+			_ -> err(invalid_state_change)
+		end
+	end).
 
 %% Internal
 
@@ -146,6 +152,14 @@ relopt_entry(#release_opt{id=Id, label=Label, bias=B}) ->
 		_ -> neutral
 	end,
 	{[{id, l2b(Id)}, {name, l2b(Label)}, {bias, Bias}]}.
+
+with_channel_do(St, ChanId, Fun) ->
+	case cpx_conn_state:get_channel_pid_by_id(St, ChanId) of
+		ChanPid when is_pid(ChanPid) ->
+			Fun(ChanPid);
+		_ ->
+			err(channel_not_found)
+	end.
 
 %% Errors
 
@@ -284,6 +298,24 @@ agent_info_test_() ->
 			{node, node()},
 			{time, 123}]},
 		get_connection_info(t_st()))
+	end}]}.
+
+hangup_test_() ->
+	{setup, fun() ->
+		meck:new(agent_channel)
+	end, fun(_) ->
+		meck:unload(agent_channel)
+	end, [{"success", fun() ->
+		ChId = <<"ch1">>,
+		St = t_st(),
+		meck:expect(agent_channel, set_state, 2, ok),
+		?assertEqual({[{state, wrapup}, {channel, ChId}]}, hangup(St, ChId)),
+		?assert(meck:called(agent_channel, set_state, [t_cpid(), wrapup], self()))
+	end}, {"invalid end wrapup", fun() ->
+		meck:expect(agent_channel, set_state, 2, error),
+		?assertEqual(err(invalid_state_change), hangup(t_st(), <<"ch1">>))
+	end}, {"channel not found", fun() ->
+		?assertEqual(err(channel_not_found), hangup(t_st(), <<"ch999">>))
 	end}]}.
 
 end_wrapup_test_() ->
