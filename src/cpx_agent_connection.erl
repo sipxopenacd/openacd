@@ -155,6 +155,7 @@
 -include("agent.hrl").
 -include("call.hrl").
 -include("queue.hrl").
+-include("cpx_conn_state.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
