@@ -33,12 +33,15 @@
 
 -include("agent.hrl").
 
--export([new/1, get/2, set/3]).
+-export([new/1, get/2, set/3,
+	get_channel_pid_by_id/2, get_id_by_channel_pid/2,
+	store_channel/2]).
 
 -record(state, {
 	agent_pid :: pid(),
 	agent_login :: erlang:error({undefined, login}) | string(),
-	channels = dict:new() :: dict()
+	channels = [] :: list(),
+	chan_count = 0 :: non_neg_integer()
 }).
 
 -type state() :: #state{}.
@@ -58,6 +61,40 @@ get(#state{channels=Channels}, channels) ->
 
 set(State, channels, Channels) ->
 	State#state{channels = Channels}.
+
+-spec get_id_by_channel_pid(state(), pid()) -> binary() | none.
+get_id_by_channel_pid(St, Pid) ->
+	case lists:keyfind(Pid, 2, St#state.channels) of
+		{Id, _} -> Id;
+		_ -> none
+	end.
+
+-spec get_channel_pid_by_id(state(), binary()) -> pid() | none.
+get_channel_pid_by_id(St, Id) ->
+	case lists:keyfind(Id, 1, St#state.channels) of
+		{_, Ch} -> Ch;
+		_ -> none
+	end.
+
+-spec store_channel(state(), pid()) -> binary().
+store_channel(St, Pid) ->
+	Channels = St#state.channels,
+	case lists:keyfind(Pid, 2, Channels) of
+		{Id, _} ->
+			{Id, St};
+		_ ->
+			NextCount = St#state.chan_count + 1,
+			Id = count_to_id(NextCount),
+			Chs = [{Id, Pid}|Channels],
+			St1 = St#state{channels=Chs, chan_count=NextCount},
+			{Id, St1}
+	end.
+
+%% Internal
+-spec count_to_id(non_neg_integer()) -> binary().
+count_to_id(Id) ->
+	IdBin = list_to_binary(integer_to_list(Id)),
+	<<"ch", IdBin/binary>>.
 
 -ifdef(TEST).
 
@@ -82,5 +119,28 @@ get_agent_rec_test_() ->
 		St = new(A),
 		?assertEqual(A2, get(St, agent))
 	end]}.
+
+t_st() ->
+	APid = spawn(fun() -> ok end),
+	ALogin = "agent",
+	new(#agent{login=ALogin, source=APid}).
+
+channel_test() ->
+	St = t_st(),
+	Pid1 = spawn(fun() -> ok end),
+	Pid2 = spawn(fun() -> ok end),
+
+	?assertEqual(none, get_id_by_channel_pid(St, Pid1)),
+	?assertEqual(none, get_channel_pid_by_id(St, <<"ch1">>)),
+
+	{Id1, St1} = store_channel(St, Pid1),
+	{Id2, St2} = store_channel(St1, Pid2),
+
+	?assertEqual(<<"ch1">>, Id1),
+	?assertEqual(<<"ch2">>, Id2),
+
+	?assertEqual(Id1, get_id_by_channel_pid(St2, Pid1)),
+	?assertEqual(Pid2, get_channel_pid_by_id(St2, Id2)).
+
 
 -endif.
