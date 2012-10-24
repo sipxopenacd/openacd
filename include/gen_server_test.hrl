@@ -14,7 +14,7 @@
 %%
 %%	The Original Code is OpenACD.
 %%
-%%	The Initial Developers of the Original Code is 
+%%	The Initial Developers of the Original Code is
 %%	Andrew Thompson and Micah Warren.
 %%
 %%	All portions of the code written by the Initial Developers are Copyright
@@ -90,8 +90,8 @@ gen_server_test_() ->
 
 %% @hidden
 %% Same as above, but allows for more isolation; especially important
-%% for named processes.  ?GEN_SERVER_TEST is expected to be a fun that returns a 3 element tuple:  {Node, Start, Stop}.  The start and stop are funs.  
-%% Start should return the pid or name used to address the gen_server, 
+%% for named processes.  ?GEN_SERVER_TEST is expected to be a fun that returns a 3 element tuple:  {Node, Start, Stop}.  The start and stop are funs.
+%% Start should return the pid or name used to address the gen_server,
 %% while stop will accept same and end it.
 
 -ifdef(GEN_SERVER_TEST).
@@ -118,5 +118,5 @@ gen_server_test_() ->
 		{Start, Stop} ->
 			{foreach, Start, Stop, Tests}
 	end.
-	
+
 -endif.

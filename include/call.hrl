@@ -14,7 +14,7 @@
 %%
 %%	The Original Code is OpenACD.
 %%
-%%	The Initial Developers of the Original Code is 
+%%	The Initial Developers of the Original Code is
 %%	Andrew Thompson and Micah Warren.
 %%
 %%	All portions of the code written by the Initial Developers are Copyright
@@ -28,10 +28,10 @@
 %%
 
 -define(getRingout, element(2, cpx:get_env(default_ringout, 60)) * 1000).
-%% slow text is textual medias that do not requrie a particually fast 
+%% slow text is textual medias that do not requrie a particually fast
 %% response, such as email.  Fast_text is textual medias that require rapid
 %% replies, such as chat.
--type(channel_category() :: 'dummy' | 'voice' | 'visual' | 'slow_text' | 
+-type(channel_category() :: 'dummy' | 'voice' | 'visual' | 'slow_text' |
 	'fast_text').
 -type(url_format() :: string()).
 -type(client_opt() :: {any(), any()}).
@@ -56,7 +56,7 @@
 		bound = [] :: [pid()],
 		% client record
 		%% TODO cleanup too many client types
-		client = undefined :: 'undefined' | #client{} 
+		client = undefined :: 'undefined' | #client{}
 			| {Id :: string(), Opts :: [{atom(), any()}]}
 			| (Id :: string()),
 		skills = [] :: [atom()],
@@ -82,9 +82,9 @@
 	cook :: pid()
 }).
 
--type(transaction_type() :: 
-	'cdrinit' | 
-	'inivr' | 
+-type(transaction_type() ::
+	'cdrinit' |
+	'inivr' |
 	'dialoutgoing' |
 	'inqueue' |
 	'ringing' |

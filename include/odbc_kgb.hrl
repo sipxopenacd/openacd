@@ -10,7 +10,7 @@
 %%
 %%	The Original Code is OpenACD.
 %%
-%%	The Initial Developers of the Original Code is 
+%%	The Initial Developers of the Original Code is
 %%	Andrew Thompson.
 %%
 %%	All portions of the code written by the Initial Developers are Copyright
@@ -47,7 +47,7 @@
 	acd_agent_id :: string(),
 	acd_type = "openacd" :: string(),
 	acd_name :: string(), % usually hostname
-	agent_ip :: string(), 
+	agent_ip :: string(),
 	ani :: string(), % field one of from_header
 	uci :: string(), % field 2 of from_header
 	did :: string(), % field 4 of from_header

@@ -14,7 +14,7 @@
 %%
 %%	The Original Code is OpenACD.
 %%
-%%	The Initial Developers of the Original Code is 
+%%	The Initial Developers of the Original Code is
 %%	Andrew Thompson and Micah Warren.
 %%
 %%	All portions of the code written by the Initial Developers are Copyright
@@ -35,19 +35,19 @@
 
 -spec(init/1 :: (Args :: [any()]) -> {'ok', state()} | {'ok', state(), gen_timeout()} | {'stop', any()} | 'ignore').
 -spec(handle_call/3 :: (Event :: any(), From :: {pid(), Tag :: term()}, State :: state()) ->
-	{'reply', any(), state()} | 
-	{'reply', any(), state(), gen_timeout()} | 
-	{'noreply', state()} | 
-	{'noreply', state(), gen_timeout()} | 
-	{'stop', any(), any(), state()} | 
+	{'reply', any(), state()} |
+	{'reply', any(), state(), gen_timeout()} |
+	{'noreply', state()} |
+	{'noreply', state(), gen_timeout()} |
+	{'stop', any(), any(), state()} |
 	{'stop', any(), state()}).
--spec(handle_cast/2 :: (Request :: any(), State :: state()) -> 
-	{'noreply', state()} | 
+-spec(handle_cast/2 :: (Request :: any(), State :: state()) ->
+	{'noreply', state()} |
 	{'noreply', state(),  gen_timeout()} | {
 	'stop', any(), state()}).
--spec(handle_info/2 :: (Request :: any(), State :: state()) ->  
-	{'noreply', state()} | 
-	{'noreply', state(),  gen_timeout()} | 
+-spec(handle_info/2 :: (Request :: any(), State :: state()) ->
+	{'noreply', state()} |
+	{'noreply', state(),  gen_timeout()} |
 	{'stop', any(), state()}).
 -spec(terminate/2 :: (Reason :: any(), State :: state()) -> any()).
 -spec(code_change/3 :: (Vsn :: {'down', any()} | any(), State :: state(), Extra :: any()) -> {'ok', state()}).
@@ -56,27 +56,27 @@
 
 -ifdef(GEN_FSM).
 
--spec(init/1 :: (Args :: [any()]) -> 
-	{'ok', statename(),  state()} | 
-	{'ok',  statename(), state(), gen_timeout()} | 
+-spec(init/1 :: (Args :: [any()]) ->
+	{'ok', statename(),  state()} |
+	{'ok',  statename(), state(), gen_timeout()} |
 	{'stop', any()} | 'ignore').
--spec(handle_event/3 :: (Event :: any(), StateName :: statename(), State :: state()) -> 
-	{'next_state', statename(), state()} | 
-	{'next_state', statename(), state(), gen_timeout()} | 
+-spec(handle_event/3 :: (Event :: any(), StateName :: statename(), State :: state()) ->
+	{'next_state', statename(), state()} |
+	{'next_state', statename(), state(), gen_timeout()} |
 	{'stop', any(), state()}).
--spec(handle_sync_event/4 :: (Event :: any(), From :: {pid(), Tag :: term()}, StateName :: statename(), State :: state()) -> 
-	{'reply', any(), statename(), state()} | 
-	{'reply', any(), statename(), state(), gen_timeout()} | 
-	{'next_state', statename(), state()} | 
-	{'next_state', statename(), state(), gen_timeout()} | 
-	{'stop', any(), any(), state()} | 
+-spec(handle_sync_event/4 :: (Event :: any(), From :: {pid(), Tag :: term()}, StateName :: statename(), State :: state()) ->
+	{'reply', any(), statename(), state()} |
+	{'reply', any(), statename(), state(), gen_timeout()} |
+	{'next_state', statename(), state()} |
+	{'next_state', statename(), state(), gen_timeout()} |
+	{'stop', any(), any(), state()} |
 	{'stop', any(), state()}).
 -spec(handle_info/3 :: (Event :: any(), StateName :: statename(), State :: state()) ->
-	{'next_state', statename(), state()} | 
-	{'next_state', statename(), state(), gen_timeout()} | 
+	{'next_state', statename(), state()} |
+	{'next_state', statename(), state(), gen_timeout()} |
 	{'stop', any(), state()}).
 -spec(terminate/3 :: (Reason :: any(), StateName :: statename(), State :: state()) -> any()).
--spec(code_change/4 :: (OldVsn :: {'down', any()} | any(), StateName :: statename(), State :: state(), Extra :: any()) -> 
+-spec(code_change/4 :: (OldVsn :: {'down', any()} | any(), StateName :: statename(), State :: state(), Extra :: any()) ->
 	{'ok', statename(), state()}).
 
 -endif.
@@ -84,18 +84,18 @@
 -ifdef(GEN_EVENT).
 
 -spec(init/1 :: (Args :: [any()]) -> {'ok', state()} | {'ok', state(), 'hibernate'}).
--spec(handle_event/2 :: (Event :: any(), State :: state()) -> 
-	{'ok', state()} | 
+-spec(handle_event/2 :: (Event :: any(), State :: state()) ->
+	{'ok', state()} |
 	{'ok', state(), 'hibernate'} |
 	{'swap_handler', any(), state(), atom() | {atom(), any()}, any()} |
 	'remove_handler').
--spec(handle_call/2 :: (Request :: any(), State :: state()) -> 
-	{'ok', any(), state()} | 
+-spec(handle_call/2 :: (Request :: any(), State :: state()) ->
+	{'ok', any(), state()} |
 	{'ok', any(), state(), 'hibernate'} |
 	{'swap_handler', any(), any(), state(), atom() | {atom(), any()}, any()} |
 	{'remove_handler', any()}).
 -spec(handle_info/2 :: (Info :: any(), State :: state()) ->
-	{'ok', state()} | 
+	{'ok', state()} |
 	{'ok', state(), 'hibernate'} |
 	{'swap_handler', any(), state(), atom() | {atom(), any()}, any()} |
 	'remove_handler').
@@ -154,7 +154,7 @@
 		{'ok', {state(), #call{}, {transaction_type(), any()}}} |
 		{'stop', any()} | 'ignore').
 
--spec(handle_ring/4 :: (Agent :: pid(), RingData :: any(), Call :: #call{}, 
+-spec(handle_ring/4 :: (Agent :: pid(), RingData :: any(), Call :: #call{},
 	State :: state()) ->
 		{'ok', state()} | {'invalid', state()}).
 
@@ -176,7 +176,7 @@
 	GenMediaState :: gen_media_state(), State :: state()) ->
 		{'ok', state()}).
 
--spec(handle_wrapup/5 :: (From :: {pid(), reference()}, 
+-spec(handle_wrapup/5 :: (From :: {pid(), reference()},
 	Statename :: gen_media_statename(), Call :: #call{},
 	GenMediaState :: gen_media_state(), State :: state()) ->
 		{'ok', state()} | {'hangup', state()}).
@@ -184,11 +184,11 @@
 -spec(handle_call/6 :: (Event :: any(), From :: {pid(), any()},
 	Statename :: gen_media_statename(), Call :: #call{},
 	GenMediaState :: gen_media_state(), State :: state()) ->
-		{'reply', any(), state()} | 
-		{'reply', any(), state(), gen_timeout()} | 
-		{'noreply', state()} | 
-		{'noreply', state(), gen_timeout()} | 
-		{'stop', any(), any(), state()} | 
+		{'reply', any(), state()} |
+		{'reply', any(), state(), gen_timeout()} |
+		{'noreply', state()} |
+		{'noreply', state(), gen_timeout()} |
+		{'stop', any(), any(), state()} |
 		{'stop', any(), state()} |
 		{'stop_ring', any(), state()} |
 		{'answer', any(), state()} |
@@ -196,25 +196,25 @@
 
 -spec(handle_cast/5 :: (Request::any(), Statename::gen_media_statename(),
 	Call :: #call{}, GenMediaState :: gen_media_state(), State :: state()) ->
-		{'noreply', state()} | 
-		{'noreply', state(),  gen_timeout()} | 
-		{'stop', any(), state()} | 
-		{'stop_ring', state()} | 
-		{'answer', state()} | 
+		{'noreply', state()} |
+		{'noreply', state(),  gen_timeout()} |
+		{'stop', any(), state()} |
+		{'stop_ring', state()} |
+		{'answer', state()} |
 		{'wrapup', state()}).
 
 -spec(handle_info/5 :: (Request :: any(),
 	Statename :: gen_media_statename(), Call :: #call{},
 	GenMediaState :: gen_media_state(), State :: state()) ->
-		{'noreply', state()} | 
-		{'noreply', state(),  gen_timeout()} | 
-		{'stop', any(), state()} | 
-		{'stop_ring', state()} | 
-		{'answer', state()} | 
+		{'noreply', state()} |
+		{'noreply', state(),  gen_timeout()} |
+		{'stop', any(), state()} |
+		{'stop_ring', state()} |
+		{'answer', state()} |
 		{'wrapup', state()}).
 
 -spec(terminate/5 :: (Reason :: any(), Statename :: gen_media_statename(),
-	Call :: #call{}, GenMediaState :: gen_media_state(), State :: state()) -> 
+	Call :: #call{}, GenMediaState :: gen_media_state(), State :: state()) ->
 		any()).
 
 -spec(code_change/4 :: (Vsn :: {'down', any()} | any(), Call :: #call{},
