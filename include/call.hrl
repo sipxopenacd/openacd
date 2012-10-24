@@ -60,6 +60,7 @@
 			| {Id :: string(), Opts :: [{atom(), any()}]}
 			| (Id :: string()),
 		skills = [] :: [atom()],
+		queue = undefined :: undefined | string(),
 		cook :: pid() | 'undefined', % gen_media uses this
 		% ring_path really means if the agent fsm can send an answer
 		ring_path = outband :: 'inband' | 'outband' | 'any',
