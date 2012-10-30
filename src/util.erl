@@ -74,6 +74,7 @@
 	list_index/2,
 	list_index/3,
 	now/0,
+	now_ms/0,
 	reload/1,
 	reload/2,
 	reload_all/0,
@@ -455,6 +456,12 @@ list_index_(Fun, Needle, [Head | Tail], Index) ->
 now() ->
 	{Mega, Sec, _} = os:timestamp(),
 	Mega * 1000000 + Sec.
+
+-spec(now_ms/0 :: () -> pos_integer()).
+now_ms() ->
+	{Mega, Sec, Micro} = os:timestamp(),
+	(Mega * 1000000000) + (Sec * 1000) + (Micro div 1000).
+
 
 %% @doc For those times when you don't need a code reload with release files
 %% and version.  For obvious reasons, this should be used for developement only.
