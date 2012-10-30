@@ -38,6 +38,7 @@
 -import(cpx_json_util, [l2b/1, b2l/1]).
 
 -export([logout/1,
+	ping/1,
 	get_queues/1,
 	get_clients/1,
 	get_skills/1,
@@ -54,6 +55,9 @@
 logout(_St) ->
 	send_exit(),
 	{[{status, logged_out}]}.
+
+ping(_St) ->
+	pong.
 
 get_queues(_St) ->
 	Qs = call_queue_config:get_queues(),
@@ -195,6 +199,9 @@ logout_test() ->
 		logout(t_st())),
 	assert_exit().
 
+ping_test() ->
+	?assertEqual(pong, ping(t_st())).
+
 call_queue_apis_test_() ->
 	{setup, fun() ->
 		meck:new(call_queue_config)
@@ -335,5 +342,6 @@ end_wrapup_test_() ->
 	end}, {"channel not found", fun() ->
 		?assertEqual(err(channel_not_found), end_wrapup(t_st(), <<"ch999">>))
 	end}]}.
+
 
 -endif.
