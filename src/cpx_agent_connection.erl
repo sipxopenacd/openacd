@@ -336,7 +336,7 @@ handle_json(State, Bin, Mods) ->
 
 	{E, Resp, State}.
 
-%% @doc After unwrapping the binary that will hold json, and connection
+%% doc After unwrapping the binary that will hold json, and connection
 %% should call this.
 % -spec(handle_json/2 :: (State :: state(), Json :: json()) ->
 % 	{'ok', json(), state()} | {'error', any(), state()} |
@@ -431,7 +431,7 @@ handle_json(State, Bin, Mods) ->
 %% Agent connection api
 %% =======================================================================
 
-%% @doc {@agent_api} Logs the agent out.  The result is a simple success.
+%% doc {@agent_api} Logs the agent out.  The result is a simple success.
 % -spec(logout/1 :: (State :: state()) -> 'exit').
 % logout(_State) ->
 % 	exit.
@@ -459,7 +459,7 @@ handle_json(State, Bin, Mods) ->
 % 	APid = cpx_conn_state:get(State, agent_pid) ,
 % 	agent:set_release(APid, RelData).
 
-%% @doc {@agent_api} Set the agent channel `Channel' to the given
+%% doc {@agent_api} Set the agent channel `Channel' to the given
 %% `Statename' with default state data.  No result property as it either
 %% worked or didn't.  There will likely be an event as well to set the agent
 %% state, so it is recommended that no actual change occur on the agent UI
@@ -480,7 +480,7 @@ handle_json(State, Bin, Mods) ->
 % 			end
 % 	end.
 
-%% @doc {@agent_api} Set the agent channel `Channel' to the given
+%% doc {@agent_api} Set the agent channel `Channel' to the given
 %% `Statename' with the given `Statedata'.  No result property as it either %% worked or it didn't.  State data will vary based on state.  Furthermore,
 %% in the case of success, an event is sent later by the agent fsm.  It is
 %% recommended that no change to the UI occur until that event is received.
@@ -503,7 +503,7 @@ handle_json(State, Bin, Mods) ->
 % 			end
 % 	end.
 
-%% @doc {@agent_api} End wrapup the agent channel 'Channel'.  This also
+%% doc {@agent_api} End wrapup the agent channel 'Channel'.  This also
 %% kills the channel, making it available for use again.  No result
 %% property as it iether worked or didn't.  There will also be an event
 %% later sent by the agent fsm.  It is recommended that no UI changes
@@ -523,7 +523,7 @@ handle_json(State, Bin, Mods) ->
 % 			end
 % 	end.
 
-%% @doc {@agent_api} Get a list of the agents that are currently available.
+%% doc {@agent_api} Get a list of the agents that are currently available.
 %% Result is:
 %% <pre>[{
 %% 	"name":  string(),
@@ -538,7 +538,7 @@ handle_json(State, Bin, Mods) ->
 % 	Noms = [{struct, [{<<"name">>, list_to_binary(Rec#agent.login)}, {<<"profile">>, list_to_binary(Rec#agent.profile)}]} || Rec <- Agents],
 % 	{ok, Noms}.
 
-%% @doc {@agent_api} Get a list of the profiles that are in the system.
+%% doc {@agent_api} Get a list of the profiles that are in the system.
 %% Result is:
 %% <pre>[{
 %% 	"name":  string(),
@@ -778,7 +778,7 @@ handle_json(State, Bin, Mods) ->
 % endpoint_to_struct(dummy_media, Opt) ->
 % 	{struct, [{endpoint, Opt}]}.
 
-%% @doc {@agent_api} Sets the agent's endpoint data to the given, well, data.
+%% doc {@agent_api} Sets the agent's endpoint data to the given, well, data.
 %% Particularly useful if the flash phone is used, as all of the connection
 %% data will not be available for that until it is started on in the
 %% browser.
@@ -844,7 +844,7 @@ handle_json(State, Bin, Mods) ->
 % 	end.
 
 
-%% @doc Useful when a plugin needs to send information or results to the
+%% doc Useful when a plugin needs to send information or results to the
 %% agent ui.
 % TODO another special snowflake.
 % -spec(arbitrary_command/3 :: (Conn :: pid(), Command :: binary() | atom(),
@@ -1170,7 +1170,7 @@ encode_call(Call) ->
 		{<<"source_module">>, Call#call.source_module},
 		{<<"type">>, Call#call.type}]}.
 
-%% @doc Encode the given data into a structure suitable for mochijson2:encode
+%% doc Encode the given data into a structure suitable for mochijson2:encode
 % -spec(encode_statedata/1 ::
 % 	(Callrec :: #call{}) -> json();
 % 	(Clientrec :: #client{}) -> json();
