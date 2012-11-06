@@ -35,7 +35,7 @@
 -include("agent.hrl").
 
 %% encode
--export([enc_skills/1]).
+-export([enc_skills/1, enc_state_changes/1]).
 %% binutils
 -export([l2b/1, b2l/1]).
 
@@ -49,6 +49,14 @@ enc_skills(Skills) ->
 			({'_queue', Queue}, Acc) -> [{[{queue, l2b(Queue)}]}|Acc];
 			(_, Acc) -> Acc
 		end, [], Skills)).
+
+-type state_changes() :: [{atom(), tuple()}].
+-spec enc_state_changes(state_changes()) -> json().
+enc_state_changes(Changes) ->
+	lists:reverse(lists:map(
+		fun({State, Timestamp}) ->
+			{[{State, util:now_ms(Timestamp)}]}
+		end, Changes)).
 
 -spec b2l(binary()) -> list().
 b2l(B) ->
@@ -76,5 +84,11 @@ enc_skills_test() ->
 			{'_profile', "tech_team"},
 			{'_queue', "dsl_support"},
 			{unknown, should, notbepresent}])).
+
+enc_state_changes_test() ->
+	?assertEqual([{[{init, 1352161996526}]},
+			{[{inqueue, 1352161998317}]}],
+		enc_state_changes([{inqueue, {1352,161998,317840}},
+			{init, {1352,161996,526276}}])).
 
 -endif.
