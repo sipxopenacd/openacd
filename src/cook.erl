@@ -159,18 +159,19 @@ init([Call, InRecipe, Queue, Qpid, {_Priority, {MSec, Sec, _MsSec}} = Key]) ->
 			Tref = erlang:send_after(?TICK_LENGTH, self(), do_tick),
 			OptRecipe = optimize_recipe(InRecipe),
 			Now = util:now(),
+			State = #state{recipe=OptRecipe, call=Call, queue=Queue, qpid = Qpid,
+				tref=Tref, key = Key, callid = CallRec#call.id},
 			Recipe = case round(Now - (MSec * 1000000 + Sec)) of
 				Ticked when Ticked > 1 ->
 					?DEBUG("fast forwarding", []),
 					fast_forward(OptRecipe, util:floor(Ticked / (?TICK_LENGTH / 1000)),
 						Qpid, Call);
 				_Else ->
-					do_recipe(OptRecipe, 0, Qpid, Call)
+					do_recipe(OptRecipe, 0, Qpid, Call, State)
 			end,
-			State = #state{recipe=Recipe, call=Call, queue=Queue, qpid = Qpid,
-				tref=Tref, key = Key, callid = CallRec#call.id},
+			State1 = State#state{recipe=Recipe},
 			gen_media:set_cook(Call,self()),
-			{ok, State}
+			{ok, State1}
 	catch
 		Why:Reason ->
 			?ERROR("~p:~p", [Why, Reason]),
@@ -200,7 +201,7 @@ handle_cast(restart_tick, #state{qpid = Qpid} = State) ->
 			{stop, {call_not_queued, State#state.call}, State};
 		Ringstate ->
 			State2 = State#state{ringstate = Ringstate},
-			NewRecipe = do_recipe(State2#state.recipe, State2#state.ticked, Qpid, State2#state.call),
+			NewRecipe = do_recipe(State2#state.recipe, State2#state.ticked, Qpid, State2#state.call, State),
 			State3 = State2#state{ticked = State2#state.ticked + 1, recipe = NewRecipe},
 			Tref = erlang:send_after(?TICK_LENGTH, self(), do_tick),
 			{noreply, State3#state{tref=Tref}}
@@ -237,7 +238,7 @@ handle_cast(Msg, #state{callid = CallID} = State) ->
 %%--------------------------------------------------------------------
 %% @private
 handle_info(do_tick, #state{qpid = Qpid} = State) ->
-	NewRecipe = do_recipe(State#state.recipe, State#state.ticked, Qpid, State#state.call),
+	NewRecipe = do_recipe(State#state.recipe, State#state.ticked, Qpid, State#state.call, State),
 	Tref = case NewRecipe of
 		[] ->
 			% empty recipe, don't wake up later
@@ -575,26 +576,24 @@ check_conditions([Cond | Conditions], Ticked, Qpid, Call) ->
 	end.
 
 %% @private
--spec(do_recipe/4 :: (Recipe :: recipe(), Ticked :: non_neg_integer(), Qpid :: pid(), Call :: pid()) -> recipe()).
-do_recipe([], _Ticked, _Qpid, _Call) ->
-	[];
-do_recipe(Recipe, Ticked, Qpid, Call) when is_pid(Qpid), is_pid(Call) ->
-	do_recipe(Recipe, Ticked, Qpid, Call, []).
+-spec(do_recipe/5 :: (Recipe :: recipe(), Ticked :: non_neg_integer(), Qpid :: pid(), Call :: pid(), #state{}) -> recipe()).
+do_recipe(Recipe, Ticked, Qpid, Call, State) when is_pid(Qpid), is_pid(Call) ->
+	do_recipe(Recipe, Ticked, Qpid, Call, State, []).
 
-do_recipe([], _Ticked, _Qpid, _Call, Acc) ->
+do_recipe([], _Ticked, _Qpid, _Call, _State, Acc) ->
 	Acc;
-do_recipe([{Conditions, Op, Runs, _Comment} = OldAction | Recipe], Ticked, Qpid, Call, Acc) ->
+do_recipe([{Conditions, Op, Runs, _Comment} = OldAction | Recipe], Ticked, Qpid, Call, State, Acc) ->
 	case check_conditions(Conditions, Ticked, Qpid, Call) of
 		true ->
-			Doneop = do_operation(Op, Qpid, Call),
+			Doneop = do_operation(Op, Qpid, Call, State),
 			case Runs of
 				run_once ->
-					do_recipe(Recipe, Ticked, Qpid, Call, lists:append(Doneop, Acc));
+					do_recipe(Recipe, Ticked, Qpid, Call, State, lists:append(Doneop, Acc));
 				run_many ->
-					do_recipe(Recipe, Ticked, Qpid, Call, lists:append([Doneop, [OldAction], Acc]))
+					do_recipe(Recipe, Ticked, Qpid, Call, State, lists:append([Doneop, [OldAction], Acc]))
 			end;
 		false ->
-			do_recipe(Recipe, Ticked, Qpid, Call, lists:append([OldAction], Acc))
+			do_recipe(Recipe, Ticked, Qpid, Call, State, lists:append([OldAction], Acc))
 	end.
 
 %% @private
@@ -657,14 +656,14 @@ fast_forward_do_op([{Op, Args} | Tail], Qpid, Call, Acc) ->
 	fast_forward_do_op(Tail, Qpid, Call, Newacc).
 
 %% @private
--spec(do_operation/3 :: (Operations :: [recipe_operation()], Qpid :: pid(), Callpid :: pid()) -> [recipe_step()]).
-do_operation(Operations, Qpid, Callpid) when is_pid(Qpid), is_pid(Callpid) ->
-	do_operation(Operations, Qpid, Callpid, []).
+-spec(do_operation/4 :: (Operations :: [recipe_operation()], Qpid :: pid(), Callpid :: pid(), #state{}) -> [recipe_step()]).
+do_operation(Operations, Qpid, Callpid, State) when is_pid(Qpid), is_pid(Callpid) ->
+	do_operation(Operations, Qpid, Callpid, State, []).
 
--spec(do_operation/4 :: (Operations :: [recipe_operation()], Qpid :: pid(), Callpid :: pid(), Acc :: [recipe_step()]) -> [recipe_step()]).
-do_operation([], _Qpid, _Callpid, Acc) ->
+-spec(do_operation/5 :: (Operations :: [recipe_operation()], Qpid :: pid(), Callpid :: pid(), #state{}, Acc :: [recipe_step()]) -> [recipe_step()]).
+do_operation([], _Qpid, _Callpid, _State, Acc) ->
 	lists:reverse(Acc);
-do_operation([{Op, Args} | Tail], Qpid, Callpid, Acc) ->
+do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 	?INFO("Doing operation: ~p", [Op]),
 	Out = case Op of
 		add_skills ->
