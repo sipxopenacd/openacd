@@ -783,7 +783,7 @@ inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
 	TimeoutSec = proplists:get_value("ringout", ClientOpts, 60),
 	Timeout = TimeoutSec * 1000,
 	{Queue, _QPid} = Internal#inqueue_state.queue_pid,
-	Call1 = Call#call{skills = ESkills, queue=Queue},
+	Call1 = Call#call{skills = ESkills, queue=Queue, state_changes = BaseState#base_state.state_changes},
 	BaseState1 = BaseState#base_state{callrec = Call1},
 	?INFO("Trying to ring ~p with ~p with timeout ~p", [Agent, Call1#call.id, Timeout]),
 	try agent:prering(Apid, Call1) of
