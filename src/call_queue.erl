@@ -62,6 +62,7 @@
 	add/2,
 	add_at/3,
 	ask/1,
+	get_name/1,
 	get_call/2, % should be changed to get_qcall_entry
 	get_calls/1,
 	get_qcall/2,
@@ -179,6 +180,10 @@ add(Pid, Mediapid) when is_pid(Pid), is_pid(Mediapid) ->
 add_at(Pid, Key, Mediapid) ->
 	Callrec = gen_media:get_call(Mediapid),
 	gen_server:cast(Pid, {add_at, Key, Mediapid, Callrec}).
+
+-spec get_name(pid()) -> string().
+get_name(Pid) ->
+	gen_server:call(Pid, get_name).
 
 %% @doc Query the queue at `pid()' `Pid' for a call with the ID `string()'
 %% or `pid()' of `Callid'.
@@ -435,6 +440,8 @@ init([Name, Opts]) ->
 %% =====
 
 %% @private
+handle_call(get_name, _From, State) ->
+	{reply, State#state.name, State};
 handle_call({get_call, Callpid}, _From, State) when is_pid(Callpid) ->
 	{reply, find_by_pid(Callpid, State#state.queue), State};
 handle_call({get_call, Callid}, _From, State) ->
