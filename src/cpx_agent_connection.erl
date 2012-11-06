@@ -1168,7 +1168,8 @@ encode_call(Call) ->
 		{<<"mediapath">>, Call#call.media_path},
 		{<<"callid">>, list_to_binary(Call#call.id)},
 		{<<"source_module">>, Call#call.source_module},
-		{<<"type">>, Call#call.type}]}.
+		{<<"type">>, Call#call.type},
+		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
 
 %% doc Encode the given data into a structure suitable for mochijson2:encode
 % -spec(encode_statedata/1 ::
