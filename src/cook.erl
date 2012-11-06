@@ -703,6 +703,9 @@ do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 			%% here should be the function call to hangup the qued call
 			gen_media:end_call(Callpid),
 			ok;
+		transfer_queue ->
+			TQName = Args,
+			transfer_queue(Qpid, TQName, Callpid, State#state.key);
 		Op ->
 			case cpx_hooks:trigger_hooks(recipe_do_operation, [Op, Qpid, Callpid]) of
 				{ok, Outz} -> Outz;
@@ -734,6 +737,27 @@ sort_conditions_compare(CondA, CondB) ->
 	A = element(1, CondA),
 	B = element(1, CondB),
 	util:list_index(A, Condlist) < util:list_index(B, Condlist).
+
+transfer_queue(OQPid, QName, MPid, Key) ->
+	case queue_manager:get_queue(QName) of
+		NQPid when is_pid(NQPid) ->
+			transfer_to_qpid(OQPid, NQPid, MPid, Key);
+		_ ->
+			?WARNING("call transfer to queue failed. queue not found: ~p", [QName]),
+			{error, no_queue}
+	end.
+
+transfer_to_qpid(OQPid, NQPid, MPid, Key) ->
+	spawn_link(fun() ->
+		case call_queue:remove(OQPid, MPid) of
+			ok ->
+				gen_media:set_queue(MPid, NQPid, true),
+				call_queue:add_at(NQPid, Key, MPid);
+			_ ->
+				?WARNING("call no longer present in queue", []),
+				{error, no_call}
+		end
+	end).
 
 -ifdef(TEST).
 
