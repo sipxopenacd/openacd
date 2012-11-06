@@ -432,6 +432,7 @@
 	spy/3,
 	set_cook/2,
 	set_queue/2,
+	set_queue/3,
 	set_url_getvars/2,
 	get_url_getvars/1,
 	add_skills/2
@@ -462,6 +463,7 @@
 	callback :: atom(),
 	substate :: any(),
 	callrec :: 'undefined' | #call{},
+	init_callrec :: 'undefined' | #call{},
 	queue_failover,
 	url_pop_get_vars = []
 }).
@@ -635,9 +637,14 @@ spy(Genmedia, Spy, AgentRec) ->
 set_cook(Genmedia, CookPid) ->
 	gen_fsm:send_event(Genmedia, {{'$gen_media', set_cook}, CookPid}).
 
--spec(set_queue/2 :: (Genmedia :: pid(), Qpid :: pid()) -> 'ok').
-set_queue(Genmedia, Qpid) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', set_queue}, Qpid}).
+-spec(set_queue/2 :: (Genmedia :: pid(), Queue :: pid() | {string(), pid()}) -> 'ok').
+set_queue(Genmedia, Queue) ->
+	set_queue(Genmedia, Queue, false).
+
+-spec(set_queue/3 :: (Genmedia :: pid(), Queue :: pid() | {string(), pid()}, Reset :: boolean()) -> 'ok').
+set_queue(Genmedia, Queue, Reset) ->
+	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', set_queue}, Queue, Reset}).
+
 
 -spec(set_url_getvars/2 :: (Genmedia :: pid(), Vars :: [{string(), string()}]) -> 'ok').
 set_url_getvars(Genmedia, Vars) ->
@@ -700,7 +707,8 @@ init([Callback, Args]) ->
 			BaseState = #base_state{
 				callback = Callback,
 				substate = Substate,
-				callrec = Callrec
+				callrec = Callrec,
+				init_callrec = Callrec
 			},
 			{_Qnom, Qpid} = case priv_queue(Queue, Callrec, true) of
 				{default, Pid} ->
@@ -725,7 +733,8 @@ init([Callback, Args]) ->
 			BaseState = #base_state{
 				callback = Callback,
 				substate = Substate,
-				callrec = Callrec
+				callrec = Callrec,
+				init_callrec = Callrec
 			},
 			set_cpx_mon({BaseState, #inivr_state{}}, [], self()),
 			{ok, inivr, {BaseState, #inivr_state{}}};
@@ -736,7 +745,8 @@ init([Callback, Args]) ->
 			BaseState = #base_state{
 				callback = Callback,
 				substate = Substate,
-				callrec = Callrec
+				callrec = Callrec,
+				init_callrec = Callrec
 			},
 			{ok, inivr, {BaseState, #inivr_state{}}};
 		{stop, Reason} = O ->
@@ -863,23 +873,26 @@ inqueue({{'$gen_media', end_call}, _}, {Cook, _}, {#base_state{
 		false ->
 			{reply, invalid, {BaseState, InqueueState}}
 	end;
+inqueue({{'$gen_media', set_queue}, QPid, Reset}, From, St) when is_pid(QPid) ->
+	QName = call_queue:get_name(QPid),
+	inqueue({{'$gen_media', set_queue}, {QName, QPid}, Reset}, From, St);
+inqueue({{'$gen_media', set_queue}, {QName, QPid}, Reset}, _From, {BaseState, Internal}) ->
+	BaseState1 = update_basestate_queue(BaseState, QName, Reset),
+	Call = BaseState1#base_state.callrec,
 
-inqueue({{'$gen_media', set_queue}, Qpid}, _From, {BaseState,
-		#inqueue_state{queue_pid = {Queue, _}} = Internal}) ->
-	#base_state{callrec = Call} = BaseState,
-	?NOTICE("Updating queue pid for ~p to ~p", [Call#call.id, Qpid]),
+	?NOTICE("Updating queue pid for ~p to ~p, reset: ~p", [Call#call.id, QPid, Reset]),
 	case Internal#inqueue_state.queue_mon of
 		undefined ->
 			ok;
 		M ->
 			erlang:demonitor(M)
 	end,
-	Newmon = erlang:monitor(process, Qpid),
+	Newmon = erlang:monitor(process, QPid),
 	NewInternal = Internal#inqueue_state{
 		queue_mon = Newmon,
-		queue_pid = {Queue, Qpid}
+		queue_pid = {QName, QPid}
 	},
-	{reply, ok, inqueue, {BaseState, NewInternal}};
+	{reply, ok, inqueue, {BaseState1, NewInternal}};
 
 inqueue({{'$gen_media', get_url_vars}, undefined}, _From, {BaseState, Internal}) ->
 	#base_state{url_pop_get_vars = GenPopopts, substate = Substate,
@@ -1051,24 +1064,27 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, From, {BaseState, Int
 			gen_server:cast(Cook, stop_ringing),
 			{reply, invalid, inqueue, {NewBase, NewInternal}}
 	end;
+inqueue_ringing({{'$gen_media', set_queue}, QPid, Reset}, From, St) when is_pid(QPid) ->
+	QName = call_queue:get_name(QPid),
+	inqueue_ringing({{'$gen_media', set_queue}, {QName, QPid}, Reset}, From, St);
+inqueue_ringing({{'$gen_media', set_queue}, {QName, QPid}, Reset}, _From, {BaseState, Internal}) ->
+	BaseState1 = update_basestate_queue(BaseState, QName, Reset),
+	Call = BaseState1#base_state.callrec,
 
-inqueue_ringing({{'$gen_media', set_queue}, Qpid}, _From, State) ->
-	{BaseState, Internal} = State,
-	#base_state{callrec = Call} = BaseState,
-	#inqueue_ringing_state{queue_mon = Mon, queue_pid = {Queue, _}} = Internal,
-	?NOTICE("Updating queue pid for ~p to ~p", [Call#call.id, Qpid]),
+	#inqueue_ringing_state{queue_mon = Mon} = Internal,
+	?NOTICE("Updating queue pid for ~p to ~p", [Call#call.id, QPid]),
 	case Mon of
 		undefined ->
 			ok;
 		M ->
 			erlang:demonitor(M)
 	end,
-	NewMon = erlang:monitor(process, Qpid),
+	NewMon = erlang:monitor(process, QPid),
 	NewInternal = Internal#inqueue_ringing_state{
 		queue_mon = NewMon,
-		queue_pid = {Queue, Qpid}
+		queue_pid = {QName, QPid}
 	},
-	{reply, ok, inqueue_ringing, {BaseState, NewInternal}};
+	{reply, ok, inqueue_ringing, {BaseState1, NewInternal}};
 
 inqueue_ringing({{'$gen_media', ring}, {{Agent, Apid}, _ChanType, takeover}},
 		From, {_, #inqueue_ringing_state{ring_pid = {Agent, Apid}}} = State) ->
@@ -1726,6 +1742,13 @@ code_change(OldVsn, StateName, State, Extra) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+update_basestate_queue(BaseState, QName, Reset) ->
+	C = case Reset of
+		true -> BaseState#base_state.init_callrec;
+		_ -> BaseState#base_state.callrec
+	end,
+	C1 = C#call{queue = QName},
+	BaseState#base_state{callrec = C1}.
 
 %%--------------------------------------------------------------------
 %% handle_custom_return
