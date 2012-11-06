@@ -463,7 +463,8 @@
 	substate :: any(),
 	callrec :: 'undefined' | #call{},
 	queue_failover,
-	url_pop_get_vars = []
+	url_pop_get_vars = [],
+	state_changes = []
 }).
 
 -spec(behaviour_info/1 ::
@@ -685,12 +686,14 @@ start(Callback, Args) ->
 
 %% @private
 init([Callback, Args]) ->
+	StateChanges = [{init, os:timestamp()}],
 	case Callback:init(Args) of
 		{ok, {Substate, undefined}} ->
 				BaseState = #base_state{
 					callback = Callback,
 					substate = Substate,
-					callrec = undefined
+					callrec = undefined,
+					state_changes = [{inivr, os:timestamp()} | StateChanges]
 				},
 				{ok, inivr, {BaseState, #inivr_state{}}};
 		{ok, {Substate, {Queue, PCallrec}}} when is_record(PCallrec, call) ->
@@ -700,7 +703,8 @@ init([Callback, Args]) ->
 			BaseState = #base_state{
 				callback = Callback,
 				substate = Substate,
-				callrec = Callrec
+				callrec = Callrec,
+				state_changes = [{inqueue, os:timestamp()} | StateChanges]
 			},
 			{_Qnom, Qpid} = case priv_queue(Queue, Callrec, true) of
 				{default, Pid} ->
@@ -725,7 +729,8 @@ init([Callback, Args]) ->
 			BaseState = #base_state{
 				callback = Callback,
 				substate = Substate,
-				callrec = Callrec
+				callrec = Callrec,
+				state_changes = [{inivr, os:timestamp()} | StateChanges]
 			},
 			set_cpx_mon({BaseState, #inivr_state{}}, [], self()),
 			{ok, inivr, {BaseState, #inivr_state{}}};
@@ -736,7 +741,8 @@ init([Callback, Args]) ->
 			BaseState = #base_state{
 				callback = Callback,
 				substate = Substate,
-				callrec = Callrec
+				callrec = Callrec,
+				state_changes = [{inivr, os:timestamp()} | StateChanges]
 			},
 			{ok, inivr, {BaseState, #inivr_state{}}};
 		{stop, Reason} = O ->
