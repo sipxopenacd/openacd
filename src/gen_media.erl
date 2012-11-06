@@ -465,7 +465,8 @@
 	callrec :: 'undefined' | #call{},
 	init_callrec :: 'undefined' | #call{},
 	queue_failover,
-	url_pop_get_vars = []
+	url_pop_get_vars = [],
+	state_changes = []
 }).
 
 -spec(behaviour_info/1 ::
@@ -692,12 +693,14 @@ start(Callback, Args) ->
 
 %% @private
 init([Callback, Args]) ->
+	StateChanges = [{init, os:timestamp()}],
 	case Callback:init(Args) of
 		{ok, {Substate, undefined}} ->
 				BaseState = #base_state{
 					callback = Callback,
 					substate = Substate,
-					callrec = undefined
+					callrec = undefined,
+					state_changes = [{inivr, os:timestamp()} | StateChanges]
 				},
 				{ok, inivr, {BaseState, #inivr_state{}}};
 		{ok, {Substate, {Queue, PCallrec}}} when is_record(PCallrec, call) ->
@@ -708,7 +711,8 @@ init([Callback, Args]) ->
 				callback = Callback,
 				substate = Substate,
 				callrec = Callrec,
-				init_callrec = Callrec
+				init_callrec = Callrec,
+				state_changes = [{inqueue, os:timestamp()} | StateChanges]
 			},
 			{_Qnom, Qpid} = case priv_queue(Queue, Callrec, true) of
 				{default, Pid} ->
@@ -734,7 +738,8 @@ init([Callback, Args]) ->
 				callback = Callback,
 				substate = Substate,
 				callrec = Callrec,
-				init_callrec = Callrec
+				init_callrec = Callrec,
+				state_changes = [{inivr, os:timestamp()} | StateChanges]
 			},
 			set_cpx_mon({BaseState, #inivr_state{}}, [], self()),
 			{ok, inivr, {BaseState, #inivr_state{}}};
@@ -746,7 +751,8 @@ init([Callback, Args]) ->
 				callback = Callback,
 				substate = Substate,
 				callrec = Callrec,
-				init_callrec = Callrec
+				init_callrec = Callrec,
+				state_changes = [{inivr, os:timestamp()} | StateChanges]
 			},
 			{ok, inivr, {BaseState, #inivr_state{}}};
 		{stop, Reason} = O ->
@@ -787,7 +793,7 @@ inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
 	TimeoutSec = proplists:get_value("ringout", ClientOpts, 60),
 	Timeout = TimeoutSec * 1000,
 	{Queue, _QPid} = Internal#inqueue_state.queue_pid,
-	Call1 = Call#call{skills = ESkills, queue=Queue},
+	Call1 = Call#call{skills = ESkills, queue=Queue, state_changes = BaseState#base_state.state_changes},
 	BaseState1 = BaseState#base_state{callrec = Call1},
 	?INFO("Trying to ring ~p with ~p with timeout ~p", [Agent, Call1#call.id, Timeout]),
 	try agent:prering(Apid, Call1) of

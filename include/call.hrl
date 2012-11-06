@@ -68,7 +68,8 @@
 		media_path = outband :: 'inband' | 'outband',
 		direction = inbound :: 'inbound' | 'outbound',
 		priority = 40 :: call_priority(),
-		arbitrary = [] :: [{string(), string()}]
+		arbitrary = [] :: [{string(), string()}],
+		state_changes = [] :: [{atom(), tuple()}]
 }).
 
 -type(call_key() :: {non_neg_integer(), {pos_integer(), non_neg_integer(), non_neg_integer()}}).
