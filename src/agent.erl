@@ -280,7 +280,7 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 			released
 	end,
 	cpx_agent_event:agent_init(Agent2),
-	set_cpx_monitor_release(Agent2),
+	init_gproc_props(Agent),
 	{ok, StateName, #state{agent_rec = Agent2, original_endpoints = OriginalEnds}}.
 
 % ======================================================================
@@ -295,7 +295,7 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_cpx_monitor_release(NewAgent),
+	set_gproc_state_prop(Release),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	{reply, ok, released, State#state{agent_rec = NewAgent}};
 
@@ -344,7 +344,7 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	agent_manager:set_avail(Agent#agent.login, Agent#agent.available_channels),
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = undefined, last_change = Now},
-	set_cpx_monitor_release(NewAgent),
+	set_gproc_state_prop(undefined),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	inform_connection(Agent, {set_release, none, Now}),
 	{reply, ok, idle, State#state{agent_rec = NewAgent}};
@@ -356,7 +356,7 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_cpx_monitor_release(NewAgent),
+	set_gproc_state_prop(Release),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	{reply, ok, released, State#state{agent_rec = NewAgent}};
 
@@ -781,21 +781,41 @@ wait_for_agent_manager(Count, StateName, #state{agent_rec = Agent} = State) ->
 			{next_state, StateName, State}
 	end.
 
-set_cpx_monitor_release(#agent{release_data = {Id, Reason, Bias}} = Agent) ->
-	set_cpx_monitor(Agent, [{released, true}, {reason, Reason}, {bias, Bias}, {reason_id, Id}]);
-set_cpx_monitor_release(#agent{release_data = undefined} = Agent) ->
-	set_cpx_monitor(Agent, [{released, false}]).
 
-set_cpx_monitor(State, Otherdeatils)->
-	set_cpx_monitor(State, Otherdeatils, ignore).
+init_gproc_props(Agent) ->
+	LoginProp = {login, Agent#agent.login},
+	ProfileProp = {profile, Agent#agent.profile},
 
-set_cpx_monitor(State, Otherdeatils, Watch) ->
-	Deatils = lists:append([
-		{profile, State#agent.profile},
-		{login, State#agent.login},
-		{skills, State#agent.skills}],
-	Otherdeatils),
-	cpx_monitor:set({agent, State#agent.id}, Deatils, Watch).
+	StProp = case Agent#agent.release_data of
+		undefined ->
+			{state, available};
+		Release ->
+			{state, {released, Release}}
+	end,
+
+	Props = [LoginProp, ProfileProp, StProp],
+	gproc:mreg(p, l, Props).
+
+set_gproc_state_prop(undefined) ->
+	gproc:set_value({p, l, cpx_agent_state}, available);
+set_gproc_state_prop(Release) ->
+	gproc:set_value({p, l, cpx_agent_state}, {released, Release}).
+
+% set_cpx_monitor_release(#agent{release_data = {Id, Reason, Bias}} = Agent) ->
+% 	set_cpx_monitor(Agent, [{released, true}, {reason, Reason}, {bias, Bias}, {reason_id, Id}]);
+% set_cpx_monitor_release(#agent{release_data = undefined} = Agent) ->
+% 	set_cpx_monitor(Agent, [{released, false}]).
+
+% set_cpx_monitor(State, Otherdeatils)->
+% 	set_cpx_monitor(State, Otherdeatils, ignore).
+
+% set_cpx_monitor(State, Otherdeatils, Watch) ->
+% 	Deatils = lists:append([
+% 		{profile, State#agent.profile},
+% 		{login, State#agent.login},
+% 		{skills, State#agent.skills}],
+% 	Otherdeatils),
+% 	cpx_monitor:set({agent, State#agent.id}, Deatils, Watch).
 
 -ifdef(TEST).
 
