@@ -28,6 +28,7 @@ my_apps() -> [
 	errd,
 	gen_smtp,
 	sasl,
+	gproc,
 	oacd_core
 ].
 
