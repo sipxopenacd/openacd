@@ -146,6 +146,13 @@
 	idle_time = os:timestamp()
 }).
 
+%% used by gproc to register agent states
+-record(cpx_agent_prop, {
+	login,
+	profile,
+	state
+}).
+
 -define(DEFAULT_PROFILE, #agent_profile{name = "Default", id = "0", timestamp = util:now()}).
 
 -define(DEFAULT_RELEASE, {"default", default, -1}).
