@@ -295,7 +295,7 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_gproc_prop(Agent),
+	set_gproc_prop(NewAgent),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	{reply, ok, released, State#state{agent_rec = NewAgent}};
 
