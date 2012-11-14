@@ -690,11 +690,15 @@ prep_autowrapup(#call{client = Client}) ->
 
 init_gproc_prop(State) ->
 	Prop = get_agent_channel_prop(State),
-	gproc:reg({p, l, cpx_agent_channel}, Prop).
+	gproc:reg({p, l, cpx_agent_channel}, Prop),
+
+	gproc:send({p, l, cpx_agent_channel_change}, Prop).
 
 set_gproc_prop(State) ->
 	Prop = get_agent_channel_prop(State),
-	gproc:set_value({p, l, cpx_agent_channel}, Prop).
+	gproc:set_value({p, l, cpx_agent_channel}, Prop),
+
+	gproc:send({p, l, cpx_agent_channel_change}, Prop).
 
 -spec get_agent_channel_prop({#state{}, atom()}) -> #cpx_agent_channel_prop{}.
 get_agent_channel_prop({State, StateName}) ->
