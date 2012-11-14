@@ -146,10 +146,17 @@
 	idle_time = os:timestamp()
 }).
 
-%% used by gproc to register agent states
+%% used by gproc to register agent and channel states
 -record(cpx_agent_prop, {
 	login,
 	profile,
+	state
+}).
+
+-record(cpx_agent_channel_prop, {
+	login,
+	profile,
+	type,
 	state
 }).
 
