@@ -48,6 +48,9 @@
 -record(state, {
 	agent_fsm :: pid(),
 	agent_connection :: pid(),
+	agent_login :: string(),
+	agent_profile :: string(),
+	media_type = voice :: channel_category(),
 	endpoint = inband :: any(),
 	state_data :: any()
 }).
