@@ -274,6 +274,9 @@ init([Agent, Call, Endpoint, StateName]) ->
 	State = #state{
 		agent_fsm = Agent#agent.source,
 		agent_connection = Agent#agent.connection,
+		agent_login = Agent#agent.login,
+		agent_profile = Agent#agent.profile,
+		media_type = Call#call.type,
 		endpoint = Endpoint,
 		state_data = Call
 	},
