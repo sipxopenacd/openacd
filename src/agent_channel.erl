@@ -623,7 +623,8 @@ handle_info(_Info, StateName, State) ->
 % TERMINATE
 % ======================================================================
 
-terminate(_Reason, _StateName, _State) ->
+terminate(_Reason, _StateName, State) ->
+	set_gproc_prop({State, stop}),
 	ok.
 
 % ======================================================================
