@@ -804,9 +804,11 @@ get_agent_prop({PrevReleaseData, Agent}) ->
 	State = get_agent_state(Agent#agent.release_data),
 	#cpx_agent_prop{login=Login, profile=Profile, previous_state=PreviousState, state=State}.
 
--spec get_agent_state(release_code() | 'undefined') -> available | {released, term()}.
+-spec get_agent_state(release_code() | 'undefined') -> init | available | {released, term()}.
 get_agent_state(Release) ->
 	case Release of
+		init ->
+			init;
 		undefined ->
 			available;
 		_ ->
