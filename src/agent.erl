@@ -280,7 +280,7 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 			released
 	end,
 	cpx_agent_event:agent_init(Agent2),
-	init_gproc_prop(Agent),
+	init_gproc_prop({init, Agent}),
 	{ok, StateName, #state{agent_rec = Agent2, original_endpoints = OriginalEnds}}.
 
 % ======================================================================
@@ -295,7 +295,7 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_gproc_prop(NewAgent),
+	set_gproc_prop({Agent#agent.release_data, NewAgent}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	{reply, ok, released, State#state{agent_rec = NewAgent}};
 
@@ -344,7 +344,7 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	agent_manager:set_avail(Agent#agent.login, Agent#agent.available_channels),
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = undefined, last_change = Now},
-	set_gproc_prop(NewAgent),
+	set_gproc_prop({Agent#agent.release_data, NewAgent}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	inform_connection(Agent, {set_release, none, Now}),
 	{reply, ok, idle, State#state{agent_rec = NewAgent}};
@@ -356,7 +356,7 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_gproc_prop(NewAgent),
+	set_gproc_prop({Agent#agent.release_data, NewAgent}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	{reply, ok, released, State#state{agent_rec = NewAgent}};
 
@@ -796,17 +796,22 @@ set_gproc_prop(Agent) ->
 	%% TODO send old state
 	gproc:send({p, l, cpx_agent_change}, Prop).
 
--spec get_agent_prop(#agent{}) -> #cpx_agent_prop{}.
-get_agent_prop(Agent) ->
+-spec get_agent_prop({release_code() | 'undefined', #agent{}}) -> #cpx_agent_prop{}.
+get_agent_prop({PrevReleaseData, Agent}) ->
 	Login = Agent#agent.login,
 	Profile = Agent#agent.profile,
-	State = case Agent#agent.release_data of
+	PreviousState = get_agent_state(PrevReleaseData),
+	State = get_agent_state(Agent#agent.release_data),
+	#cpx_agent_prop{login=Login, profile=Profile, previous_state=PreviousState, state=State}.
+
+-spec get_agent_state(release_code() | 'undefined') -> available | {released, term()}.
+get_agent_state(Release) ->
+	case Release of
 		undefined ->
 			available;
-		Release ->
+		_ ->
 			{released, Release}
-	end,
-	#cpx_agent_prop{login=Login, profile=Profile, state=State}.
+	end.
 
 % set_cpx_monitor_release(#agent{release_data = {Id, Reason, Bias}} = Agent) ->
 % 	set_cpx_monitor(Agent, [{released, true}, {reason, Reason}, {bias, Bias}, {reason_id, Id}]);
