@@ -150,6 +150,7 @@
 -record(cpx_agent_prop, {
 	login,
 	profile,
+	previous_state,
 	state
 }).
 
