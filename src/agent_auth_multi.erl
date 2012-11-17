@@ -105,7 +105,7 @@
 %% Args :: [Username :: string(), Password :: string(),
 %% Return :: auth_agent_return()]
 
--module(agent_auth).
+-module(agent_auth_multi).
 
 -include("log.hrl").
 -include("call.hrl").
