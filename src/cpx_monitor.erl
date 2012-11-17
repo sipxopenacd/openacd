@@ -259,11 +259,11 @@ elected(State, Election, Node) ->
 		_Else ->
 			Oldest = lists:foldl(Findoldest, 0, Merge),
 			Mergenodes = lists:map(fun({N, _T}) -> N end, Merge),
-			P = spawn_link(agent_auth, merge, [[node() | Mergenodes], Oldest, self()]),
-			Qspawn = spawn_link(call_queue_config, merge, [[node() | Mergenodes], Oldest, self()]),
+			% P = spawn_link(agent_auth, merge, [[node() | Mergenodes], Oldest, self()]),
+			% Qspawn = spawn_link(call_queue_config, merge, [[node() | Mergenodes], Oldest, self()]),
 			Cdrspawn = spawn_link(cdr, merge, [[node() | Mergenodes], Oldest, self()]),
-			?DEBUG("spawned for agent_auth:  ~p", [P]),
-			?DEBUG("Spawned for call_queue_config:  ~w", [Qspawn]),
+			% ?DEBUG("spawned for agent_auth:  ~p", [P]),
+			% ?DEBUG("Spawned for call_queue_config:  ~w", [Qspawn]),
 			?DEBUG("Spawned for cdr:  ~w", [Cdrspawn]),
 			{ok, {Merge, Stilldown}, State#state{status = merging, merge_status = dict:new(), merging = Mergenodes, splits = Stilldown}}
 	end.
