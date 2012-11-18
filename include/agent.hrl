@@ -96,16 +96,13 @@
 -record(agent_auth, {
 	id :: string(),
 	login :: string(),
-	password :: string(),
 	skills = [english, '_agent', '_node'] :: [atom()],
-	securitylevel = agent :: security_level(),
-	integrated :: 'undefined' | pos_integer(),
+	security_level = agent :: security_level(),
 	profile = "Default" :: string(),
 	firstname = "" :: string(),
 	lastname = "" :: string(),
 	endpoints = [] :: [{atom(), any()}],
-	extended_props = [] :: [{atom(), any()}],
-	timestamp = util:now() :: pos_integer()
+	extended_props = [] :: [{atom(), any()}]
 }).
 
 -type(profile_option() ::

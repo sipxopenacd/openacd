@@ -463,12 +463,12 @@ auth(Username, Password) ->
 -spec(add_agent/5 ::
 	(Username :: string(), Password :: string(), Skills :: [atom()], Security :: 'admin' | 'agent' | 'supervisor', Profile :: string()) ->
 		{'atomic', 'ok'}).
-add_agent(Username, Password, Skills, Security, Profile) ->
+add_agent(Username, _Password, Skills, Security, Profile) ->
 	Rec = #agent_auth{
 		login = Username,
-		password = util:bin_to_hexstr(erlang:md5(Password)),
+		% password = util:bin_to_hexstr(erlang:md5(Password)),
 		skills = Skills,
-		securitylevel = Security,
+		security_level = Security,
 		profile = Profile},
 	add_agent(Rec).
 
@@ -479,12 +479,12 @@ add_agent(Username, Password, Skills, Security, Profile) ->
 -spec(add_agent/7 ::
 	(Username :: string(), Firstname :: string(), Lastname :: string(), Password :: string(), Skills :: [atom()], Security :: 'admin' | 'agent' | 'supervisor', Profile :: string()) ->
 		{'atomic', 'ok'}).
-add_agent(Username, Firstname, Lastname, Password, Skills, Security, Profile) ->
+add_agent(Username, Firstname, Lastname, _Password, Skills, Security, Profile) ->
 	Rec = #agent_auth{
 		login = Username,
-		password = util:bin_to_hexstr(erlang:md5(Password)),
+		% password = util:bin_to_hexstr(erlang:md5(Password)),
 		skills = Skills,
-		securitylevel = Security,
+		security_level = Security,
 		profile = Profile,
 		firstname = Firstname,
 		lastname = Lastname},
@@ -536,14 +536,14 @@ build_agent_record([], Rec) ->
 build_agent_record([{login, Login} | Tail], Rec) ->
 	build_agent_record(Tail, Rec#agent_auth{login = Login});
 
-build_agent_record([{password, Password} | Tail], Rec) ->
-	build_agent_record(Tail, Rec#agent_auth{password = encode_password(Password)});
+% build_agent_record([{password, Password} | Tail], Rec) ->
+% 	build_agent_record(Tail, Rec#agent_auth{password = encode_password(Password)});
 
 build_agent_record([{skills, Skills} | Tail], Rec) when is_list(Skills) ->
 	build_agent_record(Tail, Rec#agent_auth{skills = Skills});
 
 build_agent_record([{securitylevel, Sec} | Tail], Rec) ->
-	build_agent_record(Tail, Rec#agent_auth{securitylevel = Sec});
+	build_agent_record(Tail, Rec#agent_auth{security_level = Sec});
 
 build_agent_record([{profile, Profile} | Tail], Rec) ->
 	build_agent_record(Tail, Rec#agent_auth{profile = Profile});

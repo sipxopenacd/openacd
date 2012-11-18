@@ -275,7 +275,7 @@ login(Username, Password) ->
 start(By, Val) ->
 	case agent_auth:get_agent(By, Val) of
 		{atomic, [#agent_auth{id=Id, login=Username, skills=Skills,
-			securitylevel=Security, profile=Profile, endpoints=Endpoints}]} ->
+			security_level=Security, profile=Profile, endpoints=Endpoints}]} ->
 			Agent = #agent{id = Id, login = Username,
 				skills = Skills, profile = Profile,
 				security_level = Security},
