@@ -58,6 +58,7 @@ enc_state_changes(Changes) ->
 			{[{State, util:now_ms(Timestamp)}]}
 		end, Changes)).
 
+-spec enc_agent_state(available | {released, tuple()}) -> json().
 enc_agent_state({released, {_, Label, _}}) ->
 	LabelEnc = case Label of
 		L when is_list(L) -> l2b(L);
@@ -104,7 +105,6 @@ enc_state_changes_test() ->
 enc_agent_state_test_() ->
 	[?_assertEqual({[{released, <<"label">>}]}, enc_agent_state({released, {rel, "label", -1}})),
 	?_assertEqual({[{released, label}]}, enc_agent_state({released, {rel1, label, 0}})),
-	?_assertEqual(available, enc_agent_state(available)),
-	?_assertEqual(ringing, enc_agent_state(ringing))].
+	?_assertEqual(available, enc_agent_state(available))].
 
 -endif.
