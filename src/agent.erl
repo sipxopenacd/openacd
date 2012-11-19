@@ -802,9 +802,10 @@ set_gproc_prop(Agent) ->
 get_agent_prop({PrevReleaseData, Agent}) ->
 	Login = Agent#agent.login,
 	Profile = Agent#agent.profile,
+	Skills = Agent#agent.skills,
 	PreviousState = get_agent_state(PrevReleaseData),
 	State = get_agent_state(Agent#agent.release_data),
-	#cpx_agent_prop{login=Login, profile=Profile, previous_state=PreviousState, state=State}.
+	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, previous_state=PreviousState, state=State}.
 
 -spec get_agent_state(release_code() | 'undefined') -> init | available | {released, term()}.
 get_agent_state(Release) ->
