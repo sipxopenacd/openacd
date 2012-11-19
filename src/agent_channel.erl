@@ -52,6 +52,7 @@
 	agent_profile :: string(),
 	media_type = voice :: channel_category(),
 	endpoint = inband :: any(),
+	client :: undefined | #client{} | {Id :: string(), Opts :: [{atom(), any()}]} | (Id :: string()),
 	state_data :: any()
 }).
 
