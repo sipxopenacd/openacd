@@ -785,29 +785,34 @@ wait_for_agent_manager(Count, StateName, #state{agent_rec = Agent} = State) ->
 
 init_gproc_prop(Agent) ->
 	Prop = get_agent_prop(Agent),
-	gproc:reg({p, l, cpx_agent}, Prop),
+	Update = {{self(), now()}, Prop},
+	gproc:reg({p, l, cpx_agent}, Update),
 
 	%% TODO send login event instead
-	gproc:send({p, l, cpx_agent_change}, Prop).
+	gproc:send({p, l, cpx_agent_change}, Update).
 
 set_gproc_prop(Agent) ->
 	Prop = get_agent_prop(Agent),
-	gproc:set_value({p, l, cpx_agent}, Prop),
+	Update = {{self(), now()}, Prop},
+	gproc:set_value({p, l, cpx_agent}, Update),
 
 	%% TODO send old state
-	gproc:send({p, l, cpx_agent_change}, Prop).
+	gproc:send({p, l, cpx_agent_change}, Update).
 
 -spec get_agent_prop({release_code() | 'undefined', #agent{}}) -> #cpx_agent_prop{}.
 get_agent_prop({PrevReleaseData, Agent}) ->
 	Login = Agent#agent.login,
 	Profile = Agent#agent.profile,
+	Skills = Agent#agent.skills,
 	PreviousState = get_agent_state(PrevReleaseData),
 	State = get_agent_state(Agent#agent.release_data),
-	#cpx_agent_prop{login=Login, profile=Profile, previous_state=PreviousState, state=State}.
+	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, previous_state=PreviousState, state=State}.
 
--spec get_agent_state(release_code() | 'undefined') -> available | {released, term()}.
+-spec get_agent_state(release_code() | 'undefined') -> init | available | {released, term()}.
 get_agent_state(Release) ->
 	case Release of
+		init ->
+			init;
 		undefined ->
 			available;
 		_ ->
