@@ -35,7 +35,7 @@
 -include("agent.hrl").
 
 %% encode
--export([enc_skills/1, enc_state_changes/1]).
+-export([enc_skills/1, enc_state_changes/1, enc_agent_state/1]).
 %% binutils
 -export([l2b/1, b2l/1]).
 
@@ -57,6 +57,16 @@ enc_state_changes(Changes) ->
 		fun({State, Timestamp}) ->
 			{[{State, util:now_ms(Timestamp)}]}
 		end, Changes)).
+
+enc_agent_state({released, {_, Label, _}}) ->
+	LabelEnc = case Label of
+		L when is_list(L) -> l2b(L);
+		L when is_atom(L) -> L;
+		_ -> undefined
+	end,
+	{[{released, LabelEnc}]};
+enc_agent_state(State) when is_atom(State) ->
+	State.
 
 -spec b2l(binary()) -> list().
 b2l(B) ->
@@ -90,5 +100,11 @@ enc_state_changes_test() ->
 			{[{inqueue, 1352161998317}]}],
 		enc_state_changes([{inqueue, {1352,161998,317840}},
 			{init, {1352,161996,526276}}])).
+
+enc_agent_state_test_() ->
+	[?_assertEqual({[{released, <<"label">>}]}, enc_agent_state({released, {rel, "label", -1}})),
+	?_assertEqual({[{released, label}]}, enc_agent_state({released, {rel1, label, 0}})),
+	?_assertEqual(available, enc_agent_state(available)),
+	?_assertEqual(ringing, enc_agent_state(ringing))].
 
 -endif.
