@@ -279,6 +279,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 		agent_profile = Agent#agent.profile,
 		media_type = Call#call.type,
 		endpoint = Endpoint,
+		client = Call#call.client,
 		state_data = Call
 	},
 	init_gproc_prop({State, init, StateName}),
@@ -709,7 +710,8 @@ get_agent_channel_prop({State, PreviousStateName, StateName}) ->
 	Login = State#state.agent_login,
 	Profile = State#state.agent_profile,
 	Type = State#state.media_type,
-	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, previous_state=PreviousStateName, state=StateName}.
+	Client = State#state.client,
+	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, previous_state=PreviousStateName, state=StateName}.
 
 % ======================================================================
 % TESTS
