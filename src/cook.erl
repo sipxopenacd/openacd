@@ -932,6 +932,7 @@ test_primer() ->
 	mnesia:start().
 
 do_operation_test_() ->
+	State = #state{},
 	{foreach,
 	fun() ->
 		{ok, QMPid} = gen_leader_mock:start(queue_manager),
@@ -980,7 +981,7 @@ do_operation_test_() ->
 				Incpid = Mpid,
 				ok
 			end),
-			?assertEqual([], do_operation([{set_priority, 5}], QPid, Mpid)),
+			?assertEqual([], do_operation([{set_priority, 5}], QPid, Mpid, State)),
 			Assertmocks()
 		end}
 	end,
@@ -995,7 +996,7 @@ do_operation_test_() ->
 				Incpid = Mpid,
 				ok
 			end),
-			?assertEqual([], do_operation([{prioritize, "doesn't matter"}], QPid, Mpid)),
+			?assertEqual([], do_operation([{prioritize, "doesn't matter"}], QPid, Mpid, State)),
 			Assertmocks()
 		end}
 	end,
@@ -1010,7 +1011,7 @@ do_operation_test_() ->
 				Incpid = Mpid,
 				ok
 			end),
-			?assertEqual([], do_operation([{deprioritize, "doesn't matter"}], QPid, Mpid)),
+			?assertEqual([], do_operation([{deprioritize, "doesn't matter"}], QPid, Mpid, State)),
 			Assertmocks()
 		end}
 	end,
@@ -1041,7 +1042,7 @@ do_operation_test_() ->
 	fun({_QMPid, QPid, Mpid, Assertmocks}) ->
 		{"add recipe",
 		fun() ->
-			?assertEqual([{1, 2, 3}], do_operation([{add_recipe, [1, 2, 3]}], QPid, Mpid)),
+			?assertEqual([{1, 2, 3}], do_operation([{add_recipe, [1, 2, 3]}], QPid, Mpid, State)),
 			Assertmocks()
 		end}
 	end]}.
