@@ -94,7 +94,7 @@ get_profile(St) ->
 	{[{profile, l2b(agent:get_profile(APid))}]}.
 
 get_release_codes(_St) ->
-	Rs = agent_auth:get_releases(),
+	{ok, Rs} = agent_auth:get_releases(),
 	RtoEntry = fun(#release_opt{id=Id, label=Label, bias=B}) ->
 		Bias = case B of
 			N when N < 0 -> negative;
@@ -117,7 +117,7 @@ go_released(St) ->
 	{[{state, released}, {release, {[{id, default}, {name, default}, {bias, negative}]}}]}.
 
 go_released(St, RelIdBin) ->
-	Rs = agent_auth:get_releases(), %% Better if agent_auth has a get_release
+	{ok, Rs} = agent_auth:get_releases(), %% Better if agent_auth has a get_release
 	RelId = b2l(RelIdBin),
 	case [X || X <- Rs, X#release_opt.id=:=RelId] of
 		[R] ->
@@ -229,11 +229,11 @@ agent_auth_apis_test_() ->
 	end, fun(_) ->
 		meck:unload(agent_auth)
 	end, [{"get_release_codes", fun() ->
-		meck:expect(agent_auth, get_releases, 0, [
+		meck:expect(agent_auth, get_releases, 0, {ok, [
 			#release_opt{id="relopt1", label="Release 1", bias=-1},
 			#release_opt{id="relopt2", label="Release 2", bias=0},
 			#release_opt{id="relopt3", label="Release 3", bias=1}
-		]),
+		]}),
 
 		?assertEqual({[{codes, [{[{id, <<"relopt1">>}, {name, <<"Release 1">>}, {bias, negative}]},
 			{[{id, <<"relopt2">>}, {name, <<"Release 2">>}, {bias, neutral}]},
@@ -247,11 +247,11 @@ release_change_test_() ->
 		meck:expect(agent, set_release, 2, ok),
 
 		meck:new(agent_auth),
-		meck:expect(agent_auth, get_releases, 0, [
+		meck:expect(agent_auth, get_releases, 0, {ok, [
 			#release_opt{id="relopt1", label="Release 1", bias=-1},
 			#release_opt{id="relopt2", label="Release 2", bias=0},
 			#release_opt{id="relopt3", label="Release 3", bias=1}
-		])
+		]})
 	end, fun(_) ->
 		meck:unload(agent_auth),
 		meck:unload(agent)

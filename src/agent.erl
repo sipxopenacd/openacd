@@ -257,11 +257,11 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 	process_flag(trap_exit, true),
 	OriginalEnds = Agent#agent.endpoints,
 	#agent_profile{name = Profile, skills = Skills} = try agent_auth:get_profile(Agent#agent.profile) of
-		undefined ->
+		{ok, P} ->
+			P;
+		_ ->
 			?WARNING("Agent ~p has an invalid profile of ~p, using Default", [Agent#agent.login, Agent#agent.profile]),
-			agent_auth:get_profile("Default");
-		Else ->
-			Else
+			agent_auth:get_default_profile()
 	catch
 		error:{case_clause, {aborted, _}} ->
 			#agent_profile{name = error}
@@ -406,14 +406,15 @@ handle_sync_event({set_connection, _Pid}, _From, StateName, #state{agent_rec = A
 
 handle_sync_event({change_profile, Profile}, _From, StateName, #state{agent_rec = Agent} = State) ->
 	OldProfile = Agent#agent.profile,
+	%% TODO skills might have changed since first accessed
 	OldSkills = case agent_auth:get_profile(OldProfile) of
-		#agent_profile{skills = Skills} ->
+		{ok, #agent_profile{skills = Skills}} ->
 			Skills;
 		_ ->
 			[]
 	end,
 	case agent_auth:get_profile(Profile) of
-		#agent_profile{name = Profile, skills = Skills2} ->
+		{ok, #agent_profile{name = Profile, skills = Skills2}} ->
 			NewAgentSkills = util:subtract_skill_lists(Agent#agent.skills, expand_magic_skills(Agent, OldSkills)),
 			NewAgentSkills2 = util:merge_skill_lists(NewAgentSkills, expand_magic_skills(Agent#agent{profile = Profile}, Skills2), ['_queue', '_brand']),
 			Newagent = Agent#agent{skills = NewAgentSkills2, profile = Profile},

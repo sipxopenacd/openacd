@@ -51,9 +51,32 @@
 	get_agent_by_id/1,
 	get_agents_by_profile/1,
 	get_profile/1,
+	get_default_profile/0,
 	get_profiles/0,
+	get_release/1,
 	get_releases/0
 ]).
+
+%% Agent
+-callback get_agent_by_login(string()) -> {ok, #agent_auth{}} | none | {error, any()}.
+-callback get_agent_by_id(string()) -> {ok, #agent_auth{}} | none | {error, any()}.
+-callback get_agents_by_profile(string()) -> {ok, [#agent_auth{}]} | none | {error, any()}.
+
+%% Auth
+-callback auth(Login::string(), Password::string()) -> {ok, #agent_auth{}} | {error, deny}.
+
+%% Profile
+-callback get_profile(string()) -> {ok, #agent_profile{}} | none | {error, any()}.
+-callback get_profiles() -> {ok, [#agent_profile{}]}.
+-callback get_default_profile() -> {ok, #agent_profile{}} | {error, any()}.
+
+%% Release
+-callback get_release(Id::string()) -> {ok, #release_opt{}} | none | {error, any()}.
+-callback get_releases() -> {ok, [#release_opt{}]} | {error, any()}.
+
+-define(STORE,
+	{ok, _Store} = application:get_env(oacd_core, agent_auth_storage),
+	_Store).
 
 %%====================================================================
 %% API
@@ -61,6 +84,8 @@
 
 start() ->
 	ok.
+
+%% Agent
 
 %% @doc Gets `#agent_auth{}' associated with `string() Login'.
 -spec get_agent(Login :: string()) -> {ok, #agent_auth{}} | none.
@@ -70,43 +95,116 @@ get_agent(Login) ->
 %% @doc Get an agent by login
 -spec get_agent_by_login(Login :: string()) -> {ok, #agent_auth{}} | none.
 get_agent_by_login(Login) ->
-	none.
+	?STORE:get_agent_by_login(Login).
 
 %% @doc Get an agent by id
 -spec get_agent_by_id(Id :: string()) -> {ok, #agent_auth{}} | none.
 get_agent_by_id(Id) ->
-	none.
-
-%% @doc Get all `#release_opt'.
--spec get_releases() -> {ok, [#release_opt{}]} | {error, any()}.
-get_releases() ->
-	{ok, []}.
-
-%% @doc Gets the profile `string() Name'
--spec get_profile(Name :: string()) -> {ok, #agent_profile{}} | none.
-get_profile(Name) ->
-	none.
-
-%% @doc Return all agent profiles.
--spec get_profiles() -> {ok, [#agent_profile{}]} | {error, any()}.
-get_profiles() ->
-	{ok, []}.
+	?STORE:get_agent_by_id(Id).
 
 %% @doc Gets all the agents associated with `string() Profile'.
 -spec get_agents_by_profile(Profile :: string()) -> {ok, [#agent_auth{}]} | {error, noprofile}.
 get_agents_by_profile(Profile) ->
-	{error, noprofile}.
+	?STORE:get_agents_by_profile(Profile).
 
 %% @doc Take the plaintext username and password and attempt to
 %% authenticate the agent.
 -spec auth(Username :: string(), Password :: string()) -> {allow, #agent_auth{}} | deny.
 auth(Username, Password) ->
-	deny.
+	?STORE:auth(Username, Password).
+
+%% Profile
+
+%% @doc Gets the profile `string() Name'
+-spec get_profile(Name :: string()) -> {ok, #agent_profile{}} | none.
+get_profile(Name) ->
+	?STORE:get_profile(Name).
+
+%% @doc Gets the profile `string() Name'
+-spec get_default_profile() -> {ok, #agent_profile{}} | none.
+get_default_profile() ->
+	?STORE:get_default_profile().
+
+%% @doc Return all agent profiles.
+-spec get_profiles() -> {ok, [#agent_profile{}]} | {error, any()}.
+get_profiles() ->
+	?STORE:get_profiles().
+
+%% Release
+
+%% @doc Get all `#release_opt'.
+-spec get_release(Id::string()) -> {ok, [#release_opt{}]} | {error, any()}.
+get_release(Id) ->
+	?STORE:get_release(Id).
+
+%% @doc Get all `#release_opt'.
+-spec get_releases() -> {ok, [#release_opt{}]} | {error, any()}.
+get_releases() ->
+	?STORE:get_releases().
+
+%% Internal
 
 -ifdef(TEST).
 
 %%--------------------------------------------------------------------
 %%% Test functions
 %%--------------------------------------------------------------------
+
+t_agent() ->
+	#agent_auth{id="a0", login="agent0"}.
+
+t_agents() ->
+	[#agent_auth{id="a0", login="agent0"},
+	#agent_auth{id="a1", login="agent1"}].
+
+t_profile() ->
+	#agent_profile{id="prof1", name="profile1"}.
+
+t_profiles() ->
+	[#agent_profile{id="prof0", name="profile0"},
+	#agent_profile{id="prof1", name="profile1"}].
+
+t_release() ->
+	#release_opt{id="rel0", label="release0"}.
+
+t_releases() ->
+	[#release_opt{id="rel0", label="release0"},
+	#release_opt{id="rel1", label="release1"}].
+
+passthrough_test_() ->
+	{setup, fun() ->
+		meck:new(mock_auth),
+		application:set_env(oacd_core, agent_auth_storage, mock_auth),
+
+		meck:expect(mock_auth, get_agent_by_login, 1, {ok, t_agent()}),
+		meck:expect(mock_auth, get_agent_by_id, 1, {ok, t_agent()}),
+		meck:expect(mock_auth, get_agents_by_profile, 1, {ok, t_agents()}),
+
+		meck:expect(mock_auth, auth, 2, {ok, t_agent()}),
+
+		meck:expect(mock_auth, get_profile, 1, {ok, t_profile()}),
+		meck:expect(mock_auth, get_profiles, 0, {ok, t_profiles()}),
+		meck:expect(mock_auth, get_default_profile, 0, {ok, t_profile()}),
+
+		meck:expect(mock_auth, get_release, 1, {ok, t_release()}),
+		meck:expect(mock_auth, get_releases, 0, {ok, t_releases()})
+
+	end, fun(_) ->
+		application:unset_env(oacd_core, agent_auth_storage),
+		meck:unload()
+	end, [
+		?_assertEqual({ok, t_agent()}, get_agent("agent0")),
+		?_assertEqual({ok, t_agent()}, get_agent_by_login("agent0")),
+		?_assertEqual({ok, t_agent()}, get_agent_by_id("a0")),
+		?_assertEqual({ok, t_agents()}, get_agents_by_profile("Default")),
+		?_assertEqual({ok, t_agent()}, auth("agent0", "pwd")),
+
+		?_assertEqual({ok, t_profile()}, get_profile("Default")),
+		?_assertEqual({ok, t_profiles()}, get_profiles()),
+		?_assertEqual({ok, t_profile()}, get_default_profile()),
+
+		?_assertEqual({ok, t_release()}, get_release("rel0")),
+		?_assertEqual({ok, t_releases()}, get_releases())
+	]}.
 
 -endif.

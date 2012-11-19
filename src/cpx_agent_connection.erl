@@ -175,7 +175,6 @@
 %% public api
 -export([
 	login/2,
-	start/2,
 	start/1,
 	init/1,
 	encode_cast/2,
@@ -262,42 +261,22 @@
 	{ok, #agent{}, state()} | {error, deny} | {error, duplicate}).
 login(Username, Password) ->
 	case agent_auth:auth(Username, Password) of
-		{allow, Id, _, _, _} ->
-			%% TODO double query
-			start(id, Id);
-		deny ->
+		{ok, Auth} ->
+			start_agent_with_auth(Auth);
+		_ ->
 			{error, deny}
 	end.
 
-%% @doc Start a given agent by id or login
--spec start/2 :: (id | login, string()) ->
+%% @doc Start a given agent by login
+-spec start/1 :: (Login::string()) ->
 	{ok, #agent{}, state()} | {error, noagent}.
-start(By, Val) ->
-	case agent_auth:get_agent(By, Val) of
-		{atomic, [#agent_auth{id=Id, login=Username, skills=Skills,
-			security_level=Security, profile=Profile, endpoints=Endpoints}]} ->
-			Agent = #agent{id = Id, login = Username,
-				skills = Skills, profile = Profile,
-				security_level = Security},
-			{_, APid} = agent_manager:start_agent(Agent),
-			Agent0 = Agent#agent{source = APid},
-			case agent:set_connection(APid, self()) of
-				ok ->
-					agent:set_endpoints(APid, Endpoints),
-					{ok, St} = init(Agent0),
-					{ok, Agent0, St};
-				error ->
-					{error, duplicate}
-			end;
+start(Login) ->
+	case agent_auth:get_agent(Login) of
+		{ok, Auth} ->
+			start_agent_with_auth(Auth);
 		_ ->
 			{error, noagent}
 	end.
-
-%% @doc Start a given agent by login
--spec start/1 :: (Username :: string()) ->
-	{ok, #agent{}, state()} | {error, noagent}.
-start(Username) ->
-	start(login, Username).
 
 %% @doc After the connection has been started, this should be called to
 %% seed the state.
@@ -335,6 +314,25 @@ handle_json(State, Bin, Mods) ->
 	end,
 
 	{E, Resp, State}.
+
+%% Internal
+
+start_agent_with_auth(Auth) ->
+	#agent_auth{id=Id, login=Username, skills=Skills,
+		security_level=Security, profile=Profile, endpoints=Endpoints} = Auth,
+	Agent = #agent{id = Id, login = Username,
+		skills = Skills, profile = Profile,
+		security_level = Security},
+	{_, APid} = agent_manager:start_agent(Agent),
+	Agent0 = Agent#agent{source = APid},
+	case agent:set_connection(APid, self()) of
+		ok ->
+			agent:set_endpoints(APid, Endpoints),
+			{ok, St} = init(Agent0),
+			{ok, Agent0, St};
+		error ->
+			{error, duplicate}
+	end.
 
 %% doc After unwrapping the binary that will hold json, and connection
 %% should call this.
