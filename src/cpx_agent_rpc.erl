@@ -117,10 +117,9 @@ go_released(St) ->
 	{[{state, released}, {release, {[{id, default}, {name, default}, {bias, negative}]}}]}.
 
 go_released(St, RelIdBin) ->
-	{ok, Rs} = agent_auth:get_releases(), %% Better if agent_auth has a get_release
 	RelId = b2l(RelIdBin),
-	case [X || X <- Rs, X#release_opt.id=:=RelId] of
-		[R] ->
+	case agent_auth:get_release(RelId) of
+		{ok, R} ->
 			APid = cpx_conn_state:get(St, agent_pid),
 			agent:set_release(APid, {R#release_opt.id, R#release_opt.label, R#release_opt.bias}),
 			{[{state, released}, {release, relopt_entry(R)}]};
@@ -247,11 +246,10 @@ release_change_test_() ->
 		meck:expect(agent, set_release, 2, ok),
 
 		meck:new(agent_auth),
-		meck:expect(agent_auth, get_releases, 0, {ok, [
-			#release_opt{id="relopt1", label="Release 1", bias=-1},
-			#release_opt{id="relopt2", label="Release 2", bias=0},
-			#release_opt{id="relopt3", label="Release 3", bias=1}
-		]})
+		meck:expect(agent_auth, get_release, fun("relopt1") -> {ok,
+			#release_opt{id="relopt1", label="Release 1", bias=-1}};
+		(_) -> none
+		end)
 	end, fun(_) ->
 		meck:unload(agent_auth),
 		meck:unload(agent)
