@@ -156,6 +156,7 @@
 	login,
 	profile,
 	type,
+	client,
 	previous_state,
 	state
 }).
