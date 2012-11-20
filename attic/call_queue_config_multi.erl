@@ -124,7 +124,7 @@
 %% A client is an id, label, and list of options.  Currently the only two
 %% options available are url_pop and autoend_wrapup.
 
--module(call_queue_config).
+-module(call_queue_config_multi).
 -author("Micah").
 
 -ifdef(TEST).
