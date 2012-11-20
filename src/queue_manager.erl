@@ -103,7 +103,7 @@ add_queue(Name, Opts) when is_list(Name) ->
 -spec(load_queue/1 :: (Name :: string()) -> 'ok' | 'noexists').
 load_queue(Name) ->
 	case call_queue_config:get_merged_queue(Name) of
-		Qrec when is_record(Qrec, call_queue) ->
+		{ok, Qrec} when is_record(Qrec, call_queue) ->
 			case get_queue(Name) of
 				Qpid when is_pid(Qpid) ->
 					?NOTICE("Updating running queue configuration for ~p at ~p", [Name, Qpid]),
@@ -132,12 +132,7 @@ get_queue(Name) ->
 		undefined ->
 			?DEBUG("Queue does not exis, checking mnesia...", []),
 			case call_queue_config:get_queue(Name) of
-				noexists ->
-					undefined;
-				{noexists, Else} ->
-					?WARNING("Could not load up the queue, at all, becaus of ~p", [Else]),
-					undefined;
-				Qrec when is_record(Qrec, call_queue) ->
+				{ok, Qrec} ->
 					Opts = [
 						{weight, Qrec#call_queue.weight},
 						{skills, Qrec#call_queue.skills},
@@ -148,7 +143,12 @@ get_queue(Name) ->
 							Pid;
 						{exists, Pid} ->
 							Pid
-					end
+					end;
+				none ->
+					undefined;
+				{error, Else} ->
+					?WARNING("Could not load up the queue, at all, becaus of ~p", [Else]),
+					undefined
 			end;
 		Pid ->
 			Pid
@@ -211,7 +211,7 @@ init([]) ->
 	process_flag(trap_exit, true),
 	% subscribe to mnesia system events to handle inconsistant db events
 	% load the queues in the db and start them.
-	Queues = call_queue_config:get_queues(),
+	{ok, Queues} = call_queue_config:get_queues(),
 	F = fun(Queuerec, Acc) ->
 		{ok, Pid} = call_queue:start_link(Queuerec#call_queue.name, [
 			{recipe, Queuerec#call_queue.recipe},
@@ -280,17 +280,17 @@ handle_DOWN(Node, #state{qdict = Qdict} = State, _Election) ->
 	Newdict = dict:from_list(Protodict),
 	Ressurect = fun(Qname) ->
 		case call_queue_config:get_queue(Qname) of
-			noexists ->
-				?WARNING("~s not restarting due to no config.", [Qname]),
-				ok;
-			Qrec when is_record(Qrec, call_queue) ->
+			{ok, Qrec} ->
 				add_queue(Qname, [
 					{weight, Qrec#call_queue.weight},
 					{skills, Qrec#call_queue.skills},
 					{recipe, Qrec#call_queue.recipe},
 					{hold_music, Qrec#call_queue.hold_music},
 					{group, Qrec#call_queue.group}
-				])
+				]);
+			_ ->
+				?WARNING("~s not restarting due to no config.", [Qname]),
+				ok
 		end
 	end,
 	Sfun = fun() ->
@@ -460,11 +460,7 @@ handle_info({'EXIT', Pid, Reason}, #state{qdict = Qdict} = State) ->
 			{noreply, State};
 		Qname ->
 			case call_queue_config:get_queue(Qname) of
-				noexists ->
-					?WARNING("queue ~p not in the config database", [Qname]),
-					gen_leader:leader_cast(?MODULE, {notify, Qname}),
-					{noreply, State};
-				Queuerec ->
+				{ok, Queuerec} ->
 					gen_leader:leader_cast(?MODULE, {notify, Qname}),
 					?DEBUG("Got call_queue_config of ~p for ~p", [Queuerec, Qname]),
 					Newdict = dict:erase(Queuerec#call_queue.name, Qdict),
@@ -485,7 +481,11 @@ handle_info({'EXIT', Pid, Reason}, #state{qdict = Qdict} = State) ->
 						end
 					end,
 					spawn(Fun),
-					{noreply, State#state{qdict = Newdict}}
+					{noreply, State#state{qdict = Newdict}};
+				_ ->
+					?WARNING("queue ~p not in the config database", [Qname]),
+					gen_leader:leader_cast(?MODULE, {notify, Qname}),
+					{noreply, State}
 			end
 	end;
 handle_info(_Info, State) ->

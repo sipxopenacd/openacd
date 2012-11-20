@@ -60,14 +60,14 @@ ping(_St) ->
 	pong.
 
 get_queues(_St) ->
-	Qs = call_queue_config:get_queues(),
+	{ok, Qs} = call_queue_config:get_queues(),
 	{[{queues, [l2b(Q#call_queue.name) || Q <- Qs]}]}.
 
 get_clients(_St) ->
 	ClientToEntry = fun(Cl) -> {[{id, l2b(Cl#client.id)},
 		{name, l2b(Cl#client.label)}]}
 	end,
-	Clients = call_queue_config:get_clients(),
+	{ok, Clients} = call_queue_config:get_clients(),
 	{[{clients, [ClientToEntry(Cl) || Cl <- Clients]}]}.
 
 get_skills(St) ->
@@ -207,15 +207,15 @@ call_queue_apis_test_() ->
 	end, fun(_) ->
 		meck:unload(call_queue_config)
 	end, [{"get_queues", fun() ->
-		meck:expect(call_queue_config, get_queues, 0, [
-			#call_queue{name="q1"}, #call_queue{name="q2"}]),
+		meck:expect(call_queue_config, get_queues, 0, {ok, [
+			#call_queue{name="q1"}, #call_queue{name="q2"}]}),
 
 		?assertEqual({[{queues, [<<"q1">>, <<"q2">>]}]},
 			get_queues(t_st()))
 	end}, {"get_clients", fun() ->
-		meck:expect(call_queue_config, get_clients, 0, [
+		meck:expect(call_queue_config, get_clients, 0, {ok, [
 			#client{id="cl1", label="Client1"},
-			#client{id="cl2", label="Client2"}]),
+			#client{id="cl2", label="Client2"}]}),
 
 		?assertEqual({[{clients,[{[{id, <<"cl1">>}, {name, <<"Client1">>}]},
 			{[{id, <<"cl2">>}, {name, <<"Client2">>}]}]}]},
