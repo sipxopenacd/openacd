@@ -57,7 +57,7 @@ logout(_St) ->
 	{[{status, logged_out}]}.
 
 ping(_St) ->
-	pong.
+	{[{pong, util:now_ms()}]}.
 
 get_queues(_St) ->
 	Qs = call_queue_config:get_queues(),
