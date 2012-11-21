@@ -37,7 +37,7 @@
 %% encode
 -export([enc_skills/1, enc_state_changes/1, enc_agent_state/1]).
 %% binutils
--export([l2b/1, b2l/1]).
+-export([l2b/1, b2l/1, nob/1, nol/1]).
 
 -spec enc_skills(skills()) -> json().
 enc_skills(Skills) ->
@@ -76,6 +76,18 @@ b2l(B) ->
 -spec l2b(list()) -> binary().
 l2b(L) ->
 	list_to_binary(L).
+
+-spec nob(null | list()) -> null | binary().
+nob(null) ->
+	null;
+nob(L) when is_list(L) ->
+	list_to_binary(L).
+
+-spec nol(null | binary()) -> null | list().
+nol(null) ->
+	null;
+nol(L) when is_binary(L) ->
+	binary_to_list(L).
 
 -ifdef(TEST).
 
