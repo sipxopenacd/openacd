@@ -77,14 +77,18 @@ b2l(B) ->
 l2b(L) ->
 	list_to_binary(L).
 
--spec nob(null | list()) -> null | binary().
+-spec nob(null | undefined | list()) -> null | binary().
 nob(null) ->
+	null;
+nob(undefined) ->
 	null;
 nob(L) when is_list(L) ->
 	list_to_binary(L).
 
--spec nol(null | binary()) -> null | list().
+-spec nol(null | undefined | binary()) -> null | list().
 nol(null) ->
+	null;
+nol(undefined) ->
 	null;
 nol(L) when is_binary(L) ->
 	binary_to_list(L).
