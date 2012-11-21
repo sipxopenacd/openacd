@@ -40,8 +40,7 @@
 		id :: string() | 'undefined',
 		label :: string() | 'undefined',
 		options = [] :: client_opts(),
-		last_integrated :: 'undefined' | pos_integer(),
-		timestamp = util:now() :: pos_integer()
+		last_integrated :: 'undefined' | pos_integer()
 }).
 
 -type(call_priority() :: non_neg_integer()).

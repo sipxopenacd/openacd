@@ -119,8 +119,7 @@
 	id :: 'undefined' | string(), %erlang:error({undefined, id}) :: string(),
 	order = 1 :: pos_integer(),
 	options = [] :: [profile_option()],
-	skills = [] :: [atom()],
-	timestamp = util:now() :: pos_integer()
+	skills = [] :: [atom()]
 }).
 
 %% used by agent_manager to aid in finding available agents and thier
@@ -169,8 +168,7 @@
 -record(release_opt, {
 	id :: pos_integer(),
 	label :: string(),
-	bias = 0 :: -1 | 0 | 1,
-	timestamp = util:now() :: pos_integer()
+	bias = 0 :: -1 | 0 | 1
 	}).
 
 %% A general representation of an agent moving from one state to another.
