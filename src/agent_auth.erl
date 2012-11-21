@@ -37,6 +37,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-import(cpx_test_util, [t_passthrough/3, t_passthrough/4]).
 -endif.
 
 
@@ -174,37 +175,23 @@ t_releases() ->
 passthrough_test_() ->
 	{setup, fun() ->
 		meck:new(mock_auth),
-		application:set_env(oacd_core, agent_auth_storage, mock_auth),
-
-		meck:expect(mock_auth, get_agent_by_login, 1, {ok, t_agent()}),
-		meck:expect(mock_auth, get_agent_by_id, 1, {ok, t_agent()}),
-		meck:expect(mock_auth, get_agents_by_profile, 1, {ok, t_agents()}),
-
-		meck:expect(mock_auth, auth, 2, {ok, t_agent()}),
-
-		meck:expect(mock_auth, get_profile, 1, {ok, t_profile()}),
-		meck:expect(mock_auth, get_profiles, 0, {ok, t_profiles()}),
-		meck:expect(mock_auth, get_default_profile, 0, {ok, t_profile()}),
-
-		meck:expect(mock_auth, get_release, 1, {ok, t_release()}),
-		meck:expect(mock_auth, get_releases, 0, {ok, t_releases()})
-
+		application:set_env(oacd_core, agent_auth_storage, mock_auth)
 	end, fun(_) ->
 		application:unset_env(oacd_core, agent_auth_storage),
 		meck:unload()
 	end, [
-		?_assertEqual({ok, t_agent()}, get_agent("agent0")),
-		?_assertEqual({ok, t_agent()}, get_agent_by_login("agent0")),
-		?_assertEqual({ok, t_agent()}, get_agent_by_id("a0")),
-		?_assertEqual({ok, t_agents()}, get_agents_by_profile("Default")),
-		?_assertEqual({ok, t_agent()}, auth("agent0", "pwd")),
+		t_passthrough(get_agent, get_agent_by_login, ["agent0"], {ok, t_agent()}),
 
-		?_assertEqual({ok, t_profile()}, get_profile("Default")),
-		?_assertEqual({ok, t_profiles()}, get_profiles()),
-		?_assertEqual({ok, t_profile()}, get_default_profile()),
+		t_passthrough(get_agent_by_login, ["agent0"], {ok, t_agent()}),
+		t_passthrough(get_agent_by_id, ["a0"], {ok, t_agent()}),
+		t_passthrough(get_agents_by_profile, ["Default"], {ok, t_agents()}),
+		t_passthrough(auth, ["agent0", "pwd"], {ok, t_agent()}),
 
-		?_assertEqual({ok, t_release()}, get_release("rel0")),
-		?_assertEqual({ok, t_releases()}, get_releases())
+		t_passthrough(get_profile, ["Default"], {ok, t_profile()}),
+		t_passthrough(get_profiles, [], {ok, t_profiles()}),
+		t_passthrough(get_default_profile, [], {ok, t_profile()}),
+
+		t_passthrough(get_release, ["rel0"], {ok, t_release()}),
+		t_passthrough(get_releases, [], {ok, t_releases()})
 	]}.
-
 -endif.

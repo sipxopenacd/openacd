@@ -355,54 +355,42 @@ t_clients() ->
 passthrough_test_() ->
 	{setup, fun() ->
 		meck:new(mock_cqueue),
-		application:set_env(oacd_core, call_queue_config_storage, mock_cqueue),
-
-		meck:expect(mock_cqueue, get_queue, 1, {ok, t_queue()}),
-		meck:expect(mock_cqueue, get_merged_queue, 1, {ok, t_merged_queue()}),
-		meck:expect(mock_cqueue, get_queues, 0, {ok, t_queues()}),
-		meck:expect(mock_cqueue, get_queues_by_group, 1, {ok, t_queues_group_a()}),
-
-		meck:expect(mock_cqueue, get_queue_group, 1, {ok, t_queue_group()}),
-		meck:expect(mock_cqueue, get_default_queue_group, 0, {ok, t_default_queue_group()}),
-		meck:expect(mock_cqueue, get_queue_groups, 0, {ok, t_queue_groups()}),
-		meck:expect(mock_cqueue, get_skill_key, 1, {ok, chinese}),
-
-		meck:expect(mock_cqueue, get_skill_by_key, 1, {ok, t_skill()}),
-		meck:expect(mock_cqueue, get_skill_by_name, 1, {ok, t_skill()}),
-		meck:expect(mock_cqueue, get_skills, 0, {ok, t_skills()}),
-		meck:expect(mock_cqueue, get_skills_by_group, 1, {ok, t_skills_group_lang()}),
-
-		meck:expect(mock_cqueue, get_client, 1, {ok, t_client()}),
-		meck:expect(mock_cqueue, get_client_by_id, 1, {ok, t_client()}),
-		meck:expect(mock_cqueue, get_client_by_name, 1, {ok, t_client()}),
-		meck:expect(mock_cqueue, get_default_client, 0, {ok, t_default_client()}),
-		meck:expect(mock_cqueue, get_clients, 0, {ok, t_clients()})
-
+		application:set_env(oacd_core, call_queue_config_storage, mock_cqueue)
 	end, fun(_) ->
 		application:unset_env(oacd_core, call_queue_config_storage),
 		meck:unload()
 	end, [
-		?_assertEqual({ok, t_queue()}, get_queue("queue0")),
-		?_assertEqual({ok, t_merged_queue()}, get_merged_queue("queue0")),
-		?_assertEqual({ok, t_queues()}, get_queues()),
-		?_assertEqual({ok, t_queues_group_a()}, get_queues_by_group("qgroupA")),
-
-		?_assertEqual({ok, t_queue_group()}, get_queue_group("qgroupA")),
-		?_assertEqual({ok, t_default_queue_group()}, get_default_queue_group()),
-		?_assertEqual({ok, t_queue_groups()}, get_queue_groups()),
-
-		?_assertEqual({ok, chinese}, get_skill_key("Chinese")),
-		?_assertEqual({ok, t_skill()}, get_skill(chinese)), %% equiv get_skill_by_key
-		?_assertEqual({ok, t_skill()}, get_skill_by_key(chinese)),
-		?_assertEqual({ok, t_skill()}, get_skill_by_name("Chinese")),
-		?_assertEqual({ok, t_skills()}, get_skills()),
-		?_assertEqual({ok, t_skills_group_lang()}, get_skills_by_group("Language")),
-
-		?_assertEqual({ok, t_client()}, get_client("cl0")),
-		?_assertEqual({ok, t_client()}, get_client_by_id("cl0")),
-		?_assertEqual({ok, t_client()}, get_client_by_name("Client0")),
-		?_assertEqual({ok, t_default_client()}, get_default_client()),
-		?_assertEqual({ok, t_clients()}, get_clients())
+		t_passthrough(get_queue, ["queue0"], {ok, t_queue()}),
+		t_passthrough(get_merged_queue, ["queue0"], {ok, t_merged_queue()}),
+		t_passthrough(get_queues, [], {ok, t_queues()}),
+		t_passthrough(get_queues_by_group, ["qgroupA"], {ok, t_queues_group_a()}),
+		t_passthrough(get_queue_group, ["qgroupA"], {ok, t_queue_group()}),
+		t_passthrough(get_default_queue_group, [], {ok, t_default_queue_group()}),
+		t_passthrough(get_queue_groups, [], {ok, t_queue_groups()}),
+		t_passthrough(get_skill_key, ["Chinese"], {ok, chinese}),
+		t_passthrough(get_skill, get_skill_by_key, [chinese], {ok, t_skill()}),
+		t_passthrough(get_skill_by_key, [chinese], {ok, t_skill()}),
+		t_passthrough(get_skill_by_name, ["Chinese"], {ok, t_skill()}),
+		t_passthrough(get_skills, [], {ok, t_skills()}),
+		t_passthrough(get_skills_by_group, ["Language"], {ok, t_skills_group_lang()}),
+		t_passthrough(get_client, get_client_by_id, ["cl0"], {ok, t_client()}),
+		t_passthrough(get_client_by_id, ["cl0"], {ok, t_client()}),
+		t_passthrough(get_client_by_name, ["Client0"], {ok, t_client()}),
+		t_passthrough(get_default_client, [], {ok, t_default_client()}),
+		t_passthrough(get_clients, [], {ok, t_clients()})
 	]}.
+
+t_passthrough(ApiFun, Args, Ret) ->
+	t_passthrough(ApiFun, ApiFun, Args, Ret).
+
+t_passthrough(ApiFun, CbkFun, Args, Ret) ->
+	ArgsN = length(Args),
+	Name = lists:flatten(io_lib:format("~p/~b", [ApiFun, ArgsN])),
+
+	{Name, fun() ->
+		meck:expect(mock_cqueue, CbkFun, ArgsN, Ret),
+		?assertEqual(Ret, apply(?MODULE, ApiFun, Args)),
+		?assert(meck:called(mock_cqueue, CbkFun, Args, self()))
+	end}.
 
 -endif.
