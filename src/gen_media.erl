@@ -2100,20 +2100,20 @@ correct_client(#call{client = Client} = Callrec) ->
 	Callrec#call{client = Newclient}.
 
 correct_client_sub(undefined) ->
-	Client = try call_queue_config:get_client(id, undefined) of
-		Whatever ->
-			Whatever
+	Client = try call_queue_config:get_default_client() of
+		{ok, C} ->
+			C
 	catch
 		error:{case_clause, {aborted, {node_not_running, _Node}}} ->
 			#client{}
 	end,
 	Client;
 correct_client_sub({Id,Opts}) ->
-	#client{options = Defaults} = Client = try call_queue_config:get_client(id, Id) of
+	#client{options = Defaults} = Client = try call_queue_config:get_client_by_id(Id) of
+		{ok, C} ->
+			C;
 		none ->
-			correct_client_sub(undefined);
-		Else ->
-			Else
+			correct_client_sub(undefined)
 	catch
 		error:{case_clause, {aborted, {node_not_running, _Node}}} ->
 			#client{}

@@ -444,7 +444,7 @@ status() ->
 -spec(get_queues/1 :: (Group :: string()) -> [{string(), pid()}]).
 get_queues(Group) ->
 	Queues = get_queues(),
-	StashedQueues = call_queue_config:get_queues(Group),
+	{ok, StashedQueues} = call_queue_config:get_queues_by_group(Group),
 	Compare = lists:map(fun(#call_queue{name = Nom}) -> Nom end, StashedQueues),
 	Fun = fun({Name, _Pid}) ->
 		lists:member(Name, Compare)
@@ -836,8 +836,8 @@ pretty_print_time([{Label, Interval} | Tail], Time, Acc) ->
 
 -spec(reload_recipe/1 :: (Queue :: string()) -> 'ok').
 reload_recipe(Queue) ->
-	#call_queue{group = Group, recipe = Recipe} = call_queue_config:get_queue(Queue),
-	{atomic, [#queue_group{recipe = Grep}]} = call_queue_config:get_queue_group(Group),
+	{ok, #call_queue{group = Group, recipe = Recipe}} = call_queue_config:get_queue(Queue),
+	{ok, #queue_group{recipe = Grep}} = call_queue_config:get_queue_group(Group),
 	Newrec = lists:append(Grep, Recipe),
 	Q = queue_manager:get_queue(Queue),
 	call_queue:set_recipe(Q, Newrec).

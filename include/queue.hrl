@@ -88,8 +88,7 @@
 	skills = [english, '_node'] :: [atom()],
 	recipe = ?DEFAULT_RECIPE :: recipe(),
 	hold_music :: string() | undefined,
-	group = "Default" :: string(),
-	timestamp = util:now() :: pos_integer()
+	group = "Default" :: string()
 }).
 
 -record(queue_group, {
@@ -97,8 +96,7 @@
 	recipe = [] :: recipe(),
 	skills = [] :: [atom()],
 	sort = 10 :: non_neg_integer(),
-	protected = false :: 'true' | 'false',
-	timestamp = util:now() :: pos_integer()
+	protected = false :: 'true' | 'false'
 }).
 
 -record(skill_rec, {
@@ -106,6 +104,5 @@
 	name = "New Skill" :: string(),
 	protected = false :: 'true' | 'false',
 	description = "Default description" :: string(),
-	group = "Misc" :: string(),
-	timestamp = util:now() :: pos_integer()
+	group = "Misc" :: string()
 }).
