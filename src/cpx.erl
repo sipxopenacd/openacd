@@ -1055,7 +1055,8 @@ start_plugins(Dir) ->
 			Plugins = verify_apps(Appfiles, Dir),
 			load_plugin_envs(Plugins),
 			application:set_env(oacd_core, plugins, Plugins),
-			start_plugin_apps(Plugins)
+			start_plugin_apps(Plugins),
+			?INFO("Plugin started", [])
 	end.
 
 load_plugin_envs(Plugins) ->
@@ -1104,7 +1105,6 @@ start_plugin_apps(undefined) ->
 start_plugin_apps({ok, Plugins}) ->
 	start_plugin_apps(Plugins);
 start_plugin_apps([]) ->
-	?INFO("Plugins started", []),
 	ok;
 start_plugin_apps([Plugin | Tail]) when is_atom(Plugin) ->
 	start_plugin_app(Plugin),
@@ -1117,7 +1117,7 @@ start_plugin_app(Plugin) ->
 				?INFO("Started plugin ~p", [Plugin]),
 				ok;
 			{error, {already_started, Plugin}} ->
-				?INFO("Plugin ~p already started; perhaps something else depends on it?", [Plugin]),
+				?DEBUG("Plugin ~p already started", [Plugin]),
 				ok;
 			{error, Else} ->
 				?INFO("Plugin ~p not started due to ~p", [Plugin, Else]),
