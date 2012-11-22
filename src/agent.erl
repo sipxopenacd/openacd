@@ -788,8 +788,8 @@ init_gproc_prop(Agent) ->
 	Update = {{self(), now()}, Prop},
 	gproc:reg({p, l, cpx_agent}, Update),
 
-	%% TODO send login event instead
-	gproc:send({p, l, cpx_agent_change}, Update).
+	Event = #cpx_agent_login{pid = self(), now = now(), prop = Prop},
+	gproc:send({p, l, cpx_agent_change}, Event).
 
 set_gproc_prop(Agent) ->
 	Prop = get_agent_prop(Agent),
