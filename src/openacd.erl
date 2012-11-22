@@ -16,19 +16,22 @@ start() ->
 my_apps() -> [
 	kernel,
 	stdlib,
+	sasl,
+	mnesia,
 	crypto,
 	public_key,
-	mnesia,
-	syntax_tools,
+
 	compiler,
+	syntax_tools,
 	xmerl,
-	ssl,
 	inets,
+	ssl,
+
 	mochiweb,
-	errd,
-	gen_smtp,
-	sasl,
+	syslog,
+	ejrpc2,
 	gproc,
+
 	oacd_core
 ].
 
