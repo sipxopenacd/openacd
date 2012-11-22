@@ -151,6 +151,12 @@
 	state
 }).
 
+-record(cpx_agent_login, {
+	pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_agent_prop{}
+}).
+
 -record(cpx_agent_channel_prop, {
 	login,
 	profile,
