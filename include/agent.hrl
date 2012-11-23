@@ -176,6 +176,7 @@
 
 -record(cpx_agent_channel_state_update, {
 	pid :: pid(),
+	agent_pid :: pid(),
 	now :: tuple(),
 	prop :: #cpx_agent_channel_prop{},
 	state,

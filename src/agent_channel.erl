@@ -697,7 +697,7 @@ init_gproc_prop({State, PreviousStateName, StateName}) ->
 	gproc:reg({p, l, cpx_agent_channel}, Update),
 
 	% TODO send cpx_agent_channel_init event
-	Event = #cpx_agent_channel_state_update{pid = self(), now = now(), state = StateName, old_state = PreviousStateName, prop = Prop},
+	Event = #cpx_agent_channel_state_update{pid=self(), agent_pid=State#state.agent_fsm, now=now(), state=StateName, old_state=PreviousStateName, prop=Prop},
 	gproc:send({p, l, cpx_agent_channel_change}, Event).
 
 set_gproc_prop({State, PreviousStateName, StateName}) ->
@@ -705,7 +705,7 @@ set_gproc_prop({State, PreviousStateName, StateName}) ->
 	Update = {{self(), now()}, Prop},
 	gproc:set_value({p, l, cpx_agent_channel}, Update),
 
-	Event = #cpx_agent_channel_state_update{pid = self(), now = now(), state = StateName, old_state = PreviousStateName, prop = Prop},
+	Event = #cpx_agent_channel_state_update{pid=self(), agent_pid=State#state.agent_fsm, now=now(), state=StateName, old_state=PreviousStateName, prop=Prop},
 	gproc:send({p, l, cpx_agent_channel_change}, Event).
 
 -spec get_agent_channel_prop({#state{}, atom(), atom()}) -> #cpx_agent_channel_prop{}.
