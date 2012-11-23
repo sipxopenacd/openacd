@@ -796,7 +796,7 @@ set_gproc_prop({PrevReleaseData, Agent}) ->
 	Update = {{self(), now()}, Prop},
 	gproc:set_value({p, l, cpx_agent}, Update),
 
-	Event = #cpx_agent_state_update{pid = self(), now = now(), state = get_agent_state(Agent#agent.release_data), old_state = get_agent_state(PrevReleaseData)},
+	Event = #cpx_agent_state_update{pid = self(), now = now(), state = get_agent_state(Agent#agent.release_data), old_state = get_agent_state(PrevReleaseData), prop = Prop},
 	gproc:send({p, l, cpx_agent_change}, Event).
 
 -spec get_agent_prop({release_code() | 'undefined', #agent{}}) -> #cpx_agent_prop{}.

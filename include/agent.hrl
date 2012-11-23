@@ -160,6 +160,7 @@
 -record(cpx_agent_state_update, {
 	pid :: pid(),
 	now :: tuple(),
+	prop :: #cpx_agent_prop{},
 	state,
 	old_state
 }).
