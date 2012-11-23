@@ -174,6 +174,14 @@
 	state
 }).
 
+-record(cpx_agent_channel_state_update, {
+	pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_agent_channel_prop{},
+	state,
+	old_state
+}).
+
 -define(DEFAULT_PROFILE, #agent_profile{name = "Default", id = "0", timestamp = util:now()}).
 
 -define(DEFAULT_RELEASE, {"default", default, -1}).
