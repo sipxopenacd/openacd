@@ -119,54 +119,20 @@
 start(_Type, StartArgs) ->
 	io:format("Start args ~p~n", [StartArgs]),
 	io:format("All env: ~p~n", [application:get_all_env(oacd_core)]),
-	crypto:start(),
-	%Nodes = lists:append([nodes(), [node()]]),
-	%mnesia:create_schema(Nodes),
-	%mnesia:start(),
-	case application:get_env(oacd_core, nodes) of
-		{ok, Nodes} ->
-			lists:foreach(fun(Node) -> net_adm:ping(Node) end, Nodes),
-			case nodes() of
-				[] ->
-					ok;
-				AliveNodes ->
-					io:format("Alive nodes: ~p~n", [AliveNodes]),
-					mnesia:change_config(extra_db_nodes, AliveNodes)
-			end,
-			ok;
-		_Else ->
-			Nodes = [node()],
-			application:set_env(oacd_core, nodes, Nodes)
-	end,
-	mnesia:change_table_copy_type(schema, node(), disc_copies),
-	mnesia:set_master_nodes(lists:umerge(Nodes, [node()])),
-	merge_env(),
 
+	Nodes = get_nodes(),
+	application:set_env(oacd_core, nodes, Nodes),
+	ping_nodes(Nodes),
+
+	init_mnesia(Nodes),
 	add_plugin_paths(),
+
 	try cpx_supervisor:start_link(Nodes) of
 		{ok, Pid} ->
 			application:set_env(oacd_core, uptime, util:now()),
 			?NOTICE("Application OpenACD started sucessfully!", []),
 			% to not block the shell.
-			spawn(fun() ->
-				case cpx:get_env(plugin_dir) of
-					undefined ->
-						?INFO("No plugin dir", []);
-					{ok, PluginDir} ->
-						case filelib:ensure_dir(filename:join(PluginDir, "touch")) of
-							ok ->
-								start_plugins(PluginDir);
-							{error, Error} ->
-								?ERROR("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
-						end
-				end,
-				case cpx:get_env(plugins, []) of
-					undefined ->
-						?INFO("No plugins to load", []);
-					{ok, Plugins} ->
-                		start_plugin_apps(Plugins)
-                end
-			end),
+			spawn(fun init_load_plugins/0),
 			{ok, Pid}
 	catch
 		What:Why ->
@@ -1207,6 +1173,48 @@ add_plugin_paths(PluginDir) ->
 %			AccApps
 %	end,
 %	start_plugin_apps(Tail, Dir, NewAcc).
+
+%% Internal
+get_nodes() ->
+	NodesEnv = case application:get_env(oacd_core, nodes) of
+		{ok, Ns} -> Ns;
+		_ -> []
+	end,
+	ordsets:from_list([node() | NodesEnv]).
+
+ping_nodes(Nodes) ->
+	lists:foreach(fun(Node) -> net_adm:ping(Node) end, Nodes).
+
+init_mnesia(Nodes) ->
+	case nodes() of
+		[] ->
+			ok;
+		AliveNodes ->
+			io:format("Alive nodes: ~p~n", [AliveNodes]),
+			mnesia:change_config(extra_db_nodes, AliveNodes)
+	end,
+	mnesia:change_table_copy_type(schema, node(), disc_copies),
+	mnesia:set_master_nodes(Nodes),
+	merge_env().
+
+init_load_plugins() ->
+	case cpx:get_env(plugin_dir) of
+		undefined ->
+			?INFO("No plugin dir", []);
+		{ok, PluginDir} ->
+			case filelib:ensure_dir(filename:join(PluginDir, "touch")) of
+				ok ->
+					start_plugins(PluginDir);
+				{error, Error} ->
+					?ERROR("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
+			end
+	end,
+	case cpx:get_env(plugins, []) of
+		undefined ->
+			?INFO("No plugins to load", []);
+		{ok, Plugins} ->
+			start_plugin_apps(Plugins)
+	end.
 
 -ifdef(TEST).
 
