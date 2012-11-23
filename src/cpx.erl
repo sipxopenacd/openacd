@@ -120,6 +120,8 @@ start(_Type, StartArgs) ->
 	io:format("Start args ~p~n", [StartArgs]),
 	io:format("All env: ~p~n", [application:get_all_env(oacd_core)]),
 
+	verify_store(),
+
 	Nodes = get_nodes(),
 	application:set_env(oacd_core, nodes, Nodes),
 	ping_nodes(Nodes),
@@ -1175,6 +1177,21 @@ add_plugin_paths(PluginDir) ->
 %	start_plugin_apps(Tail, Dir, NewAcc).
 
 %% Internal
+
+verify_store() ->
+	verify_store(agent_auth_storage),
+	verify_store(call_queue_config_storage).
+
+verify_store(Store) ->
+	case application:get_env(oacd_core, Store) of
+		undefined ->
+			io:format("ERROR: Missing '~p' in sys.config.",
+				[Store]),
+			throw(missing_storage);
+		_ ->
+			ok
+	end.
+
 get_nodes() ->
 	NodesEnv = case application:get_env(oacd_core, nodes) of
 		{ok, Ns} -> Ns;
