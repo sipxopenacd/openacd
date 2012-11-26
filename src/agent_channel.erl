@@ -53,6 +53,7 @@
 	media_type = voice :: channel_category(),
 	endpoint = inband :: any(),
 	client :: undefined | #client{} | {Id :: string(), Opts :: [{atom(), any()}]} | (Id :: string()),
+	callerid :: {string(), string()},
 	state_data :: any()
 }).
 
@@ -280,6 +281,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 		media_type = Call#call.type,
 		endpoint = Endpoint,
 		client = Call#call.client,
+		callerid = Call#call.callerid,
 		state_data = Call
 	},
 	init_gproc_prop({State, init, StateName}),
@@ -714,7 +716,8 @@ get_agent_channel_prop({State, PreviousStateName, StateName}) ->
 	Profile = State#state.agent_profile,
 	Type = State#state.media_type,
 	Client = State#state.client,
-	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, previous_state=PreviousStateName, state=StateName}.
+	CallerId = State#state.callerid,
+	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, callerid=CallerId, previous_state=PreviousStateName, state=StateName}.
 
 % ======================================================================
 % TESTS
