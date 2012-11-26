@@ -198,8 +198,16 @@ logout_test() ->
 		logout(t_st())),
 	assert_exit().
 
-ping_test() ->
-	?assertEqual(pong, ping(t_st())).
+ping_test_() ->
+	{setup, fun() ->
+		meck:new(util),
+		meck:expect(util, now, 0, 123000),
+		meck:expect(util, now_ms, 0, 123)
+	end, fun(_) ->
+		meck:unload()
+	end, [{"ping", fun() ->
+		?assertEqual({[{pong, 123}]}, ping(t_st()))
+	end}]}.
 
 call_queue_apis_test_() ->
 	{setup, fun() ->
@@ -285,6 +293,7 @@ agent_info_test_() ->
 		meck:new(util),
 		meck:expect(util, now, 0, 123)
 	end, fun(_) ->
+		meck:unload(util),
 		meck:unload(agent)
 	end, [{"get_skills", fun() ->
 		?assertEqual({[{skills, [english, support]}]},
