@@ -42,6 +42,7 @@
 	get_queues/1,
 	get_clients/1,
 	get_skills/1,
+	get_all_skills/1,
 	get_node/1,
 	get_profile/1,
 	get_connection_info/1,
@@ -75,6 +76,12 @@ get_skills(St) ->
 	Ss = agent:get_skills(APid),
 
 	Es = cpx_json_util:enc_skills(Ss),
+	{[{skills, Es}]}.
+
+get_all_skills(_St) ->
+	{ok, Ss} = call_queue_config:get_skills(),
+
+	Es = cpx_json_util:enc_skill_recs(Ss),
 	{[{skills, Es}]}.
 
 get_node(St) ->
@@ -350,5 +357,21 @@ end_wrapup_test_() ->
 		?assertEqual(err(channel_not_found), end_wrapup(t_st(), <<"ch999">>))
 	end}]}.
 
+get_all_skills_test_() ->
+	{setup, fun() ->
+		meck:new(call_queue_config),
+		meck:expect(call_queue_config, get_skills, 0, {ok, [#skill_rec{atom=english, name="English"},
+			#skill_rec{atom=support, name="Support"},
+			#skill_rec{atom='_all', name="All"},
+			#skill_rec{atom='_brand', name="Brand"},
+			#skill_rec{atom='_node', name="Node"},
+			#skill_rec{atom='_profile', name="Agent Profile"},
+			#skill_rec{atom='_queue', name="Queue"}]})
+	end, fun(_) ->
+		meck:unload(call_queue_config)
+	end, [{"get all skills", fun() ->
+		?assertEqual({[{skills, [english, support, '_all', '_brand', '_node', '_profile', '_queue']}]},
+			get_all_skills(t_st()))
+	end}]}.
 
 -endif.
