@@ -170,6 +170,7 @@
 	profile,
 	type,
 	client,
+	callerid,
 	previous_state,
 	state
 }).
