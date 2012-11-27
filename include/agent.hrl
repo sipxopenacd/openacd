@@ -147,7 +147,6 @@
 	login,
 	profile,
 	skills,
-	previous_state,
 	state
 }).
 

@@ -783,30 +783,27 @@ wait_for_agent_manager(Count, StateName, #state{agent_rec = Agent} = State) ->
 	end.
 
 
-init_gproc_prop({PrevReleaseData, Agent}) ->
-	Prop = get_agent_prop({PrevReleaseData, Agent}),
-	Update = {{self(), now()}, Prop},
-	gproc:reg({p, l, cpx_agent}, Update),
+init_gproc_prop({_, Agent}) ->
+	Prop = get_agent_prop(Agent),
+	gproc:reg({p, l, cpx_agent}, Prop),
 
 	Event = #cpx_agent_login{pid = self(), now = now(), prop = Prop},
 	gproc:send({p, l, cpx_agent_change}, Event).
 
 set_gproc_prop({PrevReleaseData, Agent}) ->
-	Prop = get_agent_prop({PrevReleaseData, Agent}),
-	Update = {{self(), now()}, Prop},
-	gproc:set_value({p, l, cpx_agent}, Update),
+	Prop = get_agent_prop(Agent),
+	gproc:set_value({p, l, cpx_agent}, Prop),
 
 	Event = #cpx_agent_state_update{pid = self(), now = now(), state = get_agent_state(Agent#agent.release_data), old_state = get_agent_state(PrevReleaseData), prop = Prop},
 	gproc:send({p, l, cpx_agent_change}, Event).
 
--spec get_agent_prop({release_code() | 'undefined', #agent{}}) -> #cpx_agent_prop{}.
-get_agent_prop({PrevReleaseData, Agent}) ->
+-spec get_agent_prop(#agent{}) -> #cpx_agent_prop{}.
+get_agent_prop(Agent) ->
 	Login = Agent#agent.login,
 	Profile = Agent#agent.profile,
 	Skills = Agent#agent.skills,
-	PreviousState = get_agent_state(PrevReleaseData),
 	State = get_agent_state(Agent#agent.release_data),
-	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, previous_state=PreviousState, state=State}.
+	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, state=State}.
 
 -spec get_agent_state(release_code() | 'undefined') -> init | available | {released, term()}.
 get_agent_state(Release) ->
