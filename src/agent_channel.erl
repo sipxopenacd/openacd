@@ -53,6 +53,7 @@
 	media_type = voice :: channel_category(),
 	endpoint = inband :: any(),
 	client :: undefined | #client{} | {Id :: string(), Opts :: [{atom(), any()}]} | (Id :: string()),
+	callerid :: {string(), string()},
 	state_data :: any()
 }).
 
@@ -280,6 +281,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 		media_type = Call#call.type,
 		endpoint = Endpoint,
 		client = Call#call.client,
+		callerid = Call#call.callerid,
 		state_data = Call
 	},
 	init_gproc_prop({State, init, StateName}),
@@ -691,27 +693,29 @@ prep_autowrapup(#call{client = Client}) ->
 			ok
 	end.
 
-init_gproc_prop(State) ->
-	Prop = get_agent_channel_prop(State),
-	Update = {{self(), now()}, Prop},
-	gproc:reg({p, l, cpx_agent_channel}, Update),
+init_gproc_prop({State, PrevChannelState, ChannelState}) ->
+	Prop = get_agent_channel_prop(State, ChannelState),
+	gproc:reg({p, l, cpx_agent_channel}, Prop),
 
-	gproc:send({p, l, cpx_agent_channel_change}, Update).
+	% TODO send cpx_agent_channel_init event
+	Event = #cpx_agent_channel_state_update{pid=self(), agent_pid=State#state.agent_fsm, now=now(), state=ChannelState, old_state=PrevChannelState, prop=Prop},
+	gproc:send({p, l, cpx_agent_channel_change}, Event).
 
-set_gproc_prop(State) ->
-	Prop = get_agent_channel_prop(State),
-	Update = {{self(), now()}, Prop},
-	gproc:set_value({p, l, cpx_agent_channel}, Update),
+set_gproc_prop({State, PreviousStateName, StateName}) ->
+	Prop = get_agent_channel_prop(State, StateName),
+	gproc:set_value({p, l, cpx_agent_channel}, Prop),
 
-	gproc:send({p, l, cpx_agent_channel_change}, Update).
+	Event = #cpx_agent_channel_state_update{pid=self(), agent_pid=State#state.agent_fsm, now=now(), state=StateName, old_state=PreviousStateName, prop=Prop},
+	gproc:send({p, l, cpx_agent_channel_change}, Event).
 
--spec get_agent_channel_prop({#state{}, atom(), atom()}) -> #cpx_agent_channel_prop{}.
-get_agent_channel_prop({State, PreviousStateName, StateName}) ->
-	Login = State#state.agent_login,
-	Profile = State#state.agent_profile,
-	Type = State#state.media_type,
-	Client = State#state.client,
-	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, previous_state=PreviousStateName, state=StateName}.
+-spec get_agent_channel_prop(#state{}, atom()) -> #cpx_agent_channel_prop{}.
+get_agent_channel_prop(FsmState, ChannelState) ->
+	Login = FsmState#state.agent_login,
+	Profile = FsmState#state.agent_profile,
+	Type = FsmState#state.media_type,
+	Client = FsmState#state.client,
+	CallerId = FsmState#state.callerid,
+	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, callerid=CallerId, state=ChannelState}.
 
 % ======================================================================
 % TESTS

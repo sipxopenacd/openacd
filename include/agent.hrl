@@ -147,8 +147,21 @@
 	login,
 	profile,
 	skills,
-	previous_state,
 	state
+}).
+
+-record(cpx_agent_login, {
+	pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_agent_prop{}
+}).
+
+-record(cpx_agent_state_update, {
+	pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_agent_prop{},
+	state,
+	old_state
 }).
 
 -record(cpx_agent_channel_prop, {
@@ -156,8 +169,17 @@
 	profile,
 	type,
 	client,
-	previous_state,
+	callerid,
 	state
+}).
+
+-record(cpx_agent_channel_state_update, {
+	pid :: pid(),
+	agent_pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_agent_channel_prop{},
+	state,
+	old_state
 }).
 
 -define(DEFAULT_PROFILE, #agent_profile{name = "Default", id = "0", timestamp = util:now()}).

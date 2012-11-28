@@ -33,9 +33,10 @@
 -endif.
 
 -include("agent.hrl").
+-include("queue.hrl").
 
 %% encode
--export([enc_skills/1, enc_state_changes/1, enc_agent_state/1]).
+-export([enc_skills/1, enc_state_changes/1, enc_agent_state/1, enc_skill_recs/1]).
 %% binutils
 -export([l2b/1, b2l/1, nob/1, nol/1]).
 
@@ -49,6 +50,10 @@ enc_skills(Skills) ->
 			({'_queue', Queue}, Acc) -> [{[{queue, l2b(Queue)}]}|Acc];
 			(_, Acc) -> Acc
 		end, [], Skills)).
+
+-spec enc_skill_recs([#skill_rec{}]) -> json().
+enc_skill_recs(SkillRecs) ->
+	[At || #skill_rec{atom=At} <- SkillRecs].
 
 -type state_changes() :: [{atom(), tuple()}].
 -spec enc_state_changes(state_changes()) -> json().
@@ -111,6 +116,16 @@ enc_skills_test() ->
 			{'_profile', "tech_team"},
 			{'_queue', "dsl_support"},
 			{unknown, should, notbepresent}])).
+
+enc_skill_recs_test() ->
+	?assertEqual([english, support, '_all', '_brand', '_node', '_profile', '_queue'],
+		enc_skill_recs([#skill_rec{atom=english, name="English"},
+			#skill_rec{atom=support, name="Support"},
+			#skill_rec{atom='_all', name="All"},
+			#skill_rec{atom='_brand', name="Brand"},
+			#skill_rec{atom='_node', name="Node"},
+			#skill_rec{atom='_profile', name="Agent Profile"},
+			#skill_rec{atom='_queue', name="Queue"}])).
 
 enc_state_changes_test() ->
 	?assertEqual([{[{init, 1352161996526}]},
