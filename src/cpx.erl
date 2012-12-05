@@ -119,7 +119,7 @@
 start(_Type, StartArgs) ->
 	io:format("Start args ~p~n", [StartArgs]),
 	io:format("All env: ~p~n", [application:get_all_env(oacd_core)]),
-
+	write_pid_file(),
 	verify_store(),
 
 	Nodes = get_nodes(),
@@ -150,6 +150,7 @@ prep_stop(State) ->
 -spec(stop/1 :: (State :: any()) -> 'ok').
 stop(_State) ->
 	application:unset_env(oacd_core, uptime),
+	delete_pid_file(),
 	ok.
 
 %% ====
@@ -1022,7 +1023,6 @@ start_plugins(Dir) ->
 			Appfiles = filelib:wildcard("*.app", Dir),
 			Plugins = verify_apps(Appfiles, Dir),
 			load_plugin_envs(Plugins),
-			application:set_env(oacd_core, plugins, Plugins),
 			start_plugin_apps(Plugins),
 			?INFO("Plugin started", [])
 	end.
@@ -1232,6 +1232,32 @@ init_load_plugins() ->
 		{ok, Plugins} ->
 			start_plugin_apps(Plugins)
 	end.
+
+write_pid_file() ->
+	case get_pid_path() of
+		false ->
+			ok;
+		Path ->
+			write_pid_file(Path)
+	end.
+
+write_pid_file(Path) ->
+	Pid = os:getpid(),
+	case file:write_file(Path, [Pid, $\n]) of
+		ok -> ok;
+		{error, Err} -> throw({err_write_pid_file, Path, Err})
+	end.
+
+delete_pid_file() ->
+	case get_pid_path() of
+		false ->
+			ok;
+		Path ->
+			file:delete(Path)
+	end.
+
+get_pid_path() ->
+	os:getenv("OA_PID_PATH").
 
 -ifdef(TEST).
 
