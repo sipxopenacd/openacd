@@ -1104,11 +1104,12 @@ handle_cast({new_endpoint, _Module, _Endpoint}, State) ->
 	%% TODO should likely actually tell the agent.  Maybe.
 	{ok, undefined, State};
 
-handle_cast(stop, State) ->
+handle_cast({stop, _Reason, Msg}, State) when is_atom(Msg) ->
 	Headjson = {struct, [
-		{<<"event">>, <<"stop">>}
+		{<<"event">>, <<"stop">>},
+		{<<"message">>, atom_to_binary(Msg, utf8)}
 	]},
-	{ok, Headjson, State};
+	{exit, Headjson, State};
 
 handle_cast(_E, State) ->
 	{ok, undefined, State}.
