@@ -467,7 +467,8 @@ handle_event({blab, Text}, Statename, #state{agent_rec = Agent} = State) ->
 	inform_connection(Agent, {blab, Text}),
 	{next_state, Statename, State};
 
-handle_event(stop, _StateName, State) ->
+handle_event(stop, _StateName, #state{agent_rec = Agent} = State) ->
+	inform_connection(Agent, stop),
 	{stop, normal, State};
 
 handle_event({add_skills, Skills}, StateName, #state{agent_rec = Agent} = State) ->
