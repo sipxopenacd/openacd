@@ -92,6 +92,8 @@
 	start/2,
 	start_link/2,
 	stop/1,
+	stop/2,
+	stop/3,
 	set_release/2,
 	add_skills/2,
 	remove_skills/2,
@@ -137,7 +139,17 @@ start(Agent) -> start(Agent, []).
 %% @doc Stop the passed agent fsm `Pid'.
 -spec(stop/1 :: (Pid :: pid()) -> 'ok').
 stop(Pid) ->
-	gen_fsm:send_all_state_event(Pid, stop).
+	stop(Pid, normal, undefined).
+
+%% @doc Stop the passed agent fsm `Pid' with `Reason'.
+-spec(stop/2 :: (Pid :: pid(), Reason :: term()) -> 'ok').
+stop(Pid, Reason) ->
+	stop(Pid, Reason, undefined).
+
+%% @doc Stop the passed agent fsm `Pid' with `Reason' and `Msg'.
+-spec(stop/3 :: (Pid :: pid(), Reason :: term(), Msg :: term()) -> 'ok').
+stop(Pid, Reason, Msg) ->
+	gen_fsm:send_all_state_event(Pid, {stop, Reason, Msg}).
 
 %% @doc Set the agent released or idle.
 -spec(set_release/2 :: (Pid :: pid(), Released :: 'none' | 'default' | release_code()) -> 'ok').
@@ -467,9 +479,9 @@ handle_event({blab, Text}, Statename, #state{agent_rec = Agent} = State) ->
 	inform_connection(Agent, {blab, Text}),
 	{next_state, Statename, State};
 
-handle_event(stop, _StateName, #state{agent_rec = Agent} = State) ->
-	inform_connection(Agent, stop),
-	{stop, normal, State};
+handle_event({stop, Reason, Msg}, _StateName, #state{agent_rec = Agent} = State) ->
+	inform_connection(Agent, {stop, Reason, Msg}),
+	{stop, Reason, State};
 
 handle_event({add_skills, Skills}, StateName, #state{agent_rec = Agent} = State) ->
 	NewSkills = util:merge_skill_lists(expand_magic_skills(Agent, Skills), Agent#agent.skills, ['_queue', '_brand']),
