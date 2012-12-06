@@ -1104,7 +1104,13 @@ handle_cast({new_endpoint, _Module, _Endpoint}, State) ->
 	%% TODO should likely actually tell the agent.  Maybe.
 	{ok, undefined, State};
 
-handle_cast(_, State) ->
+handle_cast(stop, State) ->
+	Headjson = {struct, [
+		{<<"event">>, <<"stop">>}
+	]},
+	{ok, Headjson, State};
+
+handle_cast(_E, State) ->
 	{ok, undefined, State}.
 
 handle_monitor_event({info, _, _}, State) ->
