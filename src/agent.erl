@@ -49,6 +49,7 @@
 %% replies, such as chat.
 %-type(channel_category() :: 'dummy' | 'voice' | 'visual' | 'slow_text' | 'fast_text').
 -record(state, {
+	start_time,
 	agent_rec :: #agent{},
 	original_endpoints = dict:new()
 }).
@@ -292,8 +293,9 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 			released
 	end,
 	cpx_agent_event:agent_init(Agent2),
-	init_gproc_prop({init, Agent2}),
-	{ok, StateName, #state{agent_rec = Agent2, original_endpoints = OriginalEnds}}.
+	State = #state{start_time = os:timestamp(), agent_rec = Agent2, original_endpoints = OriginalEnds},
+	init_gproc_prop({init, State}),
+	{ok, StateName, State}.
 
 % ======================================================================
 % IDLE
@@ -307,9 +309,10 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_gproc_prop({Agent#agent.release_data, NewAgent}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
-	{reply, ok, released, State#state{agent_rec = NewAgent}};
+	NewState = State#state{agent_rec = NewAgent},
+	set_gproc_prop({Agent#agent.release_data, NewState}),
+	{reply, ok, released, NewState};
 
 idle({precall, Call}, _From, #state{agent_rec = Agent} = State) ->
 	case start_channel(Agent, Call, precall) of
@@ -356,10 +359,11 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	agent_manager:set_avail(Agent#agent.login, Agent#agent.available_channels),
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = undefined, last_change = Now},
-	set_gproc_prop({Agent#agent.release_data, NewAgent}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	inform_connection(Agent, {set_release, none, Now}),
-	{reply, ok, idle, State#state{agent_rec = NewAgent}};
+	NewState = State#state{agent_rec = NewAgent},
+	set_gproc_prop({Agent#agent.release_data, NewState}),
+	{reply, ok, idle, NewState};
 
 released({set_release, default}, From, State) ->
 	released({set_release, ?DEFAULT_RELEASE}, From, State);
@@ -368,9 +372,10 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	set_gproc_prop({Agent#agent.release_data, NewAgent}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
-	{reply, ok, released, State#state{agent_rec = NewAgent}};
+	NewState = State#state{agent_rec = NewAgent},
+	set_gproc_prop({Agent#agent.release_data, NewState}),
+	{reply, ok, released, NewState};
 
 released(Msg, _From, State) ->
 	{reply, {error, Msg}, released, State}.
@@ -796,27 +801,29 @@ wait_for_agent_manager(Count, StateName, #state{agent_rec = Agent} = State) ->
 	end.
 
 
-init_gproc_prop({_, Agent}) ->
-	Prop = get_agent_prop(Agent),
+init_gproc_prop({_, State}) ->
+	Prop = get_agent_prop(State),
 	gproc:reg({p, l, cpx_agent}, Prop),
 
 	Event = #cpx_agent_login{pid = self(), now = now(), prop = Prop},
 	gproc:send({p, l, cpx_agent_change}, Event).
 
-set_gproc_prop({PrevReleaseData, Agent}) ->
-	Prop = get_agent_prop(Agent),
+set_gproc_prop({PrevReleaseData, State}) ->
+	Prop = get_agent_prop(State),
 	gproc:set_value({p, l, cpx_agent}, Prop),
 
-	Event = #cpx_agent_state_update{pid = self(), now = now(), state = get_agent_state(Agent#agent.release_data), old_state = get_agent_state(PrevReleaseData), prop = Prop},
+	Event = #cpx_agent_state_update{pid = self(), now = now(), state = Prop#cpx_agent_prop.state, old_state = get_agent_state(PrevReleaseData), prop = Prop},
 	gproc:send({p, l, cpx_agent_change}, Event).
 
--spec get_agent_prop(#agent{}) -> #cpx_agent_prop{}.
-get_agent_prop(Agent) ->
+-spec get_agent_prop(#state{}) -> #cpx_agent_prop{}.
+get_agent_prop(State) ->
+	StartTime = State#state.start_time,
+	Agent = State#state.agent_rec,
 	Login = Agent#agent.login,
 	Profile = Agent#agent.profile,
 	Skills = Agent#agent.skills,
-	State = get_agent_state(Agent#agent.release_data),
-	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, state=State}.
+	AgentState = get_agent_state(Agent#agent.release_data),
+	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, state=AgentState, start_time=StartTime}.
 
 -spec get_agent_state(release_code() | 'undefined') -> init | available | {released, term()}.
 get_agent_state(Release) ->

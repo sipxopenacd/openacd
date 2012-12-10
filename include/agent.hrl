@@ -147,7 +147,8 @@
 	login,
 	profile,
 	skills,
-	state
+	state,
+	start_time
 }).
 
 -record(cpx_agent_login, {
