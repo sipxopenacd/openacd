@@ -920,7 +920,7 @@ external_api_test_() ->
 			agent:stop(Pid),
 
 			?assert(meck:validate(gen_fsm)),
-			?assert(meck:called(gen_fsm, send_all_state_event, [Pid, stop]))
+			?assert(meck:called(gen_fsm, send_all_state_event, [Pid, {stop, normal, undefined}]))
 		end},
 		{"set_release/2 default", fun() ->
 			agent:set_release(Pid, default),
@@ -1405,7 +1405,7 @@ handle_event_test_() ->
 
 	fun({L, Agent}) -> {"stop", fun() ->
 		?assertEqual({stop, normal, #state{agent_rec = Agent}},
-			handle_event(stop, idle, #state{agent_rec = Agent})),
+			handle_event({stop, normal, undefined}, idle, #state{agent_rec = Agent})),
 		L(0)
 	end} end,
 
