@@ -64,3 +64,8 @@
 	transfer_state :: 'undefined' | #warm_transfer_merged_state{}
 }).
 
+-record(cpx_gen_media_prop, {
+	state,
+	call :: #call{},
+	client
+}).
