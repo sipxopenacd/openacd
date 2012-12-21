@@ -291,7 +291,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 				{ok, Pid} ->
 					?DEBUG("Starting in prering", []),
 					conn_cast(Agent, {set_channel, self(), prering, Call}),
-					cpx_agent_event:agent_channel_init(Agent,self(),prering,Call),
+					% cpx_agent_event:agent_channel_init(Agent,self(),prering,Call),
 					{ok, prering, State#state{endpoint = Pid, state_data = update_state(precall, Call)}};
 				{error, Error} ->
 					{stop, {error, Error}}
@@ -299,18 +299,18 @@ init([Agent, Call, Endpoint, StateName]) ->
 		precall when is_record(Call, client) ->
 			?DEBUG("Starting in precall", []),
 			conn_cast(Agent, {set_channel, self(), precall, Call}),
-			cpx_agent_event:agent_channel_init(Agent,self(),precall,Call),
+			% cpx_agent_event:agent_channel_init(Agent,self(),precall,Call),
 			{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		precall when is_record(Call, call) ->
 			?DEBUG("Starting in precall with media rather than client", []),
 			conn_cast(Agent, {set_channel, self(), precall, Call}),
-			cpx_agent_event:agent_channel_init(Agent, self(), precall, Call),
+			% cpx_agent_event:agent_channel_init(Agent, self(), precall, Call),
 			{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		ringing when is_record(Call, call) ->
 			% TODO tell media to ring
 			?DEBUG("Starting in ringing", []),
 			conn_cast(Agent, {set_channel, self(), ringing, Call}),
-			cpx_agent_event:agent_channel_init(Agent,self(),ringing, Call),
+			% cpx_agent_event:agent_channel_init(Agent,self(),ringing, Call),
 			{ok, ringing, State#state{state_data = update_state(ringing, Call)}};
 		_ ->
 			?WARNING("Failed start:  ~p", [{StateName, Call}]),
@@ -326,7 +326,7 @@ prering({ringing, Call}, From, State) ->
 	% TODO check if valid
 	?DEBUG("Moving from prering to ringing state request from ~p", [From]),
 	conn_cast(State#state.agent_connection, {set_channel, self(), ringing, Call}),
-	cpx_agent_event:change_agent_channel(self(), ringing, Call),
+	% cpx_agent_event:change_agent_channel(self(), ringing, Call),
 	set_gproc_prop({State, prering, ringing}),
 	{reply, ok, ringing, State#state{state_data = update_state(ringing, Call)}};
 prering(Msg, _From, State) ->
@@ -347,7 +347,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = inband} = 
 	case gen_media:oncall(Media) of
 		ok ->
 			conn_cast(Conn, {set_channel, self(), oncall, Call}),
-			cpx_agent_event:change_agent_channel(self(), oncall, Call),
+			% cpx_agent_event:change_agent_channel(self(), oncall, Call),
 			?DEBUG("Moving from ringing to oncall state", []),
 			set_gproc_prop({State, ringing, oncall}),
 			{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
@@ -361,7 +361,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Pid, state
 	case gen_media:oncall(Media) of
 		ok ->
 			conn_cast(Conn, {set_channel, self(), oncall, Call}),
-			cpx_agent_event:change_agent_channel(self(), oncall, Call),
+			% cpx_agent_event:change_agent_channel(self(), oncall, Call),
 			NewEndpoint = case Call#call.media_path of
 				inband ->
 					erlang:exit(Pid, normal),
@@ -381,7 +381,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Pid, state
 ringing({oncall, #call{id = Id}}, _From, #state{state_data = #call{id = Id} = Call} = State) ->
 	?DEBUG("Moving from ringing to oncall state", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
-	cpx_agent_event:change_agent_channel(self(), oncall, Call),
+	% cpx_agent_event:change_agent_channel(self(), oncall, Call),
 	set_gproc_prop({State, ringing, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
@@ -404,14 +404,14 @@ ringing(_Msg, State) ->
 precall({oncall, #call{client = Client} = Call}, _From, #state{state_data = Client} = State) ->
 	?DEBUG("Moving from precall to oncall state", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
-	cpx_agent_event:change_agent_channel(self(), oncall, Call),
+	% cpx_agent_event:change_agent_channel(self(), oncall, Call),
 	set_gproc_prop({State, precall, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
 precall({oncall, #call{id = Id} = Call}, _From, #state{state_data = #call{id = Id}} = State) ->
 	?DEBUG("Moving from precall to oncall", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
-	cpx_agent_event:change_agent_channel(self(), oncall, Call),
+	% cpx_agent_event:change_agent_channel(self(), oncall, Call),
 	set_gproc_prop({State, precall, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
@@ -456,7 +456,7 @@ oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
 		From ->
 			?DEBUG("Moving from oncall to wrapup", []),
 			conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
-			cpx_agent_event:change_agent_channel(self(), wrapup, Call),
+			% cpx_agent_event:change_agent_channel(self(), wrapup, Call),
 			prep_autowrapup(Call),
 			set_gproc_prop({State, oncall, wrapup}),
 			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
@@ -465,7 +465,7 @@ oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
 				ok ->
 					?DEBUG("Moving from oncall to wrapup", []),
 					conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
-					cpx_agent_event:change_agent_channel(self(), wrapup, Call),
+					% cpx_agent_event:change_agent_channel(self(), wrapup, Call),
 					prep_autowrapup(Call),
 					set_gproc_prop({State, oncall, wrapup}),
 					{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
@@ -597,7 +597,7 @@ handle_info({'EXIT', Pid, Why}, oncall, #state{endpoint = Pid} = State) ->
 	?INFO("Exit of endpoint ~p due to ~p while oncall; moving to wrapup.", [Pid, Why]),
 	Callrec = State#state.state_data,
 	conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Callrec}),
-	cpx_agent_event:change_agent_channel(self(), wrapup, Callrec),
+	% cpx_agent_event:change_agent_channel(self(), wrapup, Callrec),
 	CallPid = Callrec#call.source,
 	case gen_media:wrapup(CallPid) of
 		ok ->
