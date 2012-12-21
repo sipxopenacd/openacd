@@ -637,6 +637,9 @@ handle_info(_Info, StateName, State) ->
 
 terminate(_Reason, StateName, State) ->
 	set_gproc_prop({State, StateName, stop}),
+	Agent = agent:dump_state(State#state.agent_fsm),
+	Call = State#state.state_data,
+	gen_event:notify(State#state.event_manager, {channel_feed, {terminated_channel, os:timestamp(), Agent, Call}}),
 	ok.
 
 % ======================================================================
