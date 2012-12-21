@@ -330,6 +330,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 	case Res of
 		{ok, NextSt, State1} ->
 			{ok, EventMgr} = gen_event:start_link(),
+			cpx_hooks:trigger_hooks(channel_feed_subscribe, [self()]),
 			{ok, NextSt, State1#state{event_manager = EventMgr}};
 		_ ->
 			Res
