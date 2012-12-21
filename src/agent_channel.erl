@@ -121,7 +121,8 @@
 	spy/2,
 	has_successful_ring/1,
 	has_failed_ring/1,
-	url_pop/3
+	url_pop/3,
+	subscribe_events/2
 ]).
 
 % ======================================================================
@@ -240,6 +241,9 @@ has_failed_ring(Pid) ->
 has_successful_ring(Pid) ->
 	MediaPid = self(),
 	gen_fsm:send_event(Pid, {has_successful_ring, MediaPid}).
+
+subscribe_events(Pid, Handler) ->
+	gen_fsm:send_all_state_event(Pid, {subscribe_events, Handler}).
 
 % ======================================================================
 % INIT
@@ -565,6 +569,9 @@ wrapup(_Msg, State) ->
 % ======================================================================
 % HANDLE_EVENT
 % ======================================================================
+handle_event({subscribe_events, Handler}, StateName, State) ->
+	gen_event:add_handler(State#state.event_manager, Handler, []),
+	{next_state, StateName, State};
 
 handle_event(_Event, StateName, State) ->
 	{next_state, StateName, State}.
