@@ -292,7 +292,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 					?DEBUG("Starting in prering", []),
 					conn_cast(Agent, {set_channel, self(), prering, Call}),
 					cpx_agent_event:agent_channel_init(Agent,self(),prering,Call),
-					{ok, prering, State#state{endpoint = Pid}};
+					{ok, prering, State#state{endpoint = Pid, state_data = update_state(precall, Call)}};
 				{error, Error} ->
 					{stop, {error, Error}}
 			end;
@@ -300,18 +300,18 @@ init([Agent, Call, Endpoint, StateName]) ->
 			?DEBUG("Starting in precall", []),
 			conn_cast(Agent, {set_channel, self(), precall, Call}),
 			cpx_agent_event:agent_channel_init(Agent,self(),precall,Call),
-			{ok, precall, State};
+			{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		precall when is_record(Call, call) ->
 			?DEBUG("Starting in precall with media rather than client", []),
 			conn_cast(Agent, {set_channel, self(), precall, Call}),
 			cpx_agent_event:agent_channel_init(Agent, self(), precall, Call),
-			{ok, precall, State};
+			{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		ringing when is_record(Call, call) ->
 			% TODO tell media to ring
 			?DEBUG("Starting in ringing", []),
 			conn_cast(Agent, {set_channel, self(), ringing, Call}),
 			cpx_agent_event:agent_channel_init(Agent,self(),ringing, Call),
-			{ok, ringing, State};
+			{ok, ringing, State#state{state_data = update_state(ringing, Call)}};
 		_ ->
 			?WARNING("Failed start:  ~p", [{StateName, Call}]),
 			{stop, badstate}
@@ -328,7 +328,7 @@ prering({ringing, Call}, From, State) ->
 	conn_cast(State#state.agent_connection, {set_channel, self(), ringing, Call}),
 	cpx_agent_event:change_agent_channel(self(), ringing, Call),
 	set_gproc_prop({State, prering, ringing}),
-	{reply, ok, ringing, State#state{state_data = Call}};
+	{reply, ok, ringing, State#state{state_data = update_state(ringing, Call)}};
 prering(Msg, _From, State) ->
 	?INFO("Msg ~p not understood", [Msg]),
 	{reply, {error, invalid}, prering, State}.
@@ -350,7 +350,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = inband} = 
 			cpx_agent_event:change_agent_channel(self(), oncall, Call),
 			?DEBUG("Moving from ringing to oncall state", []),
 			set_gproc_prop({State, ringing, oncall}),
-			{reply, ok, oncall, State};
+			{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 		Else ->
 			?WARNING("Didn't go oncall:  ~p", [Else]),
 			{reply, {error, Else}, ringing, State}
@@ -372,18 +372,18 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Pid, state
 			NewState = State#state{endpoint = NewEndpoint},
 			?DEBUG("Moving from ringing to oncall state", []),
 			set_gproc_prop({State, ringing, oncall}),
-			{reply, ok, oncall, NewState};
+			{reply, ok, oncall, NewState#state{state_data = update_state(oncall, Call)}};
 		Else ->
 			?WARNING("Didn't go oncall:  ~p", [Else]),
 			{reply, {error, Else}, ringing, State}
 	end;
 
-ringing({oncall, Call}, _From, #state{state_data = Call} = State) ->
+ringing({oncall, #call{id = Id}}, _From, #state{state_data = #call{id = Id} = Call} = State) ->
 	?DEBUG("Moving from ringing to oncall state", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call),
 	set_gproc_prop({State, ringing, oncall}),
-	{reply, ok, oncall, State};
+	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
 ringing(stop, _From, #state{endpoint = Pid} = State) ->
 	gen_server:cast(Pid, hangup),
@@ -406,14 +406,14 @@ precall({oncall, #call{client = Client} = Call}, _From, #state{state_data = Clie
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call),
 	set_gproc_prop({State, precall, oncall}),
-	{reply, ok, oncall, State#state{state_data = Call}};
+	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
 precall({oncall, #call{id = Id} = Call}, _From, #state{state_data = #call{id = Id}} = State) ->
 	?DEBUG("Moving from precall to oncall", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call),
 	set_gproc_prop({State, precall, oncall}),
-	{reply, ok, oncall, State#state{state_data = Call}};
+	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
 precall(_Msg, _From, State) ->
 	{reply, {error, invalid}, precall, State}.
@@ -459,7 +459,7 @@ oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
 			cpx_agent_event:change_agent_channel(self(), wrapup, Call),
 			prep_autowrapup(Call),
 			set_gproc_prop({State, oncall, wrapup}),
-			{reply, ok, wrapup, State#state{state_data = Call}};
+			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
 		CallSource ->
 			case gen_media:wrapup(CallSource) of
 				ok ->
@@ -468,7 +468,7 @@ oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
 					cpx_agent_event:change_agent_channel(self(), wrapup, Call),
 					prep_autowrapup(Call),
 					set_gproc_prop({State, oncall, wrapup}),
-					{reply, ok, wrapup, State#state{state_data = Call}};
+					{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
 				Else ->
 					{reply, Else, oncall, State}
 			end
@@ -496,16 +496,16 @@ warmtransfer_hold(oncall, _From, #state{state_data = Call} = State) ->
 	?DEBUG("Moving from warmtransfer_hold to oncall", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
 	set_gproc_prop({State, warmtransfer_hold, oncall}),
-	{reply, ok, oncall, State};
+	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 warmtransfer_hold({warmtransfer_3rd_party, Data}, _From, #state{state_data = Call} = State) ->
 	?DEBUG("Moving from warmtransfer_hold to warmtransfer_3rd_party", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), warmtransfer_3rd_party, {Call, Data}}),
-	{reply, ok, warmtransfer_3rd_party, State#state{state_data = {Call, Data}}};
+	{reply, ok, warmtransfer_3rd_party, State#state{state_data = {update_state(warmtransfer_3rd_party, Call), Data}}};
 warmtransfer_hold(wrapup, _From, State) ->
 	?DEBUG("Moving from warmtransfer_hold to wrapup", []),
 	conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, State#state.state_data}),
 	set_gproc_prop({State, warmtransfer_hold, wrapup}),
-	{reply, ok, wrapup, State};
+	{reply, ok, wrapup, State#state{state_data = update_state(wrapup, State#state.state_data)}};
 warmtransfer_hold(_Msg, _From, State) ->
 	{reply, {error, invalid}, warmtransfer_hold, State}.
 
@@ -603,7 +603,7 @@ handle_info({'EXIT', Pid, Why}, oncall, #state{endpoint = Pid} = State) ->
 		ok ->
 			prep_autowrapup(Callrec),
 			set_gproc_prop({State, oncall, wrapup}),
-			{next_state, wrapup, State};
+			{next_state, wrapup, State#state{state_data = update_state(wrapup, Callrec)}};
 		Else ->
 			?WARNING("could not set gen_media to wrapup:  ~p", [Else]),
 			{next_state, oncall, State}
@@ -716,6 +716,13 @@ get_agent_channel_prop(FsmState, ChannelState) ->
 	Client = FsmState#state.client,
 	CallerId = FsmState#state.callerid,
 	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, callerid=CallerId, state=ChannelState}.
+
+-spec update_state(NewSt :: atom(), Call :: #call{} | {#call{}, term()}) -> Call :: #call{} | {#call{}, term()}.
+update_state(NewSt, #call{state_changes = Changes} = Call) ->
+	UpdatedChanges = [{NewSt, os:timestamp()} | Changes],
+	Call#call{state_changes = UpdatedChanges};
+update_state(_, CallData) ->
+	CallData.
 
 % ======================================================================
 % TESTS
