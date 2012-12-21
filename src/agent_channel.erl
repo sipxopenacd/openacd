@@ -50,6 +50,7 @@
 	agent_connection :: pid(),
 	agent_login :: string(),
 	agent_profile :: string(),
+	event_manager :: pid(),
 	media_type = voice :: channel_category(),
 	endpoint = inband :: any(),
 	client :: undefined | #client{} | {Id :: string(), Opts :: [{atom(), any()}]} | (Id :: string()),
@@ -285,7 +286,7 @@ init([Agent, Call, Endpoint, StateName]) ->
 		state_data = Call
 	},
 	init_gproc_prop({State, init, StateName}),
-	case StateName of
+	Res = case StateName of
 		prering when is_record(Call, call); Call =:= undefined ->
 			case start_endpoint(Endpoint, Agent, Call) of
 				{ok, Pid} ->
@@ -315,6 +316,13 @@ init([Agent, Call, Endpoint, StateName]) ->
 		_ ->
 			?WARNING("Failed start:  ~p", [{StateName, Call}]),
 			{stop, badstate}
+	end,
+	case Res of
+		{ok, NextSt, State1} ->
+			{ok, EventMgr} = gen_event:start_link(),
+			{ok, NextSt, State1#state{event_manager = EventMgr}};
+		_ ->
+			Res
 	end.
 
 
