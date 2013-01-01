@@ -384,13 +384,6 @@ t_passthrough(ApiFun, Args, Ret) ->
 	t_passthrough(ApiFun, ApiFun, Args, Ret).
 
 t_passthrough(ApiFun, CbkFun, Args, Ret) ->
-	ArgsN = length(Args),
-	Name = lists:flatten(io_lib:format("~p/~b", [ApiFun, ArgsN])),
-
-	{Name, fun() ->
-		meck:expect(mock_cqueue, CbkFun, ArgsN, Ret),
-		?assertEqual(Ret, apply(?MODULE, ApiFun, Args)),
-		?assert(meck:called(mock_cqueue, CbkFun, Args, self()))
-	end}.
+	cpx_test_util:t_passthrough(?MODULE, mock_cqueue, ApiFun, CbkFun, Args, Ret).
 
 -endif.

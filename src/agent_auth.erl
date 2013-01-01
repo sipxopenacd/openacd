@@ -37,7 +37,6 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--import(cpx_test_util, [t_passthrough/3, t_passthrough/4]).
 -endif.
 
 
@@ -194,4 +193,13 @@ passthrough_test_() ->
 		t_passthrough(get_release, ["rel0"], {ok, t_release()}),
 		t_passthrough(get_releases, [], {ok, t_releases()})
 	]}.
+
+
+t_passthrough(ApiFun, Args, Ret) ->
+	t_passthrough(ApiFun, ApiFun, Args, Ret).
+
+t_passthrough(ApiFun, CbkFun, Args, Ret) ->
+	cpx_test_util:t_passthrough(?MODULE, mock_auth, ApiFun, CbkFun, Args, Ret).
+
+
 -endif.
