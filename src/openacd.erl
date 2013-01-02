@@ -28,7 +28,6 @@ my_apps() -> [
 	ssl,
 
 	mochiweb,
-	syslog,
 	ejrpc2,
 	gproc,
 

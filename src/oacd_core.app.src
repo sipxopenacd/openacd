@@ -26,7 +26,6 @@
 		crypto,
 		public_key,
 		mochiweb,
-		syslog,
 %		ejprc2,
 		gproc
 	]},
