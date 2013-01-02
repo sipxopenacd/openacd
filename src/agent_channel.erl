@@ -307,11 +307,11 @@ init([Agent, Call, Endpoint, StateName]) ->
 				{error, Error} ->
 					{stop, {error, Error}}
 			end;
-		precall when is_record(Call, client) ->
-			?DEBUG("Starting in precall", []),
-			conn_cast(Agent, {set_channel, self(), precall, Call}),
-			% cpx_agent_event:agent_channel_init(Agent,self(),precall,Call),
-			{ok, precall, State#state{state_data = update_state(precall, Call)}};
+		% precall when is_record(Call, client) ->
+		% 	?DEBUG("Starting in precall", []),
+		% 	conn_cast(Agent, {set_channel, self(), precall, Call}),
+		% 	% cpx_agent_event:agent_channel_init(Agent,self(),precall,Call),
+		% 	{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		precall when is_record(Call, call) ->
 			?DEBUG("Starting in precall with media rather than client", []),
 			conn_cast(Agent, {set_channel, self(), precall, Call}),
