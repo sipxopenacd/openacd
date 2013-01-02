@@ -90,6 +90,7 @@
 
 -type(security_level() :: 'agent' | 'supervisor' | 'admin').
 -type(statename() :: 'idle' | 'ringing' | 'precall' | 'oncall' | 'outgoing' | 'released' | 'warmtransfer' | 'wrapup').
+-type(endpoint() :: {atom(), any()}).
 
 %% used by the agent_auth module to storing and retreiveing locally stored
 %% agent login information.
@@ -101,7 +102,7 @@
 	profile = "Default" :: string(),
 	firstname = "" :: string(),
 	lastname = "" :: string(),
-	endpoints = [] :: [{atom(), any()}],
+	endpoints = [] :: [endpoint()],
 	extended_props = [] :: [{atom(), any()}]
 }).
 
