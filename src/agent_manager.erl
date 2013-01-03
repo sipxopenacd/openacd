@@ -805,26 +805,28 @@ filter_avail_agents_by_skill_test_() ->
 	end}].
 
 -record(election, {
-	leader = none,
+	leader = none             :: 'none' | pid(),
+	previous_leader = none    :: 'none' | pid(),
 	name,
-	leadernode = none,
-	candidate_nodes = [],
-	worker_nodes = [],
-	alive = [],
-	down = [],
+	leadernode = none         :: node(),
+	candidate_nodes = []      :: [node()],
+	worker_nodes = []         :: [node()],
+	down = []                 :: [node()],
 	monitored = [],
 	buffered = [],
+	seed_node = none          :: 'none' | node(),
 	status,
 	elid,
-	acks = [],
-	work_down = [],
-	cand_timer_int,
-	cand_timer,
-	pendack,
+	acks = []                 :: [node()],
+	work_down = []            :: [node()],
+	cand_timer_int            :: integer(),
+	cand_timer                :: term(),
+	pendack                   :: node(),
 	incarn,
-	nextel,
-	bcast_type              %% all | one. When `all' each election event
+	nextel                    :: integer(),
+	%% all | one. When `all' each election event
 	%% will be broadcast to all candidate nodes.
+	bcast_type
 }).
 
 handle_cast_test_() ->
