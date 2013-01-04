@@ -39,6 +39,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-define(DEFAULT_STORAGE, agent_auth_ets).
 
 %% API
 -export([
@@ -85,7 +86,15 @@
 %%====================================================================
 
 start() ->
-	?STORE:start().
+	Store = case application:get_env(oacd_core, agent_auth_storage) of
+		{ok, St} ->
+			St;
+		_ ->
+			St = ?DEFAULT_STORAGE,
+			application:set_env(oacd_core, agent_auth_storage, St),
+			St
+	end,
+	St:start().
 
 %% Agent
 

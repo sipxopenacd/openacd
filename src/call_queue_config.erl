@@ -131,7 +131,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--define(DEFAULT_STORAGE, call_queue_config_mnesia).
+-define(DEFAULT_STORAGE, call_queue_config_ets).
 
 -include("log.hrl").
 -include("queue.hrl").
@@ -192,10 +192,14 @@
 -spec(start/0 :: () -> any()).
 start() ->
 	Store = case application:get_env(oacd_core, call_queue_config_storage) of
-		{ok, St} -> St;
-		undefined -> ?DEFAULT_STORAGE
+		{ok, St} ->
+			St;
+		_ ->
+			St = ?DEFAULT_STORAGE,
+			application:set_env(oacd_core, call_queue_config_storage, St),
+			St
 	end,
-	Store:start().
+	St:start().
 
 %% =====
 %% Call queue
