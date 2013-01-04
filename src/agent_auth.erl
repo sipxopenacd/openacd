@@ -57,6 +57,8 @@
 	get_releases/0
 ]).
 
+-callback start() -> ok.
+
 %% Agent
 -callback get_agent_by_login(string()) -> {ok, #agent_auth{}} | none | {error, any()}.
 -callback get_agent_by_id(string()) -> {ok, #agent_auth{}} | none | {error, any()}.
@@ -83,7 +85,7 @@
 %%====================================================================
 
 start() ->
-	ok.
+	?STORE:start().
 
 %% Agent
 
