@@ -111,7 +111,7 @@ get_agents_by_profile(Profile) ->
 
 %% @doc Take the plaintext username and password and attempt to
 %% authenticate the agent.
--spec auth(Username :: string(), Password :: string()) -> {allow, #agent_auth{}} | deny.
+-spec auth(Username :: string(), Password :: string()) -> {ok, #agent_auth{}} | {error, deny}.
 auth(Username, Password) ->
 	?STORE:auth(Username, Password).
 
