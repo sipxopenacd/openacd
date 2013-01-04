@@ -54,7 +54,8 @@
 -behaviour(agent_auth).
 
 -export([
-	start/0
+	start/0,
+	load_agents/1
 ]).
 
 %% Callbacks
@@ -76,8 +77,8 @@ start() ->
 	ok.
 
 get_agent_by_login(Login) ->
-	case ets:lookup(?TAB, Login) of
-		[E] ->
+	case lookup_login(Login) of
+		{ok, E} ->
 			{ok, entry_to_agent_auth(E)};
 		_ ->
 			none
@@ -91,10 +92,13 @@ get_agents_by_profile(Profile) ->
 get_agent_by_id(Id) ->
 	get_agent_by_login(Id).
 
-auth(Login, _Password) ->
-	case get_agent_by_login(Login) of
-		{ok, Auth} -> {ok, Auth};
-		_ -> {error, deny}
+auth(Login, Password) ->
+	PwdHash = erlang:md5(Password),
+	case lookup_login(Login) of
+		{ok, Auth = #agent_auth_entry{pwd_hash=PwdHash}} ->
+			{ok, entry_to_agent_auth(Auth)};
+		_ ->
+			{error, deny}
 	end.
 
 get_profile("Default") -> get_default_profile();
@@ -119,10 +123,10 @@ load_agents(Agents) ->
 	Entries = read_entries(Agents, []),
 	ets:insert(?TAB, Entries).
 
-lookup_entry(Login) ->
+lookup_login(Login) ->
 	case ets:lookup(?TAB, Login) of
 		[E] ->
-			E;
+			{ok, E};
 		_ ->
 			none
 	end.
@@ -141,14 +145,15 @@ entry_to_agent_auth(E) ->
 		login = Login,
 		skills = Skills,
 		security_level = SecurityLevel,
-		profile = Profile
+		profile = Profile,
+		endpoints = Endpoints
 	}.
 
 read_entries([], Acc) ->
 	Acc;
 read_entries([E|T], Acc) ->
 	case catch read_entry(E) of
-		{ok, R} -> [R|Acc];
+		{ok, R} -> read_entries(T, [R|Acc]);
 		_ -> Acc
 	end.
 
