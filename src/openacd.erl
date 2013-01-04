@@ -27,7 +27,6 @@ my_apps() -> [
 	inets,
 	ssl,
 
-	mochiweb,
 	ejrpc2,
 	gproc,
 
