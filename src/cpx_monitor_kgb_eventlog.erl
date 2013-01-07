@@ -413,9 +413,11 @@ get_FQDN() ->
 -define(test_filea, "eventa.test.log").
 
 file_handling_test_() ->
-	util:start_testnode(),
-	N = util:start_testnode(cpx_monitor_kgb_eventlog_file_handling_tests),
-	{spawn, N, {foreach,
+	%% TODO test on remote node
+	% util:start_testnode(),
+	% N = util:start_testnode(cpx_monitor_kgb_eventlog_file_handling_tests),
+	% {spawn, N, {foreach,
+	{foreach,
 	fun() ->
 		file:delete(?test_filea),
 		Ets = ets:new(cpx_monitor, [named_table]),
@@ -450,7 +452,7 @@ file_handling_test_() ->
 		EventLog ! {cpx_monitor_event, {drop, erlang:now(), {agent, "agent"}}},
 		timer:sleep(5),
 		?assertMatch({ok, Bin}, file:read_file(?test_filea))
-	end} end]}}.
+	end} end]}.
 
 -record(write_test_rec, {
 	logpid,
