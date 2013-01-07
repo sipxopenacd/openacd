@@ -776,7 +776,7 @@ murder_test_() ->
 		restart(management_sup, []),
 		Newwhere = whereis(management_sup),
 		?assertNot(Where =:= Newwhere),
-		?assertNot(whereis(cpx_web_management) =:= undefined)
+		?assert(whereis(cpx_web_management) =:= undefined) % removed from default startup
 	end},
 	{"Killing the agent connection branch (and bringing it back)",
 	fun() ->
