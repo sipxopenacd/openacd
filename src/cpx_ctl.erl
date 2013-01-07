@@ -31,5 +31,26 @@ process(["status"]) ->
 	[io:format("~p~n", [P]) || {P, running} <- Plugins],
 	?RET_SUCCESS;
 
+process(["list-agents"]) ->
+	?RET_SUCCESS;
+
+process(["list-queues"]) ->
+	?RET_SUCCESS;
+
+process(["list-calls"]) ->
+	?RET_SUCCESS;
+
+process(["show-agent", _Agent]) ->
+	?RET_SUCCESS;
+
+process(["show-queue", _Queue]) ->
+	?RET_SUCCESS;
+
+process(["trace-agent", _Agent]) ->
+	?RET_SUCCESS;
+
+process(["kick-agent", _Agent]) ->
+	?RET_SUCCESS;
+
 process(_) ->
 	?RET_INVALID_COMMAND.
