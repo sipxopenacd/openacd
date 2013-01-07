@@ -690,7 +690,7 @@ run_dir() ->
 -else.
 
 run_dir() ->
-	case os:getenv("OPENACD_RUN_DIR") of
+	case os:getenv("OA_RUN_DIR") of
 		false ->
 			".";
 		Dir ->

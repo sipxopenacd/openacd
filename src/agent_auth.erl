@@ -39,6 +39,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-define(DEFAULT_STORAGE, agent_auth_ets).
 
 %% API
 -export([
@@ -56,6 +57,8 @@
 	get_release/1,
 	get_releases/0
 ]).
+
+-callback start() -> ok.
 
 %% Agent
 -callback get_agent_by_login(string()) -> {ok, #agent_auth{}} | none | {error, any()}.
@@ -83,7 +86,15 @@
 %%====================================================================
 
 start() ->
-	ok.
+	Store = case application:get_env(oacd_core, agent_auth_storage) of
+		{ok, St} ->
+			St;
+		_ ->
+			St = ?DEFAULT_STORAGE,
+			application:set_env(oacd_core, agent_auth_storage, St),
+			St
+	end,
+	St:start().
 
 %% Agent
 
@@ -109,7 +120,7 @@ get_agents_by_profile(Profile) ->
 
 %% @doc Take the plaintext username and password and attempt to
 %% authenticate the agent.
--spec auth(Username :: string(), Password :: string()) -> {allow, #agent_auth{}} | deny.
+-spec auth(Username :: string(), Password :: string()) -> {ok, #agent_auth{}} | {error, deny}.
 auth(Username, Password) ->
 	?STORE:auth(Username, Password).
 

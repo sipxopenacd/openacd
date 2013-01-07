@@ -184,7 +184,7 @@
 	old_state
 }).
 
--define(DEFAULT_PROFILE, #agent_profile{name = "Default", id = "0", timestamp = util:now()}).
+-define(DEFAULT_PROFILE, #agent_profile{name = "Default", id = "Default"}).
 
 -define(DEFAULT_RELEASE, {"default", default, -1}).
 

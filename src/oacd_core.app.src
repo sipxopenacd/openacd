@@ -25,7 +25,6 @@
 		mnesia,
 		crypto,
 		public_key,
-		mochiweb,
 %		ejprc2,
 		gproc
 	]},
