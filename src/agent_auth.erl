@@ -66,8 +66,7 @@
 -callback get_agents_by_profile(string()) -> {ok, [#agent_auth{}]} | none | {error, any()}.
 
 %% Auth
-% -callback auth(Login::string(), Password::string()) -> {ok, #agent_auth{}} | {error, deny}.
--callback auth(string(), string()) -> {ok, #agent_auth{}} | {error, deny}.
+-callback auth(Login::string(), Password::string()) -> {ok, #agent_auth{}} | {error, deny}.
 
 %% Profile
 -callback get_profile(string()) -> {ok, #agent_profile{}} | none | {error, any()}.
@@ -75,8 +74,7 @@
 -callback get_default_profile() -> {ok, #agent_profile{}} | {error, any()}.
 
 %% Release
-% -callback get_release(Id::string()) -> {ok, #release_opt{}} | none | {error, any()}.
--callback get_release(string()) -> {ok, #release_opt{}} | none | {error, any()}.
+-callback get_release(Id::string()) -> {ok, #release_opt{}} | none | {error, any()}.
 -callback get_releases() -> {ok, [#release_opt{}]} | {error, any()}.
 
 -define(STORE,
