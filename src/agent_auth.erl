@@ -183,7 +183,7 @@ t_releases() ->
 	#release_opt{id="rel1", label="release1"}].
 
 passthrough_test_() ->
-	{setup, fun() ->
+	{foreach, fun() ->
 		meck:new(mock_auth),
 		application:set_env(oacd_core, agent_auth_storage, mock_auth)
 	end, fun(_) ->
