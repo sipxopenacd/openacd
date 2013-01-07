@@ -357,7 +357,7 @@ t_clients() ->
 	[t_default_client(), t_client()].
 
 passthrough_test_() ->
-	{setup, fun() ->
+	{foreach, fun() ->
 		meck:new(mock_cqueue),
 		application:set_env(oacd_core, call_queue_config_storage, mock_cqueue)
 	end, fun(_) ->
