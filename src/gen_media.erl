@@ -2409,7 +2409,14 @@ agent_interact({hangup, _Who}, State, #base_state{callrec = Callrec} =
 
 -spec get_gproc_prop(MediaState :: atom(), BaseState :: #base_state{}) -> #cpx_gen_media_prop{}.
 get_gproc_prop(State, BaseState) ->
-	#cpx_gen_media_prop{state = State, call = BaseState#base_state.callrec, client = BaseState#base_state.callrec#call.client}.
+	CallRec = BaseState#base_state.callrec,
+	Client = case CallRec of
+		#call{client = Cl} ->
+			Cl;
+		_ ->
+			undefined
+	end,
+	#cpx_gen_media_prop{state = State, call = CallRec, client = Client}.
 
 -ifdef(TEST).
 
@@ -4025,6 +4032,7 @@ mutate_return_test_() ->
 
 outbound_call_flow_test_() ->
 	{setup, fun() ->
+		application:start(gproc),
 		meck:new(media_callback),
 		meck:new(agent_channel),
 		meck:new(cdr),
@@ -4043,7 +4051,8 @@ outbound_call_flow_test_() ->
 	fun(_) ->
 		meck:unload(media_callback),
 		meck:unload(agent_channel),
-		meck:unload(cdr)
+		meck:unload(cdr),
+		application:stop(gproc)
 	end,
 	fun({GmState, Validator}) -> [
 
