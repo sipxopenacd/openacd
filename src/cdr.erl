@@ -979,9 +979,11 @@ analyze_test_() ->
 	end}].
 
 push_raw_test_() ->
-	util:start_testnode(),
-	N = util:start_testnode(cdr_push_raw_tests),
-	{spawn, N, {foreach,
+	%% TODO test on remote node
+	% util:start_testnode(),
+	% N = util:start_testnode(cdr_push_raw_tests),
+	% {spawn, N, {foreach,
+	{foreach,
 	fun() ->
 		?DEBUG("node:  ~p", [node()]),
 		mnesia:stop(),
@@ -1249,14 +1251,16 @@ push_raw_test_() ->
 				{media_custom,unending}
 			])
 		end}
-	end]}}.
+	end]}.
 
 
 % handle_event's primary duty is to see if the call is ready for summary.
 handle_event_test_() ->
-	util:start_testnode(),
-	N = util:start_testnode(cdr_handle_event_tests),
-	{spawn, N, {foreach,
+	%% TODO test on remote node
+	% util:start_testnode(),
+	% N = util:start_testnode(cdr_handle_event_tests),
+	% {spawn, N, {foreach,
+	{foreach,
 	fun() ->
 		mnesia:stop(),
 		mnesia:delete_schema([node()]),
@@ -1328,7 +1332,7 @@ handle_event_test_() ->
 			{ok, Out} = handle_info({'DOWN', Monref, process, Mpid, <<"uberdeath">>}, InState),
 			?assert(Out#state.hangup)
 		end}
-	end]}}.
+	end]}.
 
 merge_test_() ->
 	[{"Get ids",
