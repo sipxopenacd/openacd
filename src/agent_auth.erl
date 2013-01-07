@@ -88,7 +88,7 @@
 %%====================================================================
 
 start() ->
-	Store = case application:get_env(oacd_core, agent_auth_storage) of
+	case application:get_env(oacd_core, agent_auth_storage) of
 		{ok, St} ->
 			St;
 		_ ->
