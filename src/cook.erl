@@ -718,7 +718,7 @@ do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 		_ ->
 			[Out | Acc]
 	end,
-	do_operation(Tail, Qpid, Callpid, Newacc).
+	do_operation(Tail, Qpid, Callpid, State, Newacc).
 
 optimize_recipe(Recipe) ->
 	optimize_recipe(Recipe, []).
