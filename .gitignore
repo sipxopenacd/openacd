@@ -15,8 +15,8 @@ key.pub
 contrib/**/ebin/*
 contrib/**/doc/*
 contrib/mochiweb/_test
-OpenACD
-OpenACD.tar.gz
+oacd_core-*/*
+oacd_core-*.tar.gz
 
 rel/openacd
 deps

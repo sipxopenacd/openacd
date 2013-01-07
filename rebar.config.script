@@ -1,0 +1,23 @@
+% REBAR_SHARED_DEPS
+% If set, allows for dependencies already installed in
+% the code path (and possibly not in the deps directory).
+%
+% Note: this setting does not apply recursively to other
+% rebar dependencies
+case os:getenv("REBAR_SHARED_DEPS") of
+	false ->
+		CONFIG;
+	_ ->
+		case lists:keysearch(deps, 1, CONFIG) of
+			{value, {deps, Deps}} ->
+				NDeps = [case Dep of
+					% If Src is set, rebar insists that the app should
+					% be in the deps directory. We remove Src here.
+					{App, Vsn, _Src} -> {App, Vsn};
+					_ -> Dep
+				end || Dep <- Deps],
+				lists:keyreplace(deps, 1, CONFIG, {deps, NDeps});
+			_ ->
+				CONFIG
+		end
+end.
