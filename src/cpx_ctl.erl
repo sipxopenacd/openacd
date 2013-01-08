@@ -13,17 +13,17 @@
 -record(ctl_agent, {agent, profile, state, login_time}).
 
 process(["stop"]) ->
-	io:format("Stopping openacd~n"),
+	?PRINT("Stopping openacd~n"),
 	init:stop(),
 	?RET_SUCCESS;
 
 process(["restart"]) ->
-	io:format("Restarting openacd~n"),
+	?PRINT("Restarting openacd~n"),
 	init:restart(),
 	?RET_SUCCESS;
 
 process(["pid"]) ->
-	io:format("~s~n", [os:getpid()]),
+	?PRINT("~s~n", [os:getpid()]),
 	?RET_SUCCESS;
 
 process(["status"]) ->
