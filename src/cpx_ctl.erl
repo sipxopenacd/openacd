@@ -3,6 +3,7 @@
 
 -include_lib("stdlib/include/qlc.hrl").
 -include("agent.hrl").
+-include("queue.hrl").
 
 -define(RET_SUCCESS, {ok, 0}).
 -define(RET_INVALID_COMMAND, {error, 1}).
@@ -54,6 +55,10 @@ process(["list-agents"]) ->
 	?RET_SUCCESS;
 
 process(["list-queues"]) ->
+	{ok, Queues} = call_queue_config:get_queues(),
+	lists:foreach(fun(Queue) ->
+		?PRINT("~s~n", [Queue#call_queue.name])
+	end, Queues),
 	?RET_SUCCESS;
 
 process(["list-calls"]) ->
