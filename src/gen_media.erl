@@ -2416,7 +2416,7 @@ get_gproc_prop(State, BaseState) ->
 		_ ->
 			undefined
 	end,
-	#cpx_gen_media_prop{state = State, call = CallRec, client = Client}.
+	#cpx_gen_media_prop{state = State, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes}.
 
 -ifdef(TEST).
 
