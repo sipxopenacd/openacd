@@ -105,7 +105,14 @@ process(["show-queue", Queue]) ->
 process(["trace-agent", _Agent]) ->
 	?RET_SUCCESS;
 
-process(["kick-agent", _Agent]) ->
+process(["kick-agent", Agent]) ->
+	case agent_manager:query_agent(Agent) of
+		{true, Pid} ->
+			?PRINT("Disconnecting agent ~s~n", [Agent]),
+			agent:stop(Pid);
+		_ ->
+			ignore
+	end,
 	?RET_SUCCESS;
 
 process(_) ->
