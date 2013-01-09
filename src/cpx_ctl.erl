@@ -54,7 +54,10 @@ process(["list-agents"]) ->
 process(["list-queues"]) ->
 	{ok, Queues} = call_queue_config:get_queues(),
 	lists:foreach(fun(Queue) ->
-		?PRINT("~s~n", [Queue#call_queue.name])
+		QueueName = Queue#call_queue.name,
+		CallsInQueue = get_calls_in_queue(QueueName),
+		?PRINT("~-15s", [QueueName]),
+		?PRINT("~B~n", [length(CallsInQueue)])
 	end, Queues),
 	?RET_SUCCESS;
 
@@ -93,6 +96,10 @@ process(["kick-agent", _Agent]) ->
 
 process(_) ->
 	?RET_INVALID_COMMAND.
+
+get_calls_in_queue(QueueName) ->
+	QueuePid = queue_manager:get_queue(QueueName),
+	call_queue:get_calls(QueuePid).
 
 print_agent(A) ->
 	?PRINT("~-10s", [A#ctl_agent.agent]),
