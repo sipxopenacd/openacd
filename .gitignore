@@ -57,10 +57,10 @@ profile
 *.pro.user
 
 # autotools
-Makefile.in
-aclocal.m4
 autom4te.cache/*
 configure
+Makefile
+config.status
 install-sh
 missing
 
