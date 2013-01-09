@@ -85,7 +85,21 @@ process(["show-agent", Agent]) ->
 	end,
 	?RET_SUCCESS;
 
-process(["show-queue", _Queue]) ->
+process(["show-queue", Queue]) ->
+	case get_calls_in_queue(Queue) of
+		{error, no_exists} ->
+			ignore;
+		Calls when length(Calls) > 0 ->
+			?PRINT("Calls in queue: ~b~n~n", [length(Calls)]),
+			?PRINT("~-40s", ["Call ID"]),
+			?PRINT("PID~n"),	
+			lists:foreach(fun({_, Call}) ->
+				?PRINT("~-40s", [Call#queued_call.id]),
+				?PRINT("~p~n", [Call#queued_call.media])
+			end, Calls);
+		_ ->
+			?PRINT("Calls in queue: 0~n")
+	end,
 	?RET_SUCCESS;
 
 process(["trace-agent", _Agent]) ->
@@ -97,9 +111,13 @@ process(["kick-agent", _Agent]) ->
 process(_) ->
 	?RET_INVALID_COMMAND.
 
-get_calls_in_queue(QueueName) ->
-	QueuePid = queue_manager:get_queue(QueueName),
-	call_queue:get_calls(QueuePid).
+get_calls_in_queue(Name) ->
+	case queue_manager:get_queue(Name) of
+		undefined ->
+			{error, no_exists};
+		Pid ->
+			call_queue:get_calls(Pid)
+	end.
 
 print_agent(A) ->
 	?PRINT("~-10s", [A#ctl_agent.agent]),
