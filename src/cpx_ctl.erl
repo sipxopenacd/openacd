@@ -41,16 +41,10 @@ process(["status"]) ->
 	?RET_SUCCESS;
 
 process(["list-agents"]) ->
-	Agents = qlc:e(qlc:q([#ctl_agent{agent=Login, profile=Profile, state=State, login_time=StartTime} || {_, _, #cpx_agent_prop{login=Login, profile=Profile, state=State, start_time=StartTime}} <- gproc:table({l, p})])),
+	Agents = qlc:e(qlc:q([#ctl_agent{agent=Login, profile=Profile, state=State, login_time=StartTime} || 
+		{_, _, #cpx_agent_prop{login=Login, profile=Profile, state=State, start_time=StartTime}} <- gproc:table({l, p})])),
 	lists:foreach(fun(A) ->
-		?PRINT("~-10s", [A#ctl_agent.agent]),
-		?PRINT("~-15s", [A#ctl_agent.profile]),
-		{{Y,M,D}, {H,Mi,S}} = calendar:now_to_local_time(A#ctl_agent.login_time),
-		?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B     ", [Y,M,D,H,Mi,S]),
-		case A#ctl_agent.state of
-			available -> ?PRINT("Available~n");
-			{released, {Reason,_,_}} -> ?PRINT("Released: ~s~n", [Reason])
-		end
+		print_agent(A)
 	end, Agents),
 	?RET_SUCCESS;
 
@@ -64,7 +58,20 @@ process(["list-queues"]) ->
 process(["list-calls"]) ->
 	?RET_SUCCESS;
 
-process(["show-agent", _Agent]) ->
+process(["show-agent", Agent]) ->
+	case agent_manager:query_agent(Agent) of
+		{true, Pid} ->
+			 case gproc:info(Pid, gproc) of
+			 	{gproc, [{{p,l,cpx_agent}, #cpx_agent_prop{} = Prop}]} ->
+			 		CtlAgent = #ctl_agent{agent=Prop#cpx_agent_prop.login, profile=Prop#cpx_agent_prop.profile,
+			 			state=Prop#cpx_agent_prop.state, login_time=Prop#cpx_agent_prop.start_time},
+			 		print_agent(CtlAgent);
+			 	_ ->
+		 			ignore
+			 end;
+		_ ->
+			ignore
+	end,
 	?RET_SUCCESS;
 
 process(["show-queue", _Queue]) ->
@@ -78,3 +85,13 @@ process(["kick-agent", _Agent]) ->
 
 process(_) ->
 	?RET_INVALID_COMMAND.
+
+print_agent(A) ->
+	?PRINT("~-10s", [A#ctl_agent.agent]),
+	?PRINT("~-15s", [A#ctl_agent.profile]),
+	{{Y,M,D}, {H,Mi,S}} = calendar:now_to_local_time(A#ctl_agent.login_time),
+	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B     ", [Y,M,D,H,Mi,S]),
+	case A#ctl_agent.state of
+		available -> ?PRINT("Available~n");
+		{released, {Reason,_,_}} -> ?PRINT("Released: ~s~n", [Reason])
+	end.
