@@ -4,6 +4,8 @@
 -include_lib("stdlib/include/qlc.hrl").
 -include("agent.hrl").
 -include("queue.hrl").
+-include("call.hrl").
+-include("gen_media.hrl").
 
 -define(RET_SUCCESS, {ok, 0}).
 -define(RET_INVALID_COMMAND, {error, 1}).
@@ -12,6 +14,7 @@
 -define(PRINT(Fmt, Data), io:format(Fmt, Data)).
 
 -record(ctl_agent, {agent, profile, state, login_time}).
+-record(ctl_call, {client, state, caller_id, queue, line, state_changes}).
 
 process(["stop"]) ->
 	?PRINT("Stopping openacd~n"),
@@ -56,6 +59,11 @@ process(["list-queues"]) ->
 	?RET_SUCCESS;
 
 process(["list-calls"]) ->
+	Calls = qlc:e(qlc:q([#ctl_call{client=Client, state=State, caller_id=CallerId, queue=Queue, line=Dnis, state_changes=StateChanges} || 
+		{_, _, #cpx_gen_media_prop{state=State, call=#call{callerid=CallerId, dnis=Dnis, queue=Queue}, client=#client{label=Client}, state_changes=StateChanges}} <- gproc:table({l, p})])),
+	lists:foreach(fun(C) ->
+		print_call(C)
+	end, Calls),
 	?RET_SUCCESS;
 
 process(["show-agent", Agent]) ->
@@ -95,3 +103,13 @@ print_agent(A) ->
 		available -> ?PRINT("Available~n");
 		{released, {Reason,_,_}} -> ?PRINT("Released: ~s~n", [Reason])
 	end.
+
+print_call(C) ->
+	?PRINT("~-15s", [C#ctl_call.client]),
+	{CallerId1, CallerId2} = C#ctl_call.caller_id,
+	?PRINT("~-20s", [CallerId1 ++ " " ++ CallerId2]),
+	?PRINT("~-20s", [C#ctl_call.state]),
+	?PRINT("~-20s", [C#ctl_call.queue]),
+	?PRINT("~-10s", [C#ctl_call.line]),
+	{{Y,M,D}, {H,Mi,S}} = calendar:now_to_local_time(proplists:get_value(init, C#ctl_call.state_changes)),
+	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B~n", [Y,M,D,H,Mi,S]).
