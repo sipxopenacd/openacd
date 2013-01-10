@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([oacd_core], [2.0.0])
+AC_INIT([openacd], [2.0.0])
 
 AC_ERLANG_NEED_ERLC
 AC_ERLANG_NEED_ERL

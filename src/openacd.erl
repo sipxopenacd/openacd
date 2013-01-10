@@ -30,6 +30,6 @@ my_apps() -> [
 	ejrpc2,
 	gproc,
 
-	oacd_core
+	openacd
 ].
 

@@ -1,4 +1,4 @@
-[{oacd_core, [
+[{openacd, [
         {nodes, []}
         , {console_loglevel, info}
         , {logfiles, [{"@localstatedir@/log/openacd/openacd.log", info}]}

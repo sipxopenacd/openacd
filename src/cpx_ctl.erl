@@ -31,7 +31,7 @@ process(["pid"]) ->
 	?RET_SUCCESS;
 
 process(["status"]) ->
-	{ok, Uptime} = application:get_env(oacd_core, uptime),
+	{ok, Uptime} = application:get_env(openacd, uptime),
 	AgentCount = length(agent_manager:list()),
 	{ok, Queues} = call_queue_config:get_queues(),
 	QueueCount = length(Queues),

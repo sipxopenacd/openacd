@@ -78,7 +78,7 @@
 -callback get_releases() -> {ok, [#release_opt{}]} | {error, any()}.
 
 -define(STORE,
-	{ok, _Store} = application:get_env(oacd_core, agent_auth_storage),
+	{ok, _Store} = application:get_env(openacd, agent_auth_storage),
 	_Store).
 
 %%====================================================================
@@ -86,12 +86,12 @@
 %%====================================================================
 
 start() ->
-	case application:get_env(oacd_core, agent_auth_storage) of
+	case application:get_env(openacd, agent_auth_storage) of
 		{ok, St} ->
 			St;
 		_ ->
 			St = ?DEFAULT_STORAGE,
-			application:set_env(oacd_core, agent_auth_storage, St),
+			application:set_env(openacd, agent_auth_storage, St),
 			St
 	end,
 	St:start().
@@ -185,9 +185,9 @@ t_releases() ->
 passthrough_test_() ->
 	{foreach, fun() ->
 		meck:new(mock_auth),
-		application:set_env(oacd_core, agent_auth_storage, mock_auth)
+		application:set_env(openacd, agent_auth_storage, mock_auth)
 	end, fun(_) ->
-		application:unset_env(oacd_core, agent_auth_storage),
+		application:unset_env(openacd, agent_auth_storage),
 		meck:unload()
 	end, [
 		t_passthrough(get_agent, get_agent_by_login, ["agent0"], {ok, t_agent()}),

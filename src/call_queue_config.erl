@@ -186,17 +186,17 @@
 -callback get_clients() -> {ok, [#client{}]} | {error, any()}.
 
 -define(STORE,
-	{ok, _Store} = application:get_env(oacd_core, call_queue_config_storage),
+	{ok, _Store} = application:get_env(openacd, call_queue_config_storage),
 	_Store).
 
 -spec(start/0 :: () -> any()).
 start() ->
-	Store = case application:get_env(oacd_core, call_queue_config_storage) of
+	Store = case application:get_env(openacd, call_queue_config_storage) of
 		{ok, St} ->
 			St;
 		_ ->
 			St = ?DEFAULT_STORAGE,
-			application:set_env(oacd_core, call_queue_config_storage, St),
+			application:set_env(openacd, call_queue_config_storage, St),
 			St
 	end,
 	St:start().
@@ -359,9 +359,9 @@ t_clients() ->
 passthrough_test_() ->
 	{foreach, fun() ->
 		meck:new(mock_cqueue),
-		application:set_env(oacd_core, call_queue_config_storage, mock_cqueue)
+		application:set_env(openacd, call_queue_config_storage, mock_cqueue)
 	end, fun(_) ->
-		application:unset_env(oacd_core, call_queue_config_storage),
+		application:unset_env(openacd, call_queue_config_storage),
 		meck:unload()
 	end, [
 		t_passthrough(get_queue, ["queue0"], {ok, t_queue()}),

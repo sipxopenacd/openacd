@@ -3,7 +3,8 @@ version = @PACKAGE_VERSION@
 tarname = $(package)
 distdir = $(tarname)-$(version)
 
-realname = openacd
+#realname = openacd
+realname = $(package)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -14,7 +15,7 @@ sysconfdir = @sysconfdir@
 
 ERL=@ERL@
 ERLANG_INSTALL_LIB_DIR = @ERLANG_INSTALL_LIB_DIR@
-oaerllibdir = @ERLANG_INSTALL_LIB_DIR_oacd_core@
+oaerllibdir = @ERLANG_INSTALL_LIB_DIR_openacd@
 
 oaconfdir = $(sysconfdir)/$(realname)
 oalogdir = $(localstatedir)/log/$(realname)
@@ -67,7 +68,7 @@ $(distdir): FORCE
 	cp Makefile $(distdir)
 	cp rebar.config $(distdir)/rebar.config
 	cp rebar.config.script $(distdir)/rebar.config.script
-	cp $(wildcard src/oacd_core.app.src) $(distdir)/src
+	cp $(wildcard src/$(realname).app.src) $(distdir)/src
 	cp $(wildcard src/*.erl) $(distdir)/src
 	cp $(wildcard include/*.hrl) $(distdir)/include
 	cp $(wildcard contrib/src/*.erl) $(distdir)/contrib/src

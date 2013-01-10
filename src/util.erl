@@ -613,7 +613,7 @@ timemark_clear(Markname) ->
 
 -spec(priv_dir/0 :: () -> string() | {'error', 'enoent'}).
 priv_dir() ->
-	case code:priv_dir('oacd_core') of
+	case code:priv_dir('openacd') of
 		{error, _} ->
 			% could be we're running eunit
 			case {filelib:is_dir("priv"),filelib:is_dir("../priv")} of
