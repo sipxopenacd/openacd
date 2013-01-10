@@ -1,0 +1,13 @@
+[{oacd_core, [
+        {nodes, []}
+        , {console_loglevel, info}
+        , {logfiles, [{"@localstatedir@/log/openacd/openacd.log", info}]}
+        %% List plugins here
+        , {plugins, []}
+
+        %% Change storage backends here
+        % , {agent_auth_storage, agent_auth_ets}
+        % , {call_queue_config_storage, call_queue_config_ets}
+]}
+%% Application/Plug-in configurations here
+].

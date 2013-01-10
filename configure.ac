@@ -14,10 +14,25 @@ else
 	fi
 fi
 
-
 EZ_ERLANG_NEED_LIB(gen_leader)
 EZ_ERLANG_NEED_LIB(ejrpc2)
 EZ_ERLANG_NEED_LIB(gproc)
 
+# Test dependencies
+EZ_ERLANG_NEED_LIB(meck)
+EZ_ERLANG_NEED_LIB(gen_server_mock)
+
+AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
+
+AC_ARG_ENABLE(user,
+	[AS_HELP_STRING([--enable-user=USER], [user that will run openacd (default: no)])],
+	[AS_CASE([$enableval],
+		[yes], [ENABLEUSER=`whoami`],
+		[no], [ENABLEUSER=""],
+		[ENABLEUSER=$enableval])])
+
+AS_IF([test "x$ENABLEUSER" != "x"], [AC_SUBST([runuser], [$ENABLEUSER])])
+
 AC_CONFIG_FILES([Makefile])
+
 AC_OUTPUT

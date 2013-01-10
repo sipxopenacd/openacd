@@ -1,0 +1,174 @@
+#!/bin/sh
+# -*- tab-width:4;indent-tabs-mode:nil -*-
+# ex: ts=4 sw=4 et
+
+RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
+RUNNER_USER=@runuser@
+
+# Make sure this script is running as the appropriate user
+if [ ! -z "$RUNNER_USER" ] && [ `whoami` != "$RUNNER_USER" ]; then
+    exec sudo -u $RUNNER_USER -i $0 $@
+fi
+
+# erlang binaries
+ERL=erl
+ESCRIPT=escript
+
+# erlang options
+ERL_POLL=true
+ERL_SMP=auto
+ERL_NODE=openacd
+ERL_HOST=$(hostname -f)
+ERL_COOKIE=
+
+# other vm args
+# ERL_ARGS=
+
+# pipe dir - must end with '/'
+# PIPE_DIR=/tmp/openacd/
+
+# system configured dirs
+ETC_DIR=@sysconfdir@
+VAR_DIR=@localstatedir@
+
+OA_ETC_DIR=$ETC_DIR/openacd
+
+# defaults
+OA_CONFIG_PATH=$OA_ETC_DIR/sys.config
+OA_LOG_DIR=$VAR_DIR/log/openacd
+OA_DB_DIR=$VAR_DIR/openacd/db
+OA_RUN_DIR=$VAR_DIR/openacd/run
+
+ARGS=
+while [ "$#" -ne 0 ]; do
+    PARAM=$1
+    shift
+    case $PARAM in
+        --) break ;;
+        --env-config) OA_ENV_CONFIG_PATH=$1 ; shift ;;
+        --config) OA_CONFIG_CTL_PATH=$1 ; shift ;;
+        --name) ERL_NAME=$1 ; shift ;;
+        --logs) OA_LOG_DIR=$1 ; shift ;;
+        *) ARGS="$ARGS $PARAM" ;;
+    esac
+done
+
+# run env config
+[ -f "$OA_ENV_CONFIG_PATH" ] && . "$OA_ENV_CONFIG_PATH"
+
+
+# override if defined as arg
+if [ ! -z "$OA_CONFIG_CTL_PATH" ]; then
+    OA_CONFIG_PATH=$OA_CONFIG_CTL_PATH
+fi
+
+# name
+if [ -z "$ERL_NAME" ]; then
+    ERL_NAME=$ERL_NODE@$ERL_HOST
+elif [ "$ERL_NAME" != ${ERL_NAME%@*} ]; then
+    ERL_NAME=$ERL_NAME@$ERL_HOST
+else
+    ERL_HOST=${ERL_NAME%@*}
+fi
+
+ERL_NAME_TYPE=-name
+# long or short names
+if [ "$ERL_HOST" = "${ERL_HOST%.*}" ]; then
+    ERL_NAME_TYPE=-sname
+fi
+ERL_NAME_ARG="$ERL_NAME_TYPE $ERL_NAME"
+
+# cookie
+ERL_COOKIE_ARG=
+if [ ! -z "$ERL_COOKIE" ]; then
+    ERL_COOKIE_ARG="-setcookie \'$ERL_COOKIE\'"
+fi
+
+# logs
+[ -d "$OA_LOG_DIR" ] || mkdir -p "$OA_LOG_DIR"
+DATETIME=`date "+%Y%m%d-%H%M%S"`
+ERL_CRASH_DUMP=$OA_LOG_DIR/erl_crash_$DATETIME.dump
+
+# db
+[ -d "$OA_DB_DIR" ] || mkdir -p "$OA_DB_DIR"
+
+# home
+HOME=$VAR_DIR/openacd
+[ -d "$HOME" ] || mkdir -p "$HOME"
+
+# path
+ERL_LIBS=$ERL_LIBS:@ERLANG_INSTALL_LIB_DIR@
+
+cd $HOME
+
+# export globals
+export HOME
+export ERL_CRASH_DUMP
+export ERL_LIBS
+export OA_PID_PATH
+export OA_RUN_DIR
+
+# Note the `date +%s`, used to allow multiple remsh to the same node transparently
+REMSH_NAME_ARG="$REMSH_TYPE remsh`date +%s`@`echo $REMSH_NAME | awk -F@ '{print $2}'`"
+REMSH_REMSH_ARG="-remsh $REMSH_NAME"
+
+start()
+{
+    checkdupname
+
+    ERL_CMD="$ERL \
+        $ERL_NAME_ARG \
+        $ERL_COOKIE_ARG \
+        -s openacd \
+        -config $OA_CONFIG_PATH \
+        -mnesia dir \"$OA_DB_DIR\"\
+        -detached \
+        $ERL_OPTS"
+    exec $ERL_CMD
+}
+
+live()
+{
+    checkdupname
+
+    ERL_CMD="$ERL \
+        $ERL_NAME_ARG \
+        $ERL_COOKIE_ARG \
+        -s openacd \
+        -config $OA_CONFIG_PATH \
+        -mnesia dir \"$OA_DB_DIR\"\
+        $ERL_OPTS"
+    exec $ERL_CMD
+}
+
+ctl()
+{
+    CTL_NAME="oacdctl_$$@$ERL_HOST"
+    CTL_NAME_ARG="$ERL_NAME_TYPE $CTL_NAME"
+
+    exec $ERL \
+        $CTL_NAME_ARG \
+        -s oacd_ctl \
+        -noinput \
+        -hidden \
+        -extra $ERL_NAME $ARGS $@
+}
+
+checkdupname()
+{
+    $ERL $ERL_NAME_ARG -s erlang halt 2>&1|\
+        grep -c duplicate_name > /dev/null
+    if [ "$?" -eq 0 ]; then
+        echo "ERROR: Duplicate node name '$ERL_NAME' already running."
+        exit 1
+    fi
+}
+
+case $ARGS in
+    ' status' ) start ;;
+    ' start' ) start ;;
+    ' live' ) live ;;
+    * ) ctl ;;
+esac
+
+exit 0

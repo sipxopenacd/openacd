@@ -64,5 +64,9 @@ config.status
 install-sh
 missing
 
+# generated files
+rel/files/conf/*.config
+rel/files/bin/openacd
+
 #editor swap files
 *~
