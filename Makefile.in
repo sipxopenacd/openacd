@@ -12,6 +12,7 @@ libdir = @libdir@
 localstatedir = @localstatedir@
 sysconfdir = @sysconfdir@
 
+ERL=@ERL@
 ERLANG_INSTALL_LIB_DIR = @ERLANG_INSTALL_LIB_DIR@
 oaerllibdir = @ERLANG_INSTALL_LIB_DIR_oacd_core@
 
@@ -29,6 +30,7 @@ edit = sed \
   -e 's|@localstatedir[@]|$(localstatedir)|g' \
   -e 's|@sysconfdir[@]|$(sysconfdir)|g' \
   -e 's|@runuser[@]|$(runuser)|g' \
+  -e 's|@ERL[@]|$(ERL)|g' \
   -e 's|@ERLANG_INSTALL_LIB_DIR[@]|$(ERLANG_INSTALL_LIB_DIR)|g'
 
 confs = rel/files/conf/env.config rel/files/conf/sys.config

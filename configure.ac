@@ -2,6 +2,9 @@ AC_PREREQ([2.68])
 AC_INIT([oacd_core], [2.0.0])
 
 AC_ERLANG_NEED_ERLC
+AC_ERLANG_NEED_ERL
+
+AC_ERLANG_PATH_ERL
 
 AC_ARG_VAR([REBAR], [Rebar command])dnl
 if test -n "$REBAR"; then

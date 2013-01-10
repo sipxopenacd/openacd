@@ -11,8 +11,7 @@ if [ ! -z "$RUNNER_USER" ] && [ `whoami` != "$RUNNER_USER" ]; then
 fi
 
 # erlang binaries
-ERL=erl
-ESCRIPT=escript
+ERL=@ERL@
 
 # erlang options
 ERL_POLL=true
