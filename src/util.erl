@@ -736,7 +736,8 @@ start_testnode() ->
 					node();
 				{error, {{already_started, _}, _}}  ->
 					node();
-				_ ->
+				Err ->
+					?debugVal(Err),
 					erlang:error(node_fail)
 			end;
 		Else ->
