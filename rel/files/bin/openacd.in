@@ -34,6 +34,7 @@ OA_ETC_DIR=$ETC_DIR/openacd
 
 # defaults
 OA_CONFIG_PATH=$OA_ETC_DIR/sys.config
+OA_ENV_CONFIG_PATH=$OA_ETC_DIR/env.config
 OA_LOG_DIR=$VAR_DIR/log/openacd
 OA_DB_DIR=$VAR_DIR/openacd/db
 OA_RUN_DIR=$VAR_DIR/openacd/run
@@ -64,10 +65,10 @@ fi
 # name
 if [ -z "$ERL_NAME" ]; then
     ERL_NAME=$ERL_NODE@$ERL_HOST
-elif [ "$ERL_NAME" != ${ERL_NAME%@*} ]; then
+elif [ "$ERL_NAME" = ${ERL_NAME%@*} ]; then
     ERL_NAME=$ERL_NAME@$ERL_HOST
 else
-    ERL_HOST=${ERL_NAME%@*}
+    ERL_HOST=${ERL_NAME#*@}
 fi
 
 ERL_NAME_TYPE=-name
@@ -80,7 +81,7 @@ ERL_NAME_ARG="$ERL_NAME_TYPE $ERL_NAME"
 # cookie
 ERL_COOKIE_ARG=
 if [ ! -z "$ERL_COOKIE" ]; then
-    ERL_COOKIE_ARG="-setcookie \'$ERL_COOKIE\'"
+    ERL_COOKIE_ARG="-setcookie $ERL_COOKIE"
 fi
 
 # logs
@@ -144,13 +145,15 @@ ctl()
 {
     CTL_NAME="oacdctl_$$@$ERL_HOST"
     CTL_NAME_ARG="$ERL_NAME_TYPE $CTL_NAME"
-
-    exec $ERL \
+    ERL_CMD="$ERL \
         $CTL_NAME_ARG \
-        -s oacd_ctl \
-        -noinput \
-        -hidden \
-        -extra $ERL_NAME $ARGS $@
+        $ERL_COOKIE_ARG \
+        -s cpx_runner run \
+        -noshell \
+        $ERL_OPTS \
+        -extra $ERL_NAME $ARGS"
+
+    exec $ERL_CMD
 }
 
 checkdupname()
@@ -164,7 +167,6 @@ checkdupname()
 }
 
 case $ARGS in
-    ' status' ) start ;;
     ' start' ) start ;;
     ' live' ) live ;;
     * ) ctl ;;
