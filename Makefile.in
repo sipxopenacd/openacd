@@ -6,7 +6,7 @@ distdir = $(tarname)-$(version)
 all: compile
 
 compile:
-	REBAR_SHARED_DEPS=1 rebar compile
+	REBAR_SHARED_DEPS=1 @REBAR@ compile
 
 clean:
 	rebar clean
@@ -14,7 +14,7 @@ clean:
 	-rm -rf $(distdir).tar.gz
 
 check:
-	REBAR_SHARED_DEPS=1 rebar eunit skip_deps=true
+	REBAR_SHARED_DEPS=1 @REBAR@ eunit skip_deps=true
 
 dist: $(distdir).tar.gz
 
@@ -46,10 +46,10 @@ FORCE:
 deps: getdeps updatedeps
 
 getdeps:
-	rebar get-deps
+	@REBAR@ get-deps
 
 updatedeps:
-	rebar update-deps
+	@REBAR@ update-deps
 # END Local dependency management
 
 .PHONY: FORCE compile dist distcheck getdeps
