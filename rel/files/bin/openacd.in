@@ -108,10 +108,6 @@ export ERL_LIBS
 export OA_PID_PATH
 export OA_RUN_DIR
 
-# Note the `date +%s`, used to allow multiple remsh to the same node transparently
-REMSH_NAME_ARG="$REMSH_TYPE remsh`date +%s`@`echo $REMSH_NAME | awk -F@ '{print $2}'`"
-REMSH_REMSH_ARG="-remsh $REMSH_NAME"
-
 start()
 {
     checkdupname
@@ -138,6 +134,20 @@ live()
         -config $OA_CONFIG_PATH \
         -mnesia dir \"$OA_DB_DIR\"\
         $ERL_OPTS"
+    exec $ERL_CMD
+}
+
+remsh()
+{
+    REMSH_NAME="oacdremsh_$$@$ERL_HOST"
+    REMSH_NAME_ARG="$ERL_NAME_TYPE $REMSH_NAME"
+    ERL_CMD="$ERL \
+        $REMSH_NAME_ARG \
+        $ERL_COOKIE_ARG \
+        -remsh $ERL_NAME \
+        $ERL_OPTS \
+        -extra $ERL_NAME $ARGS"
+
     exec $ERL_CMD
 }
 
@@ -169,6 +179,7 @@ checkdupname()
 case $ARGS in
     ' start' ) start ;;
     ' live' ) live ;;
+    ' remsh' ) remsh ;;
     * ) ctl ;;
 esac
 
