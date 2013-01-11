@@ -41,6 +41,8 @@ OA_RUN_DIR=$VAR_DIR/openacd/run
 OA_PIPE_PATH=$VAR_DIR/openacd/pipe/run
 OA_PIPE_LOG_DIR=$OA_LOG_DIR/pipe
 
+STOP_TIMEOUT_S=15
+
 ARGS=
 while [ "$#" -ne 0 ]; do
     PARAM=$1
@@ -145,6 +147,41 @@ live()
     exec $ERL_CMD
 }
 
+stop()
+{
+    PID=$(ctl pid 2> /dev/null)
+    if [ "$?" != 0 ]; then
+        err_exit "ERROR: stop failed - cannot reach $ERL_NAME"
+    else
+        (ctl stop)
+        if [ "$?" != 0 ]; then
+            err_exit "ERROR: stop failed - cannot reach $ERL_NAME"
+        else
+            s=0
+            while $( kill -0 $PID 2> /dev/null ) && [ "$s" != "$STOP_TIMEOUT_S" ]; do
+                sleep 1
+                s=$(( s + 1 ))
+            done
+
+            if [ "$s" != "$STOP_TIMEOUT_S" ]; then
+                echo "stopped"
+            else
+                err_exit "ERROR: stop timeout"
+            fi
+        fi
+    fi
+}
+
+err_exit()
+{
+    echo $1
+    E=1
+    if [ ! -z "$2" ]; then
+        E=$2
+    fi
+    exit $E
+}
+
 attach()
 {
     exec $TO_ERL "$OA_PIPE_PATH"
@@ -174,7 +211,7 @@ ctl()
         -s cpx_runner run \
         -noshell \
         $ERL_OPTS \
-        -extra $ERL_NAME $ARGS"
+        -extra $ERL_NAME $*"
 
     exec $ERL_CMD
 }
@@ -192,9 +229,10 @@ checkdupname()
 case $ARGS in
     ' start' ) start ;;
     ' live' ) live ;;
+    ' stop' ) stop ;;
     ' attach' ) attach ;;
     ' remsh' ) remsh ;;
-    * ) ctl ;;
+    * ) ctl $ARGS;;
 esac
 
 exit 0
