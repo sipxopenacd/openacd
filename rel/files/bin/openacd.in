@@ -12,6 +12,8 @@ fi
 
 # erlang binaries
 ERL=@ERL@
+RUN_ERL=@RUN_ERL@
+TO_ERL=@TO_ERL@
 
 # erlang options
 ERL_POLL=true
@@ -22,9 +24,6 @@ ERL_COOKIE=
 
 # other vm args
 # ERL_ARGS=
-
-# pipe dir - must end with '/'
-# PIPE_DIR=/tmp/openacd/
 
 # system configured dirs
 ETC_DIR=@sysconfdir@
@@ -38,6 +37,9 @@ OA_ENV_CONFIG_PATH=$OA_ETC_DIR/env.config
 OA_LOG_DIR=$VAR_DIR/log/openacd
 OA_DB_DIR=$VAR_DIR/openacd/db
 OA_RUN_DIR=$VAR_DIR/openacd/run
+
+OA_PIPE_PATH=$VAR_DIR/openacd/pipe/run
+OA_PIPE_LOG_DIR=$OA_LOG_DIR/pipe
 
 ARGS=
 while [ "$#" -ne 0 ]; do
@@ -112,15 +114,21 @@ start()
 {
     checkdupname
 
+    OA_PIPE_DIR=$( dirname "$OA_PIPE_PATH" )
+    mkdir -p "$OA_PIPE_DIR"
+    chmod 700 "$OA_PIPE_DIR"
+
+    mkdir -p "$OA_PIPE_LOG_DIR"
+    chmod 700 "$OA_PIPE_LOG_DIR"
+
     ERL_CMD="$ERL \
         $ERL_NAME_ARG \
         $ERL_COOKIE_ARG \
         -s openacd \
         -config $OA_CONFIG_PATH \
-        -mnesia dir \"$OA_DB_DIR\"\
-        -detached \
+        -mnesia dir \\\"$OA_DB_DIR\\\"\
         $ERL_OPTS"
-    exec $ERL_CMD
+    exec $RUN_ERL -daemon "$OA_PIPE_PATH" "$OA_PIPE_LOG_DIR" "$ERL_CMD"
 }
 
 live()
@@ -135,6 +143,11 @@ live()
         -mnesia dir \"$OA_DB_DIR\"\
         $ERL_OPTS"
     exec $ERL_CMD
+}
+
+attach()
+{
+    exec $TO_ERL "$OA_PIPE_PATH"
 }
 
 remsh()
@@ -179,6 +192,7 @@ checkdupname()
 case $ARGS in
     ' start' ) start ;;
     ' live' ) live ;;
+    ' attach' ) attach ;;
     ' remsh' ) remsh ;;
     * ) ctl ;;
 esac

@@ -6,16 +6,9 @@ AC_ERLANG_NEED_ERL
 
 AC_ERLANG_PATH_ERL
 
-AC_ARG_VAR([REBAR], [Rebar command])dnl
-if test -n "$REBAR"; then
-	AC_MSG_CHECKING([for rebar])
-	AC_MSG_RESULT([$REBAR])
-else
-	AC_PATH_PROG([REBAR],[rebar],[no])
-	if test "x$REBAR" = "xno"; then
-		AC_MSG_ERROR([rebar not found])
-	fi
-fi
+EZ_NEED_PROG([REBAR], [rebar], [Rebar Erlang build tool [autodetected]])dnl
+EZ_NEED_PROG([RUN_ERL], [run_erl], [Erlang/OTP interpreter runner [autodetected]])
+EZ_NEED_PROG([TO_ERL], [to_erl], [Erlang/OTP interpreter runner [autodetected]])
 
 EZ_ERLANG_NEED_LIB(gen_leader)
 EZ_ERLANG_NEED_LIB(ejrpc2)
