@@ -564,9 +564,9 @@ submit_bug_report(Options) when is_list(Options) ->
 					{error, noconf};
 				{ok, Path} ->
 					Json = {struct, Options},
-					case httpc:request(post, {Path, [], "application/x-www-form-urlencoded", lists:append(["report=", binary_to_list(list_to_binary(mochijson2:encode(Json)))])}, [{timeout, 4000}], []) of
+					case httpc:request(post, {Path, [], "application/x-www-form-urlencoded", lists:append(["report=", binary_to_list(list_to_binary(ejrpc2_json:encode(Json)))])}, [{timeout, 4000}], []) of
 						{ok, {{_Ver, 200, _Msg}, _Head, Body}} ->
-							{struct, Props} = mochijson2:decode(Body),
+							{struct, Props} = ejrpc2_json:decode(Body),
 							case proplists:get_value(<<"success">>, Props) of
 								true ->
 									Bugid = proplists:get_value(<<"issueid">>, Props),

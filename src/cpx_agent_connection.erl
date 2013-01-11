@@ -78,7 +78,7 @@
 %% <dl>
 %% <dt>`{ok, json(), state()}'</dt><dd>If json() is undefined, no json is
 %% to be sent.  Otherwise the json should be encoded using
-%% mochijson2:encode/1 and sent over the wire.</dd>
+%% ejrpc2_json:encode/1 and sent over the wire.</dd>
 %% <dt>`{exit, json(), state()}'</dt><dd>the connection should commit
 %% hari-kari.  If json() is undefined, that's all that needs to happen,
 %% otherwise json should be sent, then death.</dd>
@@ -162,7 +162,7 @@
 
 -import(cpx_json_util, [l2b/1, b2l/1]).
 
--define(json(Struct), mochijson2:encode(Struct)).
+-define(json(Struct), ejrpc2_json:encode(Struct)).
 -define(reply_err(Id, Message, Code), ?json({struct, [{request_id, Id},
 	{success, false}, {message, Message}, {errcode, Code}]})).
 -define(simple_success(Id), ?json({struct, [{request_id, Id},
@@ -1176,7 +1176,7 @@ encode_call(Call) ->
 		{<<"type">>, Call#call.type},
 		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
 
-%% doc Encode the given data into a structure suitable for mochijson2:encode
+%% doc Encode the given data into a structure suitable for ejrpc2_json:encode
 % -spec(encode_statedata/1 ::
 % 	(Callrec :: #call{}) -> json();
 % 	(Clientrec :: #client{}) -> json();
