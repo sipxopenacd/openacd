@@ -147,7 +147,6 @@ start_link(Nodes) ->
 
 	{ok, _} = supervisor:start_child(Pid, Routingspec),
 
-	Cpxlogspec = {cpxlog, {cpxlog, start_link, []}, permanent, brutal_kill, worker, [?MODULE]},
 	Cpxmonitorspec = {cpx_monitor, {cpx_monitor, start_link, [[{nodes, Nodes}, auto_restart_mnesia]]}, permanent, 2000, worker, [?MODULE]},
 	DispatchSpec = {dispatch_manager, {dispatch_manager, start_link, []}, permanent, 2000, worker, [?MODULE]},
 	QueueManagerSpec = {queue_manager, {queue_manager, start_link, [Nodes]}, permanent, 20000, worker, [?MODULE]},
@@ -155,7 +154,6 @@ start_link(Nodes) ->
 	Cdrspec = {cdr, {cdr, start_link, []}, permanent, brutal_kill, worker, [?MODULE]},
 	Hooksspec = {cpx_hooks, {cpx_hooks, start_link, []}, permanent, brutal_kill, worker, [?MODULE]},
 
-	{ok, _} = supervisor:start_child(routing_sup, Cpxlogspec),
 	{ok, _} = supervisor:start_child(routing_sup, Cpxmonitorspec),
 	{ok, _} = supervisor:start_child(routing_sup, Hooksspec),
 	{ok, _} = supervisor:start_child(routing_sup, DispatchSpec),
