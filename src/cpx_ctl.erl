@@ -9,6 +9,7 @@
 
 -define(RET_SUCCESS, {ok, 0}).
 -define(RET_INVALID_COMMAND, {error, 1}).
+-define(UNIX_EPOCH_GSEC, 62167219200).
 
 -define(PRINT(Fmt), io:format(Fmt, [])).
 -define(PRINT(Fmt, Data), io:format(Fmt, Data)).
@@ -31,12 +32,18 @@ process(["pid"]) ->
 	?RET_SUCCESS;
 
 process(["status"]) ->
-	{ok, Uptime} = application:get_env(openacd, uptime),
+	{ok, UpTimestamp} = application:get_env(openacd, uptime),
+	Upsince = calendar:gregorian_seconds_to_datetime(UpTimestamp + ?UNIX_EPOCH_GSEC),
+	UtcDatetime = calendar:universal_time(),
+	Uptime = calendar:time_difference(Upsince, UtcDatetime),
+	{UpD, {UpH, UpM, UpS}} = Uptime,
+	{{UpsinceYr, UpsinceM, UpsinceD}, {UpsinceH, UpsinceMi, UpsinceS}} = Upsince,
 	AgentCount = length(agent_manager:list()),
 	{ok, Queues} = call_queue_config:get_queues(),
 	QueueCount = length(Queues),
 	Plugins = cpx:plugins_running(),
-	?PRINT("Uptime: ~p~n", [Uptime]),
+	?PRINT("Uptime: ~b days, ~b hours, ~b minutes, ~b seconds~n", [UpD, UpH, UpM, UpS]),
+	?PRINT("Started: ~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B UTC~n", [UpsinceYr, UpsinceM, UpsinceD, UpsinceH, UpsinceMi, UpsinceS]),
 	?PRINT("Number of queues: ~p~n", [QueueCount]),
 	?PRINT("Number of agents logged in: ~p~n", [AgentCount]),
 	?PRINT("~nPlugins running:~n"),
