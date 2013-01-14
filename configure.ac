@@ -9,6 +9,7 @@ AC_ERLANG_PATH_ERL
 EZ_NEED_PROG([REBAR], [rebar], [Rebar Erlang build tool [autodetected]])dnl
 EZ_NEED_PROG([RUN_ERL], [run_erl], [Erlang/OTP interpreter runner [autodetected]])
 EZ_NEED_PROG([TO_ERL], [to_erl], [Erlang/OTP interpreter runner [autodetected]])
+EZ_NEED_PROG([SSH_KEYGEN], [ssh-keygen], [authentication key generation, management and conversion [autodetected]])
 
 EZ_ERLANG_NEED_LIB(gen_leader)
 EZ_ERLANG_NEED_LIB(ejrpc2)

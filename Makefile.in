@@ -16,14 +16,19 @@ sysconfdir = @sysconfdir@
 ERL=@ERL@
 RUN_ERL=@RUN_ERL@
 TO_ERL=@TO_ERL@
+SSH_KEYGEN=@SSH_KEYGEN@
 
 ERLANG_INSTALL_LIB_DIR = @ERLANG_INSTALL_LIB_DIR@
 oaerllibdir = @ERLANG_INSTALL_LIB_DIR_openacd@
 
 oaconfdir = $(sysconfdir)/$(realname)
 oalogdir = $(localstatedir)/log/$(realname)
-oadbdir = $(localstatedir)/$(realname)/db
-oarundir = $(localstatedir)/$(realname)/run
+oavardir = $(localstatedir)/$(package)
+oakeydir = $(oavardir)/key
+oadbdir = $(oavardir)/db
+oarundir = $(oavardir)/run
+
+oakey = $(oakeydir)/openacd.key
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -93,7 +98,7 @@ FORCE:
 	-rm $(distdir).tar.gz >/dev/null 2>&1
 	-rm -rf $(distdir) >/dev/null 2>&1
 
-install: install-lib install-bin
+install: install-lib install-bin install-key
 
 install-lib:
 	install -d $(DESTDIR)$(oaerllibdir)/ebin
@@ -110,6 +115,14 @@ install-bin: $(confs) $(bin)
 	install -d $(DESTDIR)$(oalogdir)
 	install -d $(DESTDIR)$(oadbdir)
 	install -d $(DESTDIR)$(oarundir)
+
+install-key:
+	install -d $(DESTDIR)$(oakeydir)
+ifeq "$(wildcard $(DESTDIR)$(oakey))" ""
+	$(SSH_KEYGEN) -t rsa -f $(DESTDIR)$(oakey) -N "" -q
+else
+	@echo "key already exists in $(DESTDIR)$(oakey)"
+endif
 
 $(confs) $(bin): % : %.in Makefile
 	$(edit) $(srcdir)/$@.in > $@

@@ -2,6 +2,8 @@
         {nodes, []}
         , {console_loglevel, info}
         , {logfiles, [{"@localstatedir@/log/openacd/openacd.log", info}]}
+        , {rsakey, ["@localstatedir@/openacd/key/openacd.key"]}
+
         %% List plugins here
         , {plugins, []}
 
