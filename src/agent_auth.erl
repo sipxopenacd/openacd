@@ -30,7 +30,6 @@
 
 -module(agent_auth).
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include_lib("stdlib/include/qlc.hrl").

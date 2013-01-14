@@ -33,7 +33,6 @@
 	-include_lib("eunit/include/eunit.hrl").
 -endif.
 -include_lib("kernel/include/file.hrl").
--include("log.hrl").
 -include("call.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 
@@ -109,7 +108,7 @@ init(Props) ->
 				{ok, FileInfo} = file:read_file_info(Filename),
 				{ok, #state{file = {File, Filename, FileInfo#file_info.inode}, agents = AgentDict, calls = CallDict, callqueuemap = CallQMap, callagentmap = CallAgentMap}};
 			{error, Reason} ->
-				?WARNING("~p failed to start due to error:~p", [?MODULE, Reason]),
+				lager:warning("~p failed to start due to error:~p", [?MODULE, Reason]),
 				{stop, {error, Reason}}
 	end.
 
@@ -133,13 +132,13 @@ handle_info({cpx_monitor_event, {set, Timestamp, {{agent, Key}, Details, _Node}}
 	NewFile = check_file(State#state.file),
 	case dict:find(Key, State#state.agents) of
 		error ->
-			%?NOTICE("Agent ~p just logged in ~p", [Key, Details]),
+			%lager:notice("Agent ~p just logged in ~p", [Key, Details]),
 			log_event(NewFile, "agent_start", Timestamp, proplists:get_value(node, Details), [proplists:get_value(login, Details)]),
 			[log_event(NewFile, "agent_login", Timestamp, proplists:get_value(node, Details), [proplists:get_value(login, Details), Queue]) || {'_queue', Queue} <- proplists:get_value(skills, Details)],
-			?INFO("skills: ~p", [proplists:get_value(skills, Details)]),
+			lager:info("skills: ~p", [proplists:get_value(skills, Details)]),
 			ok;
 		{ok, Current} ->
-			%?NOTICE("Udating agent ~p from  ~p to ~p", [Key, Current, Details]),
+			%lager:notice("Udating agent ~p from  ~p to ~p", [Key, Current, Details]),
 			agent_diff(Key, Details, Current, Timestamp, State#state{file = NewFile})
 	end,
 	case {proplists:get_value(statedata, Details), proplists:get_value(state, Details)} of
@@ -189,7 +188,7 @@ handle_info({cpx_monitor_event, {drop, Timestamp, {media, Key}}}, #state{file = 
 
 			case dict:find(Key, State#state.calls) of
 				{ok, New} ->
-					?INFO("~p abandoned", [Key]),
+					lager:info("~p abandoned", [Key]),
 					log_event(NewFile, "call_terminate", Timestamp,
 							proplists:get_value(node, New), [
 							Queue,
@@ -202,7 +201,7 @@ handle_info({cpx_monitor_event, {drop, Timestamp, {media, Key}}}, #state{file = 
 							proplists:get_value(dnis, New, "")
 						]);
 				error ->
-					?ERROR("unknown call ~p abandoned", [Key])
+					lager:error("unknown call ~p abandoned", [Key])
 			end;
 		{ok, _Agent} ->
 			ok
@@ -216,7 +215,7 @@ handle_info({redrop, {media, Key}}, #state{callqueuemap = Callqmap, callagentmap
 	Newamap = dict:erase(Key, CallAgentMap),
 	{noreply, State#state{callqueuemap = Newcmap, callagentmap = Newamap, calls = Newcalls}};
 handle_info(_Info, State) ->
-	%?NOTICE("Got message: ~p", [Info]),
+	%lager:notice("Got message: ~p", [Info]),
 	{noreply, State}.
 
 % =====
@@ -353,27 +352,27 @@ log_event({File, _Name, _Inode}, Event, Timestamp, Node, Args) ->
 	io:format(File, FormatString, AllArgs).
 
 check_file({FileHandle, FileName, FileInode}) ->
-	?DEBUG("Checking file ~s", [FileName]),
+	lager:debug("Checking file ~s", [FileName]),
 	{Fhandle, Finode} = case file:read_file_info(FileName) of
 		{ok, #file_info{inode = FileInode} = _Fileinfo} ->
-	 		?DEBUG("file ~s say's it's cool", [FileName]),
+	 		lager:debug("file ~s say's it's cool", [FileName]),
 			{FileHandle, FileInode};
 		{ok, #file_info{inode = NewInode} = _Fileinfo} ->
 			case file:open(FileName, [append]) of
 				{ok, NewHandle} ->
-					?DEBUG("Gots myself a new file inode.", []),
+					lager:debug("Gots myself a new file inode.", []),
 					{NewHandle, NewInode};
 				_ ->
-					?ERROR("Could not re-open disappeared file ~s", [FileName]),
+					lager:error("Could not re-open disappeared file ~s", [FileName]),
 					exit(nofile)
 			end;
 		{error, enoent} ->
-			?DEBUG("Looks like the file ~s was removed", [FileName]),
+			lager:debug("Looks like the file ~s was removed", [FileName]),
 			{ok, NewHandle} = file:open(FileName, [append]),
 			{ok, #file_info{inode = NewInode}} = file:read_file_info(FileName),
 			{NewHandle, NewInode};
 		Else ->
-			?WARNING("Could not ensure events file ~s exists (~p).", [FileName, Else])
+			lager:warning("Could not ensure events file ~s exists (~p).", [FileName, Else])
 	end,
 	{Fhandle, FileName, Finode}.
 
@@ -448,9 +447,9 @@ file_handling_test_() ->
 	fun({EventLog, _}) -> {"straight removal", fun() ->
 		EventLog ! {cpx_monitor_event, {set, erlang:now(), {{agent, "agent"}, [{login, "agent"}, {skills, []}], node()}}},
 		file:delete(?test_filea),
-		timer:sleep(5),
+		timer:sleep(100),
 		EventLog ! {cpx_monitor_event, {drop, erlang:now(), {agent, "agent"}}},
-		timer:sleep(5),
+		timer:sleep(100),
 		?assertMatch({ok, Bin}, file:read_file(?test_filea))
 	end} end]}.
 
@@ -518,14 +517,14 @@ send_media_set(Pid, InProps) ->
 % 		send_agent_set(EventLog, released),
 % 		timer:sleep(100),
 % 		{ok, Bin} = file:read_file(?test_fileb),
-% 		?DEBUG("Got bin:  ~p", [Bin]),
+% 		lager:debug("Got bin:  ~p", [Bin]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_start : ", Node:NodeSize/binary,
 % 		" : agentName", _:1/binary, _/binary>>, Bin),
 % 		<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_start : ", Node:NodeSize/binary,
 % 		" : agentName", _:1/binary, Rest/binary>> = Bin,
-% 		?DEBUG("Rest:  ~p", [Rest]),
+% 		lager:debug("Rest:  ~p", [Rest]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_login : ", Node:NodeSize/binary,
 % 		" : agentName : Queue", _:1/binary>>, Rest)
@@ -537,7 +536,7 @@ send_media_set(Pid, InProps) ->
 % 		send_agent_set(EventLog, idle),
 % 		timer:sleep(5),
 % 		{ok, Bin} = file:read_file(?test_fileb),
-% 		?DEBUG("Got bin:  ~p", [Bin]),
+% 		lager:debug("Got bin:  ~p", [Bin]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_available : ", Node:NodeSize/binary,
 % 		" : agentName : Queue", _:1/binary, _/binary>>, Bin),
@@ -554,7 +553,7 @@ send_media_set(Pid, InProps) ->
 % 		send_agent_set(EventLog, released),
 % 		timer:sleep(5),
 % 		{ok, Bin} = file:read_file(?test_fileb),
-% 		?DEBUG("Got bin:  ~p", [Bin]),
+% 		lager:debug("Got bin:  ~p", [Bin]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_unavailable : ", Node:NodeSize/binary,
 % 		" : agentName : Queue", _:1/binary, _/binary>>, Bin),
@@ -571,14 +570,14 @@ send_media_set(Pid, InProps) ->
 % 		send_agent_set(EventLog, drop),
 % 		timer:sleep(100),
 % 		{ok, Bin} = file:read_file(?test_fileb),
-% 		?DEBUG("Got bin:  ~p", [Bin]),
+% 		lager:debug("Got bin:  ~p", [Bin]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_stop : ", Node:NodeSize/binary,
 % 		" : agentName", _:1/binary, _/binary>>, Bin),
 % 		<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_stop : ", Node:NodeSize/binary,
 % 		" : agentName", _:1/binary, Rest/binary>> = Bin,
-% 		?DEBUG("Got rest:  ~p", [Rest]),
+% 		lager:debug("Got rest:  ~p", [Rest]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : agent_logout : ", Node:NodeSize/binary,
 % 		" : agentName : Queue", _:1/binary>>, Rest)
@@ -587,7 +586,7 @@ send_media_set(Pid, InProps) ->
 % 		send_media_set(EventLog, [{queue, "Queue"}]),
 % 		timer:sleep(100),
 % 		{ok, Bin} = file:read_file(?test_fileb),
-% 		?DEBUG("Got bin:  ~p", [Bin]),
+% 		lager:debug("Got bin:  ~p", [Bin]),
 % 		?assertMatch(<<_:17/binary, " : ", Lhost:LhSize/binary, " : ",
 % 		_:27/binary, " : call_enqueue : ", Node:NodeSize/binary,
 % 		" : Queue : from_header : media : Origin Code : CLS : Source IP : 9080",

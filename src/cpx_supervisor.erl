@@ -66,7 +66,6 @@
 -module(cpx_supervisor).
 -author("Micah").
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include("cpx.hrl").
@@ -141,7 +140,7 @@ start_link(Nodes) ->
 	Agentspec = {agent_sup, {cpx_middle_supervisor, start_named, [3, 5, agent_sup]}, temporary, 2000, supervisor, [?MODULE]},
 	Mediamanagerspec = {mediamanager_sup, {cpx_middle_supervisor, start_named, [3, 5, mediamanager_sup]}, permanent, 2000, supervisor, [?MODULE]},
 	Specs = [Routingspec, Agentspec, Managementspec, Mediamanagerspec],
-	?DEBUG("specs:  ~p", [supervisor:check_childspecs(Specs)]),
+	lager:debug("specs:  ~p", [supervisor:check_childspecs(Specs)]),
 
 	%load_specs(),
 	%supervisor:start_child(management_sup, Cpxmonitorspec),
@@ -187,13 +186,13 @@ start(Nodes) ->
 %% @doc Exit with reason `shutdown'
 -spec(stop/0 :: () -> 'true').
 stop() ->
-	?NOTICE("stopping ~p...", [?MODULE]),
+	lager:notice("stopping ~p...", [?MODULE]),
 	exit(whereis(?MODULE), shutdown).
 
 %% @doc In case of a branch going down, this funciton will restart the specified branch.
 -spec(restart/2 :: (Branch :: supervisor_name(), Args :: [any()]) -> 'ok').
 restart(agent_connection_sup, _Args) ->
-	?INFO("Restaring agent_connection_sup.", []),
+	lager:info("Restaring agent_connection_sup.", []),
 	supervisor:restart_child(agent_sup, agent_connection_sup);
 restart(routing_sup, Nodes) ->
 	Out = supervisor:restart_child(cpx_supervisor, routing_sup),
@@ -207,7 +206,7 @@ restart(routing_sup, Nodes) ->
 	supervisor:start_child(routing_sup, Cdrspec),
 	Out;
 restart(agent_sup, Nodes) ->
-	?INFO("Restarting agent_sup.", []),
+	lager:info("Restarting agent_sup.", []),
 	Out = supervisor:restart_child(cpx_supervisor, agent_sup),
 	Agentconnspec = {agent_connection_sup, {cpx_middle_supervisor, start_named, [3, 5, agent_connection_sup]}, temporary, 2000, supervisor, [?MODULE]},
 	AgentManagerSpec = {agent_manager, {agent_manager, start_link, [Nodes]}, permanent, 2000, worker, [?MODULE]},
@@ -227,7 +226,7 @@ set_value(Key, Value) ->
 	{ok, Locked} = application:get_env(openacd, locked_env),
 	case lists:member(Key, Locked) of
 		true ->
-			?WARNING("Env ~s only changed in database due to being in static config file.", [Key]),
+			lager:warning("Env ~s only changed in database due to being in static config file.", [Key]),
 			ok;
 		false ->
 			application:set_env('OpenACD', Key, Value)
@@ -249,7 +248,7 @@ get_value(Key) ->
 		{atomic, [Rec]} ->
 			{ok, Rec#cpx_value.value};
 		Else ->
-			?NOTICE("Error getting value for ~p:  ~p", [Key, Else]),
+			lager:notice("Error getting value for ~p:  ~p", [Key, Else]),
 			none
 	end.
 
@@ -262,7 +261,7 @@ drop_value(Key) ->
 	{ok, Locked} = application:get_env(openacd, locked_env),
 	case lists:member(Key, Locked) of
 		true ->
-			?WARNING("Setting ~s only removed from database since it also exists in static config.", [Key]),
+			lager:warning("Setting ~s only removed from database since it also exists in static config.", [Key]),
 			ok;
 		false ->
 			application:unset_env('OpenACD', Key)
@@ -274,7 +273,7 @@ drop_value(Key) ->
 %%====================================================================
 %% @private
 init([]) ->
-	?DEBUG("starting cpx_supervisor on ~p", [node()]),
+	lager:debug("starting cpx_supervisor on ~p", [node()]),
 	case build_tables() of
 		ok ->
 			{ok,{{one_for_one,3,5}, []}}
@@ -296,19 +295,19 @@ add_conf(Rec) ->
 -spec(build_spec/1 :: (Spec :: #cpx_conf{}) -> child_spec() | {'error', any()}).
 build_spec(#cpx_conf{module_name = Mod, start_function = Start, start_args = Args, id = Id}) ->
 	Spec = {Id, {Mod, Start, Args}, permanent, 20000, worker, [?MODULE]},
-	?DEBUG("Building spec:  ~p", [Spec]),
+	lager:debug("Building spec:  ~p", [Spec]),
 	case supervisor:check_childspecs([Spec]) of
 		ok ->
 			Spec;
 		Else ->
-			?ERROR("Spec failed check:  ~p", [Spec]),
+			lager:error("Spec failed check:  ~p", [Spec]),
 			Else
 	end.
 
 %% @doc Attempts to build the `cpx_conf' table.
 -spec(build_tables/0 :: () -> 'ok' | {'error', any()}).
 build_tables() ->
-	?DEBUG("cpx building tables...",[]),
+	lager:debug("cpx building tables...",[]),
 	A = util:build_table(cpx_conf, [
 		{attributes, record_info(fields, cpx_conf)},
 		{disc_copies, [node()]},
@@ -331,7 +330,7 @@ build_tables() ->
 			io:format("cpx_supervisor:build_tables, table exists~n"),
 			ok;
 		Else ->
-			?NOTICE("unusual response building tables: ~p", [Else]),
+			lager:notice("unusual response building tables: ~p", [Else]),
 			Else
 	end,
 	B = util:build_table(cpx_value, [
@@ -343,7 +342,7 @@ build_tables() ->
 		Result2 when Result2 =:= {atomic, ok}; Result2 =:= copied; Result2 =:= exists ->
 			ok;
 		Else2 ->
-			?NOTICE("unusual response building cpx_value table:  ~p", [Else2])
+			lager:notice("unusual response building cpx_value table:  ~p", [Else2])
 	end.
 
 %% @doc Adds the default configuration to the database.
@@ -388,7 +387,7 @@ update_conf(Id, Conf) when is_record(Conf, cpx_conf) ->
 						mnesia:write(Conf#cpx_conf{timestamp = util:now()}),
 						Out;
 					Else ->
-						?WARNING("Starting new spec got ~p, restarting previous configuration", [Else]),
+						lager:warning("Starting new spec got ~p, restarting previous configuration", [Else]),
 						start_spec(Rec),
 						erlang:error({start_fail, Else})
 				end;
@@ -397,7 +396,7 @@ update_conf(Id, Conf) when is_record(Conf, cpx_conf) ->
 					{atomic, {ok, Pid} = Out} when is_pid(Pid) ->
 						Out;
 					Else ->
-						?WARNING("Adding new spec got ~p", [Else]),
+						lager:warning("Adding new spec got ~p", [Else]),
 						erlang:error({start_fail, Else})
 				end
 		end
@@ -449,20 +448,20 @@ restart_spec(Conf) when is_record(Conf, cpx_conf) ->
 %% @private
 -spec(start_spec/1 :: (Spec :: #cpx_conf{}) -> {'ok', pid()} | {'ok', pid(), any()} | {'error', any()}).
 start_spec(Spec) when is_record(Spec, cpx_conf) ->
-	?DEBUG("Starting ~p with supervisor ~p", [Spec#cpx_conf.id, Spec#cpx_conf.supervisor]),
+	lager:debug("Starting ~p with supervisor ~p", [Spec#cpx_conf.id, Spec#cpx_conf.supervisor]),
 	cpx_middle_supervisor:add_with_middleman(Spec#cpx_conf.supervisor, 3, 5, Spec).
 
 -spec(stop_spec/1 :: (Spec :: #cpx_conf{}) -> 'ok').
 stop_spec(Spec) when is_record(Spec, cpx_conf) ->
 	Out = cpx_middle_supervisor:drop_child(Spec#cpx_conf.supervisor, Spec),
 %	Out = supervisor:terminate_child(Spec#cpx_conf.supervisor, Spec#cpx_conf.id),
-	?DEBUG("Out:  ~p.  Spec:  ~p.", [Out, Spec]),
+	lager:debug("Out:  ~p.  Spec:  ~p.", [Out, Spec]),
 	Out.
 
 %% @private
 %-spec(load_specs/0 :: () -> {'error', any()} | none()).
 %load_specs() ->
-%	?DEBUG("loading specs...",[]),
+%	lager:debug("loading specs...",[]),
 %	F = fun() ->
 %		QH = qlc:q([X || X <- mnesia:table(cpx_conf)]),
 %		qlc:e(QH)
@@ -471,13 +470,13 @@ stop_spec(Spec) when is_record(Spec, cpx_conf) ->
 %		{atomic, Records} ->
 %			lists:map(fun(I) -> start_spec(I) end, Records);
 %		Else ->
-%			?ERROR("unable to retrieve specs:  ~p", [Else]),
+%			lager:error("unable to retrieve specs:  ~p", [Else]),
 %			Else
 %	end.
 
 -spec(load_specs/1 :: (Super :: supervisor_name()) -> {'aborted', any()} | 'ok').
 load_specs(Super) ->
-	?DEBUG("loading specs for supervisor ~s", [Super]),
+	lager:debug("loading specs for supervisor ~s", [Super]),
 	F = fun() ->
 		QH = qlc:q([X || X <- mnesia:table(cpx_conf), X#cpx_conf.supervisor =:= Super]),
 		qlc:e(QH)
@@ -486,7 +485,7 @@ load_specs(Super) ->
 		{atomic, Records} ->
 			case length(Records) of
 				0 ->
-					?WARNING("No specs to load for ~w", [Super]),
+					lager:warning("No specs to load for ~w", [Super]),
 					ok;
 				_Else ->
 					ok
@@ -512,7 +511,7 @@ load_specs(Super) ->
 %			end,
 			lists:foreach(fun(I) -> start_spec(I) end, Records);
 		Else ->
-			?ERROR("unable to retrieve specs for ~s:  ~p", [Super, Else]),
+			lager:error("unable to retrieve specs for ~s:  ~p", [Super, Else]),
 			Else
 	end.
 
@@ -538,7 +537,7 @@ get_archive_path(Call) ->
 					{error, Reason, ExpandedPath}
 			end;
 		X ->
-			?NOTICE("got ~p", [X]),
+			lager:notice("got ~p", [X]),
 			none
 	end.
 
@@ -570,15 +569,15 @@ submit_bug_report(Options) when is_list(Options) ->
 							case proplists:get_value(<<"success">>, Props) of
 								true ->
 									Bugid = proplists:get_value(<<"issueid">>, Props),
-									?NOTICE("bug report submitted:  ~p", [Bugid]),
+									lager:notice("bug report submitted:  ~p", [Bugid]),
 									ok;
 								_ ->
 									Message = proplists:get_value(<<"message">>, Props),
-									?NOTICE("Bug report attempt errored ~p", [Message]),
+									lager:notice("Bug report attempt errored ~p", [Message]),
 									{error, Message}
 							end;
 						Else ->
-							?NOTICE("bug report attempt errored ~p", [Else]),
+							lager:notice("bug report attempt errored ~p", [Else]),
 							Else
 					end
 			end
@@ -591,11 +590,11 @@ submit_bug_report(Options) when is_list(Options) ->
 % 	{
 % 		foreach,
 % 		fun() ->
-% 			?CONSOLE("f1 ~p", [mnesia:stop()]),
-% 			?CONSOLE("f2 ~p", [mnesia:delete_schema([node()])]),
-% 			?CONSOLE("f3 ~p", [mnesia:create_schema([node()])]),
-% 			?CONSOLE("F4 ~p", [mnesia:start()]),
-% 			?CONSOLE("findme ~p", [cpx_supervisor:start([node()])])
+% 			?debugFmt("f1 ~p", [mnesia:stop()]),
+% 			?debugFmt("f2 ~p", [mnesia:delete_schema([node()])]),
+% 			?debugFmt("f3 ~p", [mnesia:create_schema([node()])]),
+% 			?debugFmt("F4 ~p", [mnesia:start()]),
+% 			?debugFmt("findme ~p", [cpx_supervisor:start([node()])])
 % 		end,
 % 		fun(_Whatever) ->
 % 			cpx_supervisor:stop(),
@@ -609,12 +608,12 @@ submit_bug_report(Options) when is_list(Options) ->
 % 				fun() ->
 % 					Valid = #cpx_conf{id = gen_server_mock, module_name = gen_server_mock, start_function = named, start_args = [{local, dummy_media_manager}], supervisor = management_sup},
 % 					Out = update_conf(gen_server_mock, Valid),
-% 					?CONSOLE("Out:  ~p", [Out]),
+% 					?debugFmt("Out:  ~p", [Out]),
 % 					QH = qlc:q([X || X <- mnesia:table(cpx_conf), X#cpx_conf.module_name =:= gen_server_mock]),
 % 					F = fun() ->
 % 						qlc:e(QH)
 % 					end,
-% 					?CONSOLE("~p", [mnesia:transaction(F)]),
+% 					?debugFmt("~p", [mnesia:transaction(F)]),
 % 					?assertMatch({atomic, [#cpx_conf{}]}, mnesia:transaction(F)),
 % 					?assert(is_pid(whereis(dummy_media_manager)))
 % 				end
@@ -641,7 +640,7 @@ submit_bug_report(Options) when is_list(Options) ->
 % 					update_conf(gen_server_mock, Spec),
 % 					?assert(is_pid(whereis(dummy_media_manager))),
 % 					destroy(gen_server_mock),
-% 					?CONSOLE("~p", [whereis(dummy_media_manager)]),
+% 					?debugFmt("~p", [whereis(dummy_media_manager)]),
 % 					?assertEqual(undefined, whereis(dummy_media_manager)),
 % 					QH = qlc:q([X || X <- mnesia:table(cpx_conf), X#cpx_conf.module_name =:= gen_server_mock]),
 % 					F = fun() ->
@@ -707,7 +706,7 @@ submit_bug_report(Options) when is_list(Options) ->
 % 					?assertMatch({aborted, {{start_fail, _}, _}}, Out),
 % 					Newpid = whereis(dummy_media_manager),
 % 					?assertNot(Oldpid =:= Newpid),
-% 					?DEBUG("new pid:  ~p", [Newpid]),
+% 					lager:debug("new pid:  ~p", [Newpid]),
 % 					?assert(is_pid(Newpid)),
 % 					QH = qlc:q([X || X <- mnesia:table(cpx_conf), X#cpx_conf.module_name =:= gen_server_mock]),
 % 					F = fun() ->
@@ -839,8 +838,8 @@ mutlinode_test_d() ->
 			mnesia:stop(),
 
 			mnesia:change_config(extra_db_nodes, [Master, Slave]),
-			?CONSOLE("~p", [mnesia:delete_schema([node(), Master, Slave])]),
-			?CONSOLE("~p", [mnesia:create_schema([node(), Master, Slave])]),
+			?debugFmt("~p", [mnesia:delete_schema([node(), Master, Slave])]),
+			?debugFmt("~p", [mnesia:create_schema([node(), Master, Slave])]),
 
 			cover:start([Master, Slave]),
 
@@ -848,8 +847,8 @@ mutlinode_test_d() ->
 			rpc:call(Slave, mnesia, start, []),
 			mnesia:start(),
 
-			?CONSOLE("~p", [mnesia:change_table_copy_type(schema, Master, disc_copies)]),
-			?CONSOLE("~p", [mnesia:change_table_copy_type(schema, Slave, disc_copies)]),
+			?debugFmt("~p", [mnesia:change_table_copy_type(schema, Master, disc_copies)]),
+			?debugFmt("~p", [mnesia:change_table_copy_type(schema, Slave, disc_copies)]),
 
 			% nix the agent_tcp_default and web_managmeent to keep addresses from binding
 			rpc:call(Master, cpx_supervisor, build_tables, []),
@@ -879,7 +878,7 @@ mutlinode_test_d() ->
 					Masterres = rpc:call(Master, ?MODULE, start, [[Master, Slave]]),
 					%timer:sleep(3000),
 					Slaveres = rpc:call(Slave, ?MODULE, start, [[Master, Slave]]),
-					?CONSOLE("M:  ~p; S:  ~p", [Masterres, Slaveres]),
+					?debugFmt("M:  ~p; S:  ~p", [Masterres, Slaveres]),
 					?assertMatch({ok, _Pid}, Masterres),
 					?assertMatch({ok, _Pid2}, Slaveres)
 				end}

@@ -33,7 +33,6 @@
 
 -behaviour(application).
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include("queue.hrl").
@@ -131,19 +130,19 @@ start(_Type, StartArgs) ->
 	try cpx_supervisor:start_link(Nodes) of
 		{ok, Pid} ->
 			application:set_env(openacd, uptime, util:now()),
-			?NOTICE("Application OpenACD started sucessfully!", []),
+			lager:notice("Application OpenACD started sucessfully!", []),
 			% to not block the shell.
 			spawn(fun init_load_plugins/0),
 			{ok, Pid}
 	catch
 		What:Why ->
-			?ERROR("Application OpenACD failed to start successfully! ~p:~p", [What, Why]),
+			lager:error("Application OpenACD failed to start successfully! ~p:~p", [What, Why]),
 			{What, Why}
 	end.
 
 -spec(prep_stop/1 :: (State :: any()) -> any()).
 prep_stop(State) ->
-	?NOTICE("Application OpenACD stopping...", []),
+	lager:notice("Application OpenACD stopping...", []),
 	State.
 
 -spec(stop/1 :: (State :: any()) -> 'ok').
@@ -316,7 +315,7 @@ load_plugin(Plugin) ->
 							application:set_env(openacd, plugins, lists:usort([Plugin | Plugins])),
 							start_plugin_app(Plugin);
 						Else ->
-							?INFO("Could not make link:  ~p", [Else]),
+							lager:info("Could not make link:  ~p", [Else]),
 							{error, Else}
 					end
 			end
@@ -1000,30 +999,30 @@ verify_apps([Appfile | Tail], Dir, Acc) ->
 			FilteredApplist = [Appname || {application, Appname, _} <- AppList, atom_to_list(Appname) ++ ".app" =:= Appfile],
 			case FilteredApplist of
 				[] ->
-					?INFO("consulting ~s did not find app config", [Appfile]),
+					lager:info("consulting ~s did not find app config", [Appfile]),
 					verify_apps(Tail, Dir, Acc);
 				[Appname] ->
 					verify_apps(Tail, Dir, [Appname | Acc])
 			end;
 		_ ->
-			?INFO("consulting ~s reveals it is not an app file.", [Appfile]),
+			lager:info("consulting ~s reveals it is not an app file.", [Appfile]),
 			verify_apps(Tail, Dir, Acc)
 	end.
 
 start_plugins(undefined) ->
-	?NOTICE("No plugin directory configured", []),
+	lager:notice("No plugin directory configured", []),
 	ok;
 start_plugins(Dir) ->
 	case add_plugin_paths(Dir) of
 		{error, badarg} ->
-			?WARNING("Plugin directory ~p is not a directory!", [Dir]),
+			lager:warning("Plugin directory ~p is not a directory!", [Dir]),
 			ok;
 		ok ->
 			Appfiles = filelib:wildcard("*.app", Dir),
 			Plugins = verify_apps(Appfiles, Dir),
 			load_plugin_envs(Plugins),
 			start_plugin_apps(Plugins),
-			?INFO("Plugin started", [])
+			lager:info("Plugin started", [])
 	end.
 
 load_plugin_envs(Plugins) ->
@@ -1036,7 +1035,7 @@ load_plugin_envs(Plugins) ->
 	end,
 	case mnesia:transaction(Transfun) of
 		{aborted, Err} ->
-			?WARNING("Could not load stored plugin envs:  ~p", [Err]);
+			lager:warning("Could not load stored plugin envs:  ~p", [Err]);
 		{atomic, Res} ->
 			[set_plugin_env(Appname0,Envs0) || {Appname0, Envs0} <- Res]
 	end.
@@ -1054,7 +1053,7 @@ load_plugin_env(Plugin) ->
 		{atomic, [Env]} ->
 			set_plugin_env(Plugin, Env);
 		Else ->
-			?WARNING("Could not load plugin ~p env:  ~p", [Plugin, Else])
+			lager:warning("Could not load plugin ~p env:  ~p", [Plugin, Else])
 	end.
 
 save_plugin_env(Plugin, Envs) ->
@@ -1064,10 +1063,10 @@ save_plugin_env(Plugin, Envs) ->
 		mnesia:write(Rec)
 	end,
 	Res = mnesia:transaction(Transfun),
-	?INFO("Result of saving plugin ~p env:  ~p", [Plugin, Res]).
+	lager:info("Result of saving plugin ~p env:  ~p", [Plugin, Res]).
 
 start_plugin_apps(undefined) ->
-	?INFO("No plugins to start", []),
+	lager:info("No plugins to start", []),
 	ok;
 start_plugin_apps({ok, Plugins}) ->
 	start_plugin_apps(Plugins);
@@ -1081,13 +1080,13 @@ start_plugin_app(Plugin) ->
 	StartFun = fun() ->
 		case application:start(Plugin) of
 			ok ->
-				?INFO("Started plugin ~p", [Plugin]),
+				lager:info("Started plugin ~p", [Plugin]),
 				ok;
 			{error, {already_started, Plugin}} ->
-				?DEBUG("Plugin ~p already started", [Plugin]),
+				lager:debug("Plugin ~p already started", [Plugin]),
 				ok;
 			{error, Else} ->
-				?INFO("Plugin ~p not started due to ~p", [Plugin, Else]),
+				lager:info("Plugin ~p not started due to ~p", [Plugin, Else]),
 				ok
 		end
 	end,
@@ -1095,7 +1094,7 @@ start_plugin_app(Plugin) ->
 		{error, {already_loaded, Plugin}} ->
 			StartFun();
 		{error, Reason} ->
-			?INFO("Plugin ~p app load failed:  ~p", [Plugin, Reason]),
+			lager:info("Plugin ~p app load failed:  ~p", [Plugin, Reason]),
 			ok;
 		ok ->
 			{ok, Keys} = application:get_all_key(Plugin),
@@ -1115,7 +1114,7 @@ add_plugin_paths() ->
 add_plugin_paths(PluginDir) ->
 	case filelib:is_dir(PluginDir) of
 		false ->
-			?ERROR("plugin_dir ~p not a directory", [PluginDir]),
+			lager:error("plugin_dir ~p not a directory", [PluginDir]),
 			{error, badarg};
 		true ->
 			{ok, AppDirs} = file:list_dir(PluginDir),
@@ -1132,7 +1131,7 @@ add_plugin_paths(PluginDir) ->
 %add_plugin_deps([Dep | Tail], Dir) ->
 %	case filelib:is_dir(filename:join([Dir, "deps", Dep, "ebin"])) of
 %		true ->
-%			?INFO("Adding plugin dependancy  ~p to code path", [Dep]),
+%			lager:info("Adding plugin dependancy  ~p to code path", [Dep]),
 %			true = code:add_pathz(filename:join([Dir, "deps", Dep, "ebin"]));
 %		false ->
 %			ok
@@ -1149,7 +1148,7 @@ add_plugin_paths(PluginDir) ->
 %start_plugin_apps([Plugin | Tail], Dir, AccApps) ->
 %	NewAcc = case filelib:is_dir(filename:join([Dir, Plugin, "ebin"])) of
 %		true ->
-%			?INFO("Adding plugin ~p to code path", [Plugin]),
+%			lager:info("Adding plugin ~p to code path", [Plugin]),
 %			true = code:add_pathz(filename:join([Dir, Plugin, "ebin"])),
 %			case filelib:is_dir(filename:join([Dir, Plugin, "deps"])) of
 %				true ->
@@ -1164,10 +1163,10 @@ add_plugin_paths(PluginDir) ->
 %					[application:start(App) || App <- Apps],
 %					PluginApp = list_to_atom(Plugin),
 %					StartRes = application:start(PluginApp),
-%					?INFO("starting plugin ~p:  ~p", [Plugin, StartRes]),
+%					lager:info("starting plugin ~p:  ~p", [Plugin, StartRes]),
 %					[PluginApp | AccApps];
 %				{error, Err} ->
-%					?WARNING("Plugin ~s failed to start due to app file read error ~p.", [Plugin, Err]),
+%					lager:warning("Plugin ~s failed to start due to app file read error ~p.", [Plugin, Err]),
 %					AccApps
 %			end;
 %		false ->
@@ -1202,18 +1201,18 @@ init_mnesia(Nodes) ->
 init_load_plugins() ->
 	case cpx:get_env(plugin_dir) of
 		undefined ->
-			?INFO("No plugin dir", []);
+			lager:info("No plugin dir", []);
 		{ok, PluginDir} ->
 			case filelib:ensure_dir(filename:join(PluginDir, "touch")) of
 				ok ->
 					start_plugins(PluginDir);
 				{error, Error} ->
-					?ERROR("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
+					lager:error("Could not ensure plugin directory ~s exists:  ~p", [PluginDir, Error])
 			end
 	end,
 	case cpx:get_env(plugins, []) of
 		undefined ->
-			?INFO("No plugins to load", []);
+			lager:info("No plugins to load", []);
 		{ok, Plugins} ->
 			start_plugin_apps(Plugins)
 	end.

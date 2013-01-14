@@ -34,7 +34,6 @@
 -module(dispatch_manager).
 -author("Micah").
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 
@@ -109,7 +108,7 @@ end_avail(AgentPid) ->
 %%====================================================================
 %% @private
 init([]) ->
-	?DEBUG("~p starting at ~p", [?MODULE, node()]),
+	lager:debug("~p starting at ~p", [?MODULE, node()]),
 	process_flag(trap_exit, true),
 	case whereis(agent_manager) of
 		undefined ->
@@ -118,14 +117,14 @@ init([]) ->
 			Agents = agent_manager:list(),
 			spawn(fun() ->
 				timer:sleep(10),
-				?DEBUG("Spawn waking up with agents ~p", [Agents]),
+				lager:debug("Spawn waking up with agents ~p", [Agents]),
 				[case A#agent_cache.channels of
 					[] ->
 						dispatch_manager:end_avail(A#agent_cache.pid);
 					_ ->
 						dispatch_manager:now_avail(A#agent_cache.pid, A#agent_cache.channels)
 				end || {_Id, A} <- Agents],
-				?DEBUG("Spawn done.", [])
+				lager:debug("Spawn done.", [])
 			end),
 			{ok, #state{}}
 	end.
@@ -148,7 +147,7 @@ handle_call(Request, _From, State) ->
 %%--------------------------------------------------------------------
 %% @private
 handle_cast({now_avail, AgentPid, Channels}, #state{channel_count = Chans} = State) ->
-	?DEBUG("Someone's (~p) available now.", [AgentPid]),
+	lager:debug("Someone's (~p) available now.", [AgentPid]),
 	case dict:find(AgentPid, State#state.agents) of
 		{ok, {_Ref, Channels}} ->
 			{noreply, balance(State)};
@@ -165,7 +164,7 @@ handle_cast({now_avail, AgentPid, Channels}, #state{channel_count = Chans} = Sta
 			{noreply, balance(State2)}
 	end;
 handle_cast({end_avail, AgentPid}, State) ->
-	?DEBUG("An agent (~p) is no longer available.", [AgentPid]),
+	lager:debug("An agent (~p) is no longer available.", [AgentPid]),
 	{NewDict, NewCount} = case dict:find(AgentPid, State#state.agents) of
 		error ->
 			{State#state.agents, State#state.channel_count};
@@ -198,7 +197,7 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 %% @private
 handle_info({'DOWN', _MonitorRef, process, Object, _Info}, State) ->
-	?DEBUG("Announcement that an agent (~p) is down, balancing in response.", [Object]),
+	lager:debug("Announcement that an agent (~p) is down, balancing in response.", [Object]),
 	case dict:find(Object, State#state.agents) of
 		error ->
 			{noreply, balance(State)};
@@ -211,10 +210,10 @@ handle_info({'DOWN', _MonitorRef, process, Object, _Info}, State) ->
 handle_info({'EXIT', Pid, Reason}, #state{dispatchers = Dispatchers} = State) ->
 	case (Reason =:= normal orelse Reason =:= shutdown) of
 		true ->
-			%?DEBUG("Dispatcher exited normally ~p", [Pid]),
+			%lager:debug("Dispatcher exited normally ~p", [Pid]),
 			ok;
 		false ->
-			?NOTICE("Dispatcher unexpected exit:  ~p ~p", [Pid, Reason])
+			lager:notice("Dispatcher unexpected exit:  ~p ~p", [Pid, Reason])
 	end,
 	CleanD = lists:delete(Pid, Dispatchers),
 	State2 = State#state{dispatchers = CleanD},
@@ -227,7 +226,7 @@ handle_info(_Info, State) ->
 %%--------------------------------------------------------------------
 %% @private
 terminate(Reason, State) ->
-	?NOTICE("Termination cause:  ~p.  State:  ~p", [Reason, State]),
+	lager:notice("Termination cause:  ~p.  State:  ~p", [Reason, State]),
 	ok.
 
 %%--------------------------------------------------------------------
@@ -247,7 +246,7 @@ balance(#state{dispatchers = Dispatchers, channel_count = NumAgents} = State) ->
 	NumDisp = length(Dispatchers),
 	case NumAgents of
 		X when X > NumDisp ->
-			?DEBUG("Starting new dispatcher",[]),
+			lager:debug("Starting new dispatcher",[]),
 			case dispatcher:start_link() of
 				{ok, Pid} ->
 					balance(State#state{dispatchers = [ Pid | Dispatchers]});
@@ -255,14 +254,14 @@ balance(#state{dispatchers = Dispatchers, channel_count = NumAgents} = State) ->
 					balance(State)
 			end;
 		_ ->
-			?DEBUG("It is fully balanced!",[]),
+			lager:debug("It is fully balanced!",[]),
 			State
 	end.
 
 %balance(State) when length(State#state.agents) < length(State#state.dispatchers) ->
-%	%?DEBUG("Killing a dispatcher",[]),
+%	%lager:debug("Killing a dispatcher",[]),
 %	%[Pid | Dispatchers] = State#state.dispatchers,
-%	%?DEBUG("Pid I'm about to kill: ~p.", [Pid]),
+%	%lager:debug("Pid I'm about to kill: ~p.", [Pid]),
 %	%try dispatcher:stop(Pid) of
 %		%ok ->
 %			% if it dies, we'll get the exit message.
@@ -282,7 +281,7 @@ balance(#state{dispatchers = Dispatchers, channel_count = NumAgents} = State) ->
 %			State
 %	end;
 %balance(State) ->
-%	?DEBUG("It is fully balanced!",[]),
+%	lager:debug("It is fully balanced!",[]),
 %	State.
 
 %balance_down(Out, _In, 0, _Force) ->
@@ -290,14 +289,14 @@ balance(#state{dispatchers = Dispatchers, channel_count = NumAgents} = State) ->
 %balance_down(Out, [], _Count, true) ->
 %	lists:reverse(Out);
 %balance_down(Out, [], Count, false) ->
-%	?DEBUG("switching to hard kill mode; ~p holdouts", [Count]),
+%	lager:debug("switching to hard kill mode; ~p holdouts", [Count]),
 %	balance_down([], lists:reverse(Out), Count, true);
 %balance_down(Out, [D | In], Count, Force) ->
 %	try dispatcher:stop(D, Force) of
 %		ok ->
 %			balance_down(Out, In, Count - 1, Force);
 %		_ ->
-%			?DEBUG("dispatcher declined to die", []),
+%			lager:debug("dispatcher declined to die", []),
 %			balance_down([D | Out], In, Count, Force)
 %	catch
 %		_:_ ->

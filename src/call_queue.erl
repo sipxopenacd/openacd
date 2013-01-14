@@ -44,7 +44,6 @@
 
 -behaviour(gen_server).
 
--include("log.hrl").
 -include("call.hrl").
 -include("queue.hrl").
 
@@ -419,7 +418,7 @@ selection_info(Qpid) ->
 
 %% @private
 init([Name, Opts]) ->
-	?DEBUG("Starting queue ~p at ~p", [Name, node()]),
+	lager:debug("Starting queue ~p at ~p", [Name, node()]),
 	process_flag(trap_exit, true),
 	State = #state{
 		name = Name,
@@ -466,7 +465,7 @@ handle_call({add, _, _, _}, _From, #state{flag = exit_when_empty} = State) ->
 	{reply, invalid, State};
 handle_call({add, Priority, Callpid, Callrec}, From, State) when is_pid(Callpid) ->
 	% cook is started on the same node callpid is on
-	?INFO("adding call ~p to ~p request from ~p on node ~p", [Callrec#call.id, State#state.name, From, node(Callpid)]),
+	lager:info("adding call ~p to ~p request from ~p on node ~p", [Callrec#call.id, State#state.name, From, node(Callpid)]),
 	Key = {Priority, now()},
 	{ok, Cookpid} = cook:start_at(node(Callpid), Callpid, State#state.recipe, State#state.name, self(), Key),
 	NewState = queue_call(Cookpid, Callrec, Key, State),
@@ -524,10 +523,10 @@ handle_call(dump, _From, State) ->
 	{reply, State, State};
 
 handle_call({remove, Callpid}, _From, State) ->
-	?INFO("Trying to remove call ~p from ~p", [Callpid, State#state.name]),
+	lager:info("Trying to remove call ~p from ~p", [Callpid, State#state.name]),
 	case find_by_pid(Callpid, State#state.queue) of
 		none ->
-			?INFO("Did not find call ~w in ~p", [Callpid, State#state.name]),
+			lager:info("Did not find call ~w in ~p", [Callpid, State#state.name]),
 			{reply, none, State};
 		{Key, #queued_call{cook=Cookpid} = Qcall} ->
 			unlink(Cookpid),
@@ -535,7 +534,7 @@ handle_call({remove, Callpid}, _From, State) ->
 			State2 = State#state{queue=gb_trees:delete(Key, State#state.queue)},
 			lists:foreach(fun(D) -> exit(D, kill) end, Qcall#queued_call.dispatchers),
 			set_cpx_mon(State2),
-			?INFO("Removed call ~p from queue ~p", [Qcall#queued_call.id, State#state.name]),
+			lager:info("Removed call ~p from queue ~p", [Qcall#queued_call.id, State#state.name]),
 			case State#state.flag of
 				exit_when_empty ->
 					case gb_trees:size(State2#state.queue) of
@@ -612,17 +611,17 @@ handle_call(Request, _From, State) ->
 
 %% @private
 handle_cast({remove, Callpid}, State) ->
-	?INFO("Trying to remove call ~p (cast) from ~p", [Callpid, State#state.name]),
+	lager:info("Trying to remove call ~p (cast) from ~p", [Callpid, State#state.name]),
 	case find_by_pid(Callpid, State#state.queue) of
 		none ->
-			?INFO("Did not find ~p (cast) in ~p", [Callpid, State#state.name]),
+			lager:info("Did not find ~p (cast) in ~p", [Callpid, State#state.name]),
 			{noreply, State};
 		{Key, #queued_call{cook=Cookpid, id=ID}} ->
 			unlink(Cookpid),
 			cook:stop(Cookpid),
 			State2 = State#state{queue=gb_trees:delete(Key, State#state.queue)},
 			set_cpx_mon(State2),
-			?INFO("Removed ~p from ~p", [ID, State#state.name]),
+			lager:info("Removed ~p from ~p", [ID, State#state.name]),
 			case State#state.flag of
 				exit_when_empty ->
 					case gb_trees:size(State2#state.queue) of
@@ -634,7 +633,7 @@ handle_cast({remove, Callpid}, State) ->
 			end
 	end;
 handle_cast({add_at, Key, Mediapid, Mediarec}, State) ->
-	?INFO("adding call ~p to ~p on node ~p at position ~p", [Mediarec#call.id, State#state.name, node(Mediapid), Key]),
+	lager:info("adding call ~p to ~p on node ~p at position ~p", [Mediarec#call.id, State#state.name, node(Mediapid), Key]),
 	% cook is started on the same node Mediapid is on
 	{ok, Cookpid} = cook:start_at(node(Mediapid), Mediapid, State#state.recipe, State#state.name, self(), Key),
 	NewState = queue_call(Cookpid, Mediarec, Key, State),
@@ -650,7 +649,7 @@ handle_cast({update, Opts}, State) ->
 	},
 	{noreply, Newstate};
 handle_cast(Msg, State) ->
-	?DEBUG("Unhandled cast ~p for ~p", [Msg, State#state.name]),
+	lager:debug("Unhandled cast ~p for ~p", [Msg, State#state.name]),
 	{noreply, State}.
 
 %% =====
@@ -659,10 +658,10 @@ handle_cast(Msg, State) ->
 
 %% @private
 handle_info({'DOWN', _Ref, process, Pid, Reason}, State) ->
-	?NOTICE("~p Handling down process ~p due to ~p", [State#state.name, Pid, Reason]),
+	lager:notice("~p Handling down process ~p due to ~p", [State#state.name, Pid, Reason]),
 	case find_by_pid(Pid, State#state.queue) of
 		none ->
-			?INFO("~p Did not find pid ~w", [State#state.name, Pid]),
+			lager:info("~p Did not find pid ~w", [State#state.name, Pid]),
 			{noreply, State};
 		{Key, #queued_call{cook=Cookpid, dispatchers = Dips}} ->
 			cook:stop(Cookpid),
@@ -674,13 +673,13 @@ handle_info({'DOWN', _Ref, process, Pid, Reason}, State) ->
 handle_info({'EXIT', From, Reason}, State) ->
 	case whereis(queue_manager) of
 		undefined ->
-			?ERROR("~p Can't find the manager.  dying", [State#state.name]),
+			lager:error("~p Can't find the manager.  dying", [State#state.name]),
 			{stop, {queue_manager, Reason}, State};
 		From ->
-			?NOTICE("~p Handling exit of queue manager with reason ~p.  Dying with it.", [State#state.name, Reason]),
+			lager:notice("~p Handling exit of queue manager with reason ~p.  Dying with it.", [State#state.name, Reason]),
 			{stop, {queue_manager_died, Reason}, State};
 		_Else ->
-			?DEBUG("~p got exit of ~w due to ~p; looping through calls", [State#state.name, From, Reason]),
+			lager:debug("~p got exit of ~w due to ~p; looping through calls", [State#state.name, From, Reason]),
 			Calls = gb_trees:to_list(State#state.queue),
 			Cleancalls = clean_pid(From, State#state.recipe, Calls, State#state.name),
 			Newtree = gb_trees:from_orddict(Cleancalls),
@@ -688,7 +687,7 @@ handle_info({'EXIT', From, Reason}, State) ->
 			{noreply, State#state{queue=Newtree}}
 	end;
 handle_info(Info, State) ->
-	?DEBUG("~p got info ~p", [State#state.name, Info]),
+	lager:debug("~p got info ~p", [State#state.name, Info]),
 	{noreply, State}.
 
 %% =====
@@ -697,12 +696,12 @@ handle_info(Info, State) ->
 
 %% @private
 terminate(Reason, State) when is_atom(Reason) andalso Reason =:= normal orelse Reason =:= shutdown ->
-	?NOTICE("~p terminated with reason ~p", [State#state.name, Reason]),
+	lager:notice("~p terminated with reason ~p", [State#state.name, Reason]),
 	lists:foreach(fun({_K,V}) when is_pid(V#call.cook) -> cook:stop(V#call.cook); (_) -> ok end, gb_trees:to_list(State#state.queue)),
 	set_cpx_mon(State, delete),
 	ok;
 terminate(Reason, State) ->
-	?NOTICE("~p unusual terminate:  ~p", [State#state.name, Reason]),
+	lager:notice("~p unusual terminate:  ~p", [State#state.name, Reason]),
 	set_cpx_mon(State, delete),
 	ok.
 
@@ -731,7 +730,7 @@ queue_call(Cookpid, Callrec, Key, State) ->
 			State#state{queue = Trees}
 	catch
 		error:{key_exists, _} ->
-			?ERROR("Call ~p is already queued in ~p at ~p", [Callrec#call.id, State#state.name, Key]),
+			lager:error("Call ~p is already queued in ~p at ~p", [Callrec#call.id, State#state.name, Key]),
 			State
 	end.
 
@@ -764,14 +763,14 @@ set_cpx_mon(State, Watch) ->
 %% Cleans up both dead dispatchers and dead cooks from the calls.
 -spec(clean_pid/4 :: (Deadpid :: pid(), Recipe :: recipe(), Calls :: [{call_key(), #queued_call{}}], QName :: string()) -> [{call_key(), #queued_call{}}]).
 clean_pid(Deadpid, Recipe, Calls, QName) ->
-	?INFO("Cleaning dead pids out...", []),
+	lager:info("Cleaning dead pids out...", []),
 	clean_pid_(Deadpid, Recipe, QName, Calls, []).
 
 clean_pid_(_Deadpid, _Recipe, _QName, [], Acc) ->
 	lists:reverse(Acc);
 clean_pid_(Deadpid, Recipe, QName, [{Key, #queued_call{cook = Deadpid} = Call} | Calls], Acc) ->
 	{ok, Pid} = cook:start_at(node(Call#queued_call.media), Call#queued_call.media, Recipe, QName, self(), Key),
-	?NOTICE("Cook for ~p died - respawning as ~p", [Call#queued_call.id, Pid]),
+	lager:notice("Cook for ~p died - respawning as ~p", [Call#queued_call.id, Pid]),
 	link(Pid),
 	Cleancall = Call#queued_call{cook = Pid},
 	gen_media:set_cook(Call#queued_call.media, Pid),
@@ -1381,22 +1380,22 @@ queue_manager_and_cook_test_() ->
 % 		fun({Pid, Dummy}) ->
 % 			unregister(media_dummy),
 % 			exit(Dummy, normal),
-% 			?CONSOLE("Das pid:  ~p", [Pid]),
+% 			?debugFmt("Das pid:  ~p", [Pid]),
 % 			call_queue:stop(Pid),
 % 			queue_manager:stop()
 % 			%try call_queue:stop(Pid)
 % 			%catch
 % 				%What1:Why1 ->
-% 					%?CONSOLE("Cleanup of call_queue caught ~p:~p", [What1, Why1])
+% 					%?debugFmt("Cleanup of call_queue caught ~p:~p", [What1, Why1])
 % 			%end,
 % 			%case whereis(queue_manager) of
 % 				%undefined ->
-% 					%?CONSOLE("queue_manager already dead.", []);
+% 					%?debugFmt("queue_manager already dead.", []);
 % 				%_Else ->
 % 					%try queue_manager:stop()
 % 					%catch
 % 						%What2:Why2 ->
-% 							%?CONSOLE("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
+% 							%?debugFmt("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
 % 					%end
 % 			%end
 % 		end,
@@ -1551,22 +1550,22 @@ queue_manager_and_cook_test_() ->
 % 		fun({Pid, Dummy}) ->
 % 			unregister(media_dummy),
 % 			exit(Dummy, normal),
-% 			?CONSOLE("Das pid:  ~p", [Pid]),
+% 			?debugFmt("Das pid:  ~p", [Pid]),
 % 			call_queue:stop(Pid),
 % 			queue_manager:stop()
 % 			%try call_queue:stop(Pid)
 % 			%catch
 % 				%What1:Why1 ->
-% 					%?CONSOLE("Cleanup of call_queue caught ~p:~p", [What1, Why1])
+% 					%?debugFmt("Cleanup of call_queue caught ~p:~p", [What1, Why1])
 % 			%end,
 % 			%case whereis(queue_manager) of
 % 				%undefined ->
-% 					%?CONSOLE("queue_manager already dead.", []);
+% 					%?debugFmt("queue_manager already dead.", []);
 % 				%_Else ->
 % 					%try queue_manager:stop()
 % 					%catch
 % 						%What2:Why2 ->
-% 							%?CONSOLE("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
+% 							%?debugFmt("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
 % 					%end
 % 			%end
 % 		end,
@@ -1722,7 +1721,7 @@ queue_manager_and_cook_test_() ->
 % 					%dummy_media:set_brand(Dummy1, #client{label="Test Brand"}),
 % 					?assertEqual(ok, add(Pid, Dummy1)),
 % 					{_Key, Call2} = get_call(Pid, "C1"),
-% 					?DEBUG("de skillz:  ~p", [Call2#queued_call.skills]),
+% 					lager:debug("de skillz:  ~p", [Call2#queued_call.skills]),
 % 					%% gen_media will swallow up clients it can't confirm are real.
 % 					?assertEqual(true, lists:member({'_brand', undefined}, Call2#queued_call.skills))
 % 				end
@@ -1733,7 +1732,7 @@ queue_manager_and_cook_test_() ->
 % 					%dummy_media:set_skills(Dummy1, ['_brand']),
 % 					?assertEqual(ok, add(Pid, Dummy1)),
 % 					{_Key, Call2} = get_call(Pid, "C1"),
-% 					?DEBUG("skills:  ~p", [Call2#queued_call.skills]),
+% 					lager:debug("skills:  ~p", [Call2#queued_call.skills]),
 % 					?assertEqual(true, lists:member({'_brand', undefined}, Call2#queued_call.skills))
 % 				end
 % 			}, {
@@ -1760,7 +1759,7 @@ queue_manager_and_cook_test_() ->
 % 				end
 % 			}, {
 % 				"The Media dies during cook start", fun() ->
-% 					?CONSOLE("Media dies during cook start test begins", []),
+% 					?debugFmt("Media dies during cook start test begins", []),
 % 					Pid = whereis(testqueue),
 % 					{ok, Dummy1} = dummy_media:start([{id, "C1"}, {queues, none}]),
 % 					add(Pid, Dummy1),
@@ -1770,7 +1769,7 @@ queue_manager_and_cook_test_() ->
 % 				end
 % 			}, {
 % 				"Media dies", fun() ->
-% 					?CONSOLE("Media dies", []),
+% 					?debugFmt("Media dies", []),
 % 					Pid = whereis(testqueue),
 % 					{ok, Dummy1} = dummy_media:start([{id, "C1"}, {queues, none}]),
 % 					add(Pid, Dummy1),
@@ -1799,22 +1798,22 @@ queue_manager_and_cook_test_() ->
 % 		fun({Pid, Dummy}) ->
 % 			unregister(media_dummy),
 % 			exit(Dummy, normal),
-% 			?CONSOLE("Das pid:  ~p", [Pid]),
+% 			?debugFmt("Das pid:  ~p", [Pid]),
 % 			call_queue:stop(Pid),
 % 			queue_manager:stop()
 % 			%try call_queue:stop(Pid)
 % 			%catch
 % 				%What1:Why1 ->
-% 					%?CONSOLE("Cleanup of call_queue caught ~p:~p", [What1, Why1])
+% 					%?debugFmt("Cleanup of call_queue caught ~p:~p", [What1, Why1])
 % 			%end,
 % 			%case whereis(queue_manager) of
 % 				%undefined ->
-% 					%?CONSOLE("queue_manager already dead.", []);
+% 					%?debugFmt("queue_manager already dead.", []);
 % 				%_Else ->
 % 					%try queue_manager:stop()
 % 					%catch
 % 						%What2:Why2 ->
-% 							%?CONSOLE("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
+% 							%?debugFmt("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
 % 					%end
 % 			%end
 % 		end,
@@ -1888,22 +1887,22 @@ queue_manager_and_cook_test_() ->
 % 			fun({Pid, Dummy}) ->
 % 				unregister(media_dummy),
 % 				exit(Dummy, normal),
-% 				?CONSOLE("Das pid:  ~p", [Pid]),
+% 				?debugFmt("Das pid:  ~p", [Pid]),
 % 				call_queue:stop(Pid),
 % 				queue_manager:stop()
 % 				%try call_queue:stop(Pid)
 % 				%catch
 % 					%What1:Why1 ->
-% 						%?CONSOLE("Cleanup of call_queue caught ~p:~p", [What1, Why1])
+% 						%?debugFmt("Cleanup of call_queue caught ~p:~p", [What1, Why1])
 % 				%end,
 % 				%case whereis(queue_manager) of
 % 					%undefined ->
-% 						%?CONSOLE("queue_manager already dead.", []);
+% 						%?debugFmt("queue_manager already dead.", []);
 % 					%_Else ->
 % 						%try queue_manager:stop()
 % 						%catch
 % 							%What2:Why2 ->
-% 								%?CONSOLE("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
+% 								%?debugFmt("Cleanup of queue_manager caught ~p:~p", [What2, Why2])
 % 						%end
 % 				%end
 % 			end,
@@ -1915,7 +1914,7 @@ queue_manager_and_cook_test_() ->
 % 						Dummy1 = whereis(media_dummy),
 % 						{_Key1, Call1} = get_call(Pid, Dummy1),
 % 						?assertEqual(Call1#queued_call.media, Dummy1),
-% 						?CONSOLE("Dummy1: ~p~nCall1:  ~p~nQPid:  ~p", [Dummy1, Call1, Pid]),
+% 						?debugFmt("Dummy1: ~p~nCall1:  ~p~nQPid:  ~p", [Dummy1, Call1, Pid]),
 % 						gen_server:stop(Call1#queued_call.cook, test_kill),
 % 						?assert(is_process_alive(Call1#queued_call.cook) =:= false),
 % 						receive
@@ -1992,7 +1991,7 @@ queue_manager_and_cook_test_() ->
 % 					% be faking a dispatcher.
 % 					timer:sleep(10),
 % 					Queue = rpc:call(Slave, queue_manager, get_queue, ["testqueue"]),
-% 					?DEBUG("queue: ~p", [Queue]),
+% 					lager:debug("queue: ~p", [Queue]),
 
 % 					% ensure an empty queue says that it is indeed empty.
 % 					?assertEqual(none, rpc:call(Master, call_queue, grab, [Queue])),

@@ -5,7 +5,6 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include("agent.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 
@@ -44,7 +43,7 @@ start(Nodes) ->
 	case build_tables(Nodes) of
 		ok -> ok;
 		Else ->
-			?WARNING("Some tables didn't build, this may crash later. ~p", [Else])
+			lager:warning("Some tables didn't build, this may crash later. ~p", [Else])
 	end,
 	gen_event:start({local, ?MODULE}).
 
@@ -61,7 +60,7 @@ start_link(Nodes) ->
 	case build_tables(Nodes) of
 		ok -> ok;
 		Else ->
-			?WARNING("Some tables didn't build, this may crash later. ~p", [Else])
+			lager:warning("Some tables didn't build, this may crash later. ~p", [Else])
 	end,
 	gen_event:start_link({local, ?MODULE}).
 
@@ -82,11 +81,11 @@ agent_init(Agent) when is_record(Agent, agent) ->
 			false ->
 				ok = gen_event:add_sup_handler(?MODULE, {?MODULE, Id}, Agent);
 			_ ->
-				?INFO("Agent Event already initialized for ~s", [Agent#agent.login])
+				lager:info("Agent Event already initialized for ~s", [Agent#agent.login])
 		end
 	end catch
 		What:Why ->
-			?ERROR("Initializing Agent Event Failed due to ~p:~p", [What,Why]),
+			lager:error("Initializing Agent Event Failed due to ~p:~p", [What,Why]),
 			{What, Why}
 	end.
 
@@ -120,11 +119,11 @@ agent_channel_init(Agent, ChannelId, Statename, Statedata) ->
 			false ->
 				ok = gen_event:add_sup_handler(?MODULE, {?MODULE, ChannelId}, [Agent, ChannelId, Statename, Statedata]);
 			_ ->
-				?INFO("Agent channel ~p already has event initialized", [ChannelId])
+				lager:info("Agent channel ~p already has event initialized", [ChannelId])
 		end
 	end catch
 		What:Why ->
-			?ERROR("Initialization failed for channel id ~s:~p due to ~p:~p", [Agent, ChannelId, What, Why]),
+			lager:error("Initialization failed for channel id ~s:~p due to ~p:~p", [Agent, ChannelId, What, Why]),
 			{What, Why}
 	end.
 
@@ -152,7 +151,7 @@ truncate(AgentId) ->
 		{atomic, {Agents, Channels}} ->
 			signal_cpx_monitor_truncate(Agents, Channels);
 		{aborted, Else} ->
-			?WARNING("Could not truncate:  ~p", [Else])
+			lager:warning("Could not truncate:  ~p", [Else])
 	end.
 
 %% =====
@@ -184,7 +183,7 @@ init([Agent, ChannelId, Statename, Statedata]) when is_pid(ChannelId) ->
 		ok ->
 			{ok, {AgentPid, ChannelId}};
 		_Else ->
-			?WARNING("Storing initial agent channel event for ~p failed", [ChannelId]),
+			lager:warning("Storing initial agent channel event for ~p failed", [ChannelId]),
 			{ok, {AgentPid, ChannelId}}
 	end;
 
@@ -225,7 +224,7 @@ init(Agent) when is_record(Agent, agent) ->
 		ok ->
 			{ok, Agent};
 		Res ->
-			?WARNING("res of agent state login:  ~p", [Res]),
+			lager:warning("res of agent state login:  ~p", [Res]),
 			{ok, Agent}
 	end.
 
@@ -285,7 +284,7 @@ handle_event({change_state, #agent{id = Id}, NewAgent},
 		ok ->
 			{ok, NewAgent};
 		Res ->
-			?WARNING("res of agent ~p state change ~p log:  ~p", [Id, State, Res]),
+			lager:warning("res of agent ~p state change ~p log:  ~p", [Id, State, Res]),
 			{ok, NewAgent}
 	end;
 
@@ -328,7 +327,7 @@ handle_event({change_agent_channel, ChanId, Statename, Statedata},
 		ok ->
 			{ok, State};
 		Res ->
-			?WARNING("res of the agent channel ~p state change ~p:~p log: ~p", [ChanId, Statename, Statedata, Res]),
+			lager:warning("res of the agent channel ~p state change ~p:~p log: ~p", [ChanId, Statename, Statedata, Res]),
 			{ok, State}
 	end;
 
@@ -351,7 +350,7 @@ handle_call(_Request, State) ->
 %% @private
 
 handle_info(Info, State) ->
-	?DEBUG("Some info:  ~p", [Info]),
+	lager:debug("Some info:  ~p", [Info]),
 	{ok, State}.
 
 %% ----
@@ -360,7 +359,7 @@ handle_info(Info, State) ->
 
 %% @private
 terminate({stop, Reason}, {_AgentId, ChanPid}) ->
-	?DEBUG("Seems the channel ~p stopped:  ~p", [ChanPid, Reason]),
+	lager:debug("Seems the channel ~p stopped:  ~p", [ChanPid, Reason]),
 	Now = util:now(),
 	Transfun = fun() ->
 		BaseRec = terminate_states(ChanPid, Now),
@@ -375,7 +374,7 @@ terminate({stop, Reason}, {_AgentId, ChanPid}) ->
 	mnesia:async_dirty(Transfun);
 
 terminate({stop, Reason}, #agent{id = AgentId} = Agent) ->
-	?DEBUG("Agent ~s stopped:  ~p", [Agent#agent.login, Reason]),
+	lager:debug("Agent ~s stopped:  ~p", [Agent#agent.login, Reason]),
 	Now = util:now(),
 	Transfun = fun() ->
 		Basestate = terminate_states(AgentId, Now),
@@ -388,7 +387,7 @@ terminate({stop, Reason}, #agent{id = AgentId} = Agent) ->
 	mnesia:async_dirty(Transfun);
 
 terminate(Why, _State) ->
-	?INFO("Some other exit:  %p", [Why]),
+	lager:info("Some other exit:  %p", [Why]),
 	ok.
 
 %% -----
@@ -452,7 +451,7 @@ build_tables(Nodes) ->
 	case {lists:member(Agent, Successes), lists:member(Channel, Successes)} of
 		{true, true} -> ok;
 		_ ->
-			?WARNING("One of the tables didn't build.  Agent:  ~p;  Channel:  ~p", [Agent, Channel]),
+			lager:warning("One of the tables didn't build.  Agent:  ~p;  Channel:  ~p", [Agent, Channel]),
 			{Agent, Channel}
 	end.
 

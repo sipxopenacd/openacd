@@ -37,7 +37,6 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include("queue.hrl").
 -include("call.hrl").
 
@@ -106,7 +105,7 @@ load_queue(Name) ->
 		{ok, Qrec} when is_record(Qrec, call_queue) ->
 			case get_queue(Name) of
 				Qpid when is_pid(Qpid) ->
-					?NOTICE("Updating running queue configuration for ~p at ~p", [Name, Qpid]),
+					lager:notice("Updating running queue configuration for ~p at ~p", [Name, Qpid]),
 					gen_server:cast(Qpid, {update, [{group, Qrec#call_queue.group},
 								{recipe, Qrec#call_queue.recipe}, {weight, Qrec#call_queue.weight},
 								{skills, Qrec#call_queue.skills}]}),
@@ -130,7 +129,7 @@ load_queue(Name) ->
 get_queue(Name) ->
 	case gen_leader:leader_call(?MODULE, {get_queue, Name}) of
 		undefined ->
-			?DEBUG("Queue does not exis, checking mnesia...", []),
+			lager:debug("Queue does not exis, checking mnesia...", []),
 			case call_queue_config:get_queue(Name) of
 				{ok, Qrec} ->
 					Opts = [
@@ -147,7 +146,7 @@ get_queue(Name) ->
 				none ->
 					undefined;
 				{error, Else} ->
-					?WARNING("Could not load up the queue, at all, becaus of ~p", [Else]),
+					lager:warning("Could not load up the queue, at all, becaus of ~p", [Else]),
 					undefined
 			end;
 		Pid ->
@@ -207,7 +206,7 @@ get_leader() ->
 %% @private
 %-spec(init/1 :: (Args :: []) -> {'ok', #state{}}).
 init([]) ->
-	?DEBUG("queue manager starting at ~p", [node()]),
+	lager:debug("queue manager starting at ~p", [node()]),
 	process_flag(trap_exit, true),
 	% subscribe to mnesia system events to handle inconsistant db events
 	% load the queues in the db and start them.
@@ -227,14 +226,14 @@ init([]) ->
 %% @private
 %-spec(elected/3 :: (State :: #state{}, Election :: election(), Node :: atom()) -> {'ok', dict(), #state{}}).
 elected(State, _Election, _Node) ->
-	?INFO("~p elected",[node()]),
+	lager:info("~p elected",[node()]),
 	mnesia:subscribe(system),
 	{ok, State#state.qdict, State}.
 
 %% @private
 %-spec(surrendered/3 :: (State :: #state{}, LeaderDict :: dict(), Election :: election()) -> {'ok', #state{}}).
 surrendered(#state{qdict = Qdict} = State, LeaderDict, Election) ->
-	?INFO("~p surrendered to ~p.",[node(), gen_leader:leader_node(Election)]),
+	lager:info("~p surrendered to ~p.",[node(), gen_leader:leader_node(Election)]),
 	mnesia:unsubscribe(system),
 	% any queues the leader has that do not match the pid we have
 	F = fun(Key, Value, {Mestate, Tokill}) ->
@@ -244,7 +243,7 @@ surrendered(#state{qdict = Qdict} = State, LeaderDict, Election) ->
 			{ok, Value} ->
 				{Mestate, Tokill};
 			{ok, Otherpid} ->
-				?INFO("slated to die: ~p at ~p", [Key, Otherpid]),
+				lager:info("slated to die: ~p at ~p", [Key, Otherpid]),
 				{dict:erase(Key, Mestate), [Otherpid | Tokill]}
 		end
 	end,
@@ -259,13 +258,13 @@ surrendered(#state{qdict = Qdict} = State, LeaderDict, Election) ->
 		call_queue:stop(Pid)
 	end,
 	lists:foreach(Killem, Todie),
-	%?CONSOLE("Lead: ~p.  Self: ~p", [LeaderDict, Noleader]),
+	%?debugFmt("Lead: ~p.  Self: ~p", [LeaderDict, Noleader]),
 	{ok, State#state{qdict = Noleader}}.
 
 %% @private
 %-spec(handle_DOWN/3 :: (Node :: atom(), State :: #state{}, Election :: election()) -> {'ok', #state{}}).
 handle_DOWN(Node, #state{qdict = Qdict} = State, _Election) ->
-	?INFO("in handle_DOWN",[]),
+	lager:info("in handle_DOWN",[]),
 	mnesia:set_master_nodes(call_queue, [node()]),
 	mnesia:set_master_nodes(skill_rec, [node()]),
 	Fold = fun(Qname, Qpid, {Props, Deads}) ->
@@ -289,7 +288,7 @@ handle_DOWN(Node, #state{qdict = Qdict} = State, _Election) ->
 					{group, Qrec#call_queue.group}
 				]);
 			_ ->
-				?WARNING("~s not restarting due to no config.", [Qname]),
+				lager:warning("~s not restarting due to no config.", [Qname]),
 				ok
 		end
 	end,
@@ -297,7 +296,7 @@ handle_DOWN(Node, #state{qdict = Qdict} = State, _Election) ->
 		lists:foreach(Ressurect, Deads)
 	end,
 	spawn(Sfun),
-	%Newdict = dict:filter(fun(K,V) -> ?INFO("Trying to remove ~p", [K]), Node =/= node(V) end, Qdict),
+	%Newdict = dict:filter(fun(K,V) -> lager:info("Trying to remove ~p", [K]), Node =/= node(V) end, Qdict),
 	{ok, State#state{qdict = Newdict}}.
 
 %% @private
@@ -307,14 +306,14 @@ handle_leader_call(queues_as_list, _From, #state{qdict = Qdict} = State, _Electi
 handle_leader_call({get_queue, Name}, _From, #state{qdict = Qdict} = State, _Election) ->
 	case dict:find(Name, Qdict) of
 		{ok, Pid} ->
-			%?DEBUG("Found queue ~p", [Name]),
+			%lager:debug("Found queue ~p", [Name]),
 			{reply, Pid, State};
 		error ->
-			?WARNING("No such queue ~p", [Name]),
+			lager:warning("No such queue ~p", [Name]),
 			{reply, undefined, State}
 	end;
 handle_leader_call({exists, Name}, _From, #state{qdict = Qdict} = State, _Election) ->
-	?DEBUG("got an exists request",[]),
+	lager:debug("got an exists request",[]),
 	{reply, dict:is_key(Name, Qdict), State};
 handle_leader_call(get_pid, _From, State, _Election) ->
 	{reply, {ok, self()}, State};
@@ -331,7 +330,7 @@ handle_call({notify, Name, Pid}, _From, #state{qdict = Qdict} = State, _Election
 handle_call({exists, Name}, _From, #state{qdict = Qdict} = State, _Election) ->
 	{reply, dict:is_key(Name, Qdict), State};
 handle_call({get_queue, Name}, _From, #state{qdict = Qdict} = State, _Election) ->
-	?DEBUG("get_queue start...", []),
+	lager:debug("get_queue start...", []),
 	case dict:find(Name, Qdict) of
 		{ok, Pid} ->
 			{reply, Pid, State};
@@ -353,16 +352,16 @@ handle_call({start, Name, Options}, _From, #state{qdict = Qdict} = State, Electi
 				{ok, OPid} ->
 					unlink(Pid),
 					call_queue:stop(Pid),
-					?NOTICE("Leader says ~p already exists at ~p", [Name, OPid]),
+					lager:notice("Leader says ~p already exists at ~p", [Name, OPid]),
 					{reply, {exists, OPid}, State};
 				error ->
-					?DEBUG("Leader notified of  ~p at ~p", [Name, Pid]),
+					lager:debug("Leader notified of  ~p at ~p", [Name, Pid]),
 					NewDict = dict:store(Name, Pid, Qdict),
 					{reply, {ok, Pid}, State#state{qdict = NewDict}}
 			end;
 		Node ->
 			% we're not the leader, notify them
-			?INFO("Notifying leader ~p of new queue ~p at ~p", [Node, Name, Pid]),
+			lager:info("Notifying leader ~p of new queue ~p at ~p", [Node, Name, Pid]),
 			% unfortunately, you can't make a leader_call from a handle_call because it blocks
 			% so we're going to do it via old fashioned messages
 			Ref = make_ref(),
@@ -378,7 +377,7 @@ handle_call({start, Name, Options}, _From, #state{qdict = Qdict} = State, Electi
 			end
 	end;
 handle_call(stop, _From, State, _Election) ->
-	?INFO("stop requested",[]),
+	lager:info("stop requested",[]),
 	{stop, normal, ok, State};
 handle_call(_Request, _From, State, _Election) ->
 	{reply, unknown, State}.
@@ -387,11 +386,11 @@ handle_call(_Request, _From, State, _Election) ->
 %% @private
 %-spec(handle_leader_cast/3 :: (Request :: any(), State :: #state{}, Election :: election()) -> {'noreply', #state{}}).
 handle_leader_cast({notify, Name, Pid}, #state{qdict = Qdict} = State, _Election) ->
-	?INFO("leader alerted about new queue ~p at ~p", [Name, Pid]),
+	lager:info("leader alerted about new queue ~p at ~p", [Name, Pid]),
 	Newdict = dict:store(Name, Pid, Qdict),
 	{noreply, State#state{qdict = Newdict}};
 handle_leader_cast({notify, Name}, #state{qdict = Qdict} = State, _Election) ->
-	?INFO("leader alerted about dead queue ~p", [Name]),
+	lager:info("leader alerted about dead queue ~p", [Name]),
 	Newdict = dict:erase(Name, Qdict),
 	{noreply, State#state{qdict = Newdict}};
 handle_leader_cast(_Msg, State, _Election) ->
@@ -400,7 +399,7 @@ handle_leader_cast(_Msg, State, _Election) ->
 %% @private
 %-spec(handle_cast/3 :: (Msg :: any(), State :: #state{}, Election :: election()) -> {'noreply', #state{}}).
 handle_cast({notify, Name, Pid}, #state{qdict = Qdict} = State, _Election) ->
-	?INFO("local alerted about new queue ~p at ~p", [Name, Pid]),
+	lager:info("local alerted about new queue ~p at ~p", [Name, Pid]),
 	Newdict = dict:store(Name, Pid, Qdict),
 	link(Pid),
 	gen_leader:leader_cast(?MODULE, {notify, Name, Pid}),
@@ -413,30 +412,30 @@ handle_cast(_Msg, State, _Election) ->
 handle_info({notify, {From, Ref}, Name, Pid}, #state{qdict = Qdict} = State) ->
 	case dict:find(Name, Qdict) of
 		{ok, OPid} ->
-			?NOTICE("Leader says ~p already exists at ~p", [Name, OPid]),
+			lager:notice("Leader says ~p already exists at ~p", [Name, OPid]),
 			From ! {Ref, {exists, OPid}},
 			{noreply, State};
 		error ->
-			?DEBUG("Leader notified of  ~p at ~p", [Name, Pid]),
+			lager:debug("Leader notified of  ~p at ~p", [Name, Pid]),
 			NewDict = dict:store(Name, Pid, Qdict),
 			From ! {Ref, {ok, Pid}},
 			{noreply, State#state{qdict = NewDict}}
 	end;
 handle_info({mnesia_system_event, {inconsistent_database, _Context, _Node}}, State) ->
-	?WARNING("inconsistant_database event, setting master nodes...", []),
+	lager:warning("inconsistant_database event, setting master nodes...", []),
 	mnesia:set_master_nodes(call_queue, [node()]),
 	mnesia:set_master_nodes(skill_rec, [node()]),
 	{noreply, State};
 handle_info({mnesia_system_event, MEvent}, State) ->
-	?INFO("other mnesia system event:  ~p", [MEvent]),
+	lager:info("other mnesia system event:  ~p", [MEvent]),
 	{noreply, State};
 handle_info({'EXIT', Pid, normal}, #state{qdict = Qdict} = State) ->
 	case find_queue_name(Pid, Qdict) of
 		none ->
-			?DEBUG("Normal exit of pid ~p", [Pid]),
+			lager:debug("Normal exit of pid ~p", [Pid]),
 			{noreply, State};
 		Qname ->
-			?NOTICE("~p @ ~p died normally", [Qname, Pid]),
+			lager:notice("~p @ ~p died normally", [Qname, Pid]),
 			gen_leader:leader_cast(?MODULE, {notify, Qname}),
 			Newdict = dict:erase(Qname, Qdict),
 			{noreply, State#state{qdict = Newdict}}
@@ -444,46 +443,46 @@ handle_info({'EXIT', Pid, normal}, #state{qdict = Qdict} = State) ->
 handle_info({'EXIT', Pid, shutdown}, #state{qdict = Qdict} = State) ->
 	case find_queue_name(Pid, Qdict) of
 		none ->
-			?DEBUG("Shutdown of pid ~p", [Pid]),
+			lager:debug("Shutdown of pid ~p", [Pid]),
 			{noreply, State};
 		Qname ->
-			?NOTICE("~p @ ~p was shutdown.", [Qname, Pid]),
+			lager:notice("~p @ ~p was shutdown.", [Qname, Pid]),
 			gen_leader:leader_cast(?MODULE, {notify, Qname}),
 			Newdict = dict:erase(Qname, Qdict),
 			{noreply, State#state{qdict = Newdict}}
 	end;
 handle_info({'EXIT', Pid, Reason}, #state{qdict = Qdict} = State) ->
-	?NOTICE("~p died due to ~p.", [Pid, Reason]),
+	lager:notice("~p died due to ~p.", [Pid, Reason]),
 	case find_queue_name(Pid, Qdict) of
 		none ->
-			?WARNING("Cannot find queue corresponding with ~p", [Pid]),
+			lager:warning("Cannot find queue corresponding with ~p", [Pid]),
 			{noreply, State};
 		Qname ->
 			case call_queue_config:get_queue(Qname) of
 				{ok, Queuerec} ->
 					gen_leader:leader_cast(?MODULE, {notify, Qname}),
-					?DEBUG("Got call_queue_config of ~p for ~p", [Queuerec, Qname]),
+					lager:debug("Got call_queue_config of ~p for ~p", [Queuerec, Qname]),
 					Newdict = dict:erase(Queuerec#call_queue.name, Qdict),
 					Fun = fun() ->
 						case Reason of
 							{move, Node} when Node =/= node() ->
-								?INFO("trying to migrate queue ~p from ~p to ~p", [Qname, node(), Node]),
+								lager:info("trying to migrate queue ~p from ~p to ~p", [Qname, node(), Node]),
 								case net_adm:ping(Node) of
 									pong ->
 										rpc:call(Node, queue_manager, load_queue, [Qname]);
 									pang ->
-										?WARNING("Node ~p is not responding, unable to migrate ~p to it, restarting it locally on ~p", [Node, Qname, node()]),
+										lager:warning("Node ~p is not responding, unable to migrate ~p to it, restarting it locally on ~p", [Node, Qname, node()]),
 										load_queue(Qname)
 								end;
 							_Else ->
-								?INFO("Restarting ~p", [Qname]),
+								lager:info("Restarting ~p", [Qname]),
 								load_queue(Qname)
 						end
 					end,
 					spawn(Fun),
 					{noreply, State#state{qdict = Newdict}};
 				_ ->
-					?WARNING("queue ~p not in the config database", [Qname]),
+					lager:warning("queue ~p not in the config database", [Qname]),
 					gen_leader:leader_cast(?MODULE, {notify, Qname}),
 					{noreply, State}
 			end
@@ -653,14 +652,14 @@ find_queue_name(NeedlePid, Dict) ->
 % 	{ok, R} = mnesia:change_config(extra_db_nodes, [Master, Slave]),
 % 	{atomic, ok} = mnesia:change_table_copy_type(schema, Master, disc_copies),
 % 	{atomic, ok} = mnesia:change_table_copy_type(schema, Slave, disc_copies),
-% 	?INFO("change config return:  ~p", [R]),
-% 	?INFO("schema table info:  ~p", [mnesia:table_info(schema, all)]),
+% 	lager:info("change config return:  ~p", [R]),
+% 	lager:info("schema table info:  ~p", [mnesia:table_info(schema, all)]),
 % 	cover:start([Master, Slave]),
 % 	{inorder, {foreach, fun() ->
-% 		?DEBUG("========== Build it up! ==========", []),
+% 		lager:debug("========== Build it up! ==========", []),
 % 		{ok, QMMaster} = rpc:call(Master, ?MODULE, start, [[Master, Slave]]),
 % 		{ok, QMSlave} = rpc:call(Slave, ?MODULE, start, [[Master, Slave]]),
-% 		?DEBUG("building done", []),
+% 		lager:debug("building done", []),
 % 		#multinode_test_state{
 % 			master_node = Master,
 % 			slave_node = Slave,
@@ -669,7 +668,7 @@ find_queue_name(NeedlePid, Dict) ->
 % 		}
 % 	end,
 % 	fun(Rec) ->
-% 		?DEBUG("========== Tear it down! ==========", []),
+% 		lager:debug("========== Tear it down! ==========", []),
 % 		rpc:call(Master, ?MODULE, stop, []),
 % 		rpc:call(Slave, ?MODULE, stop, []),
 % 		{atomic, ok} = mnesia:delete_table(call_queue),
@@ -685,30 +684,30 @@ find_queue_name(NeedlePid, Dict) ->
 % 			end
 % 		end,
 % 		Sleeper(Sleeper),
-% 		?DEBUG("Tear down done", [])
+% 		lager:debug("Tear down done", [])
 % 	end,
 % 	[fun(_) -> Name = "Master Death", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		rpc:call(Master, ?MODULE, stop, []),
 % 		?assertMatch({ok, _Pid}, rpc:call(Slave, ?MODULE, add_queue, ["queue1", []])),
 % 		?assertMatch(true, rpc:call(Slave, ?MODULE, query_queue, ["queue1"]))
 % 	end} end,
 % 	fun(_) -> Name = "Slave Death", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		?assertMatch({ok, _Pid}, rpc:call(Slave, ?MODULE, add_queue, ["queue1", []])),
 % 		ok = rpc:call(Slave, ?MODULE, stop, []),
 % 		?assertMatch(false, rpc:call(Master, ?MODULE, query_queue, ["queue1"]))
 % 	end} end,
 % 	fun(_) -> Name = "Net Split", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		rpc:call(Master, ?MODULE, add_queue, ["queue1", []]),
 % 		rpc:call(Slave, ?MODULE, add_queue, ["queue2", []]),
 % 		rpc:call(Master, call_queue_config, new_queue, ["queue1", 1, [], [], "default"]),
 % 		?assertMatch(true, rpc:call(Slave, ?MODULE, query_queue, ["queue1"])),
 % 		?assertMatch(true, rpc:call(Master, ?MODULE, query_queue, ["queue2"])),
 % 		rpc:call(Slave, erlang, disconnect_node, [Master]),
-% 		?debugFmt("Master queues ~p~n", [rpc:call(Master, ?MODULE, queues, [])]),
-% 		?debugFmt("Slave queues ~p~n", [rpc:call(Slave, ?MODULE, queues, [])]),
+% 		lager:debugFmt("Master queues ~p~n", [rpc:call(Master, ?MODULE, queues, [])]),
+% 		lager:debugFmt("Slave queues ~p~n", [rpc:call(Slave, ?MODULE, queues, [])]),
 % 		?assertMatch(true, rpc:call(Slave, ?MODULE, query_queue, ["queue2"])),
 % 		?assertMatch(true, rpc:call(Slave, ?MODULE, query_queue, ["queue1"])),
 % 		?assertMatch(true, rpc:call(Master, ?MODULE, query_queue, ["queue1"])),
@@ -717,7 +716,7 @@ find_queue_name(NeedlePid, Dict) ->
 % 		?assertMatch({exists, _Pid}, rpc:call(Master, ?MODULE, add_queue, ["queue1", []]))
 % 	end} end,
 % 	fun(_) -> Name = "Queues in sync", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		rpc:call(Master, ?MODULE, add_queue, ["queue1", []]),
 % 		?assertMatch(true, rpc:call(Master, ?MODULE, query_queue, ["queue1"])),
 % 		?assertMatch({exists, _Pid}, rpc:call(Slave, ?MODULE, add_queue, ["queue1", []])),
@@ -729,13 +728,13 @@ find_queue_name(NeedlePid, Dict) ->
 % 		?assertMatch(ok, rpc:call(Slave, ?MODULE, stop, []))
 % 	end} end,
 % 	fun(_) -> Name = "No proc", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		slave:stop(Master),
 % 		timer:sleep(200),
 % 		?assertMatch(false, rpc:call(Slave, ?MODULE, query_queue, ["queue1"]))
 % 	end} end,
 % 	fun(_) -> Name = "Best bindable queues with failed master", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		{ok, Pid} = rpc:call(Slave, ?MODULE, add_queue, ["queue2", []]),
 % 		{ok, Dummy1} = rpc:call(Slave, dummy_media, start, [[{id, "Call1"}, {queues, none}]]),
 % 		?assertEqual(ok, call_queue:add(Pid, 0, Dummy1)),
@@ -744,7 +743,7 @@ find_queue_name(NeedlePid, Dict) ->
 % 		?assertMatch([{"queue2", Pid, {_, #queued_call{id="Call1"}}, ?DEFAULT_WEIGHT}], rpc:call(Slave, ?MODULE, get_best_bindable_queues, []))
 % 	end} end,
 % 	fun(_) -> Name = "Leader is told about a call_queue that dies and did not come back", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		{ok, QPid} = rpc:call(Slave, ?MODULE, add_queue, ["queue2", []]),
 % 		?assertMatch({exists, QPid}, rpc:call(Master, ?MODULE, add_queue, ["queue2", []])),
 % 		gen_server:call(QPid, {stop, test_kill}),
@@ -753,40 +752,40 @@ find_queue_name(NeedlePid, Dict) ->
 % 			ok
 % 		end,
 % 		NewQPid = rpc:call(Slave, ?MODULE, get_queue, ["queue2"]),
-% 		?CONSOLE("the pids:  ~p and ~p", [QPid, NewQPid]),
+% 		?debugFmt("the pids:  ~p and ~p", [QPid, NewQPid]),
 % 		?assertNot(QPid =:= NewQPid),
 % 		?assertEqual(undefined, rpc:call(Master, ?MODULE, get_queue, ["queue2"]))
 % 	end} end,
 % 	fun(_) -> Name = "Leader is told about a call_queue that died but is reborn", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		QPid = rpc:call(Slave, queue_manager, get_queue, ["default_queue"]),
-% 		?CONSOLE("qpid: ~p", [QPid]),
+% 		?debugFmt("qpid: ~p", [QPid]),
 % 		gen_server:call(QPid, {stop, test_kill}),
 % 		receive
 % 		after 100 ->
 % 			ok
 % 		end,
 % 		NewQPid = rpc:call(Slave, queue_manager, get_queue, ["default_queue"]),
-% 		?CONSOLE("Das pids:  ~p and ~p", [QPid, NewQPid]),
+% 		?debugFmt("Das pids:  ~p and ~p", [QPid, NewQPid]),
 % 		?assertNot(QPid =:= NewQPid),
 % 		?assertNot(NewQPid =:= undefined)
 % 	end} end,
 % 	fun(_) -> Name = "A queue is only started (or stays started) on one node", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		% because a queue_manager starts every queue in the database on init,
 % 		% a queue will always exist locally.
 % 		% this is not desired behavior, so on a surrender, it must ditch any
 % 		% empty queues it already has, and notify the leader of the rest.
 % 		MasterQ = rpc:call(Master, queue_manager, get_queue, ["default_queue"]),
 % 		SlaveQ = rpc:call(Slave, queue_manager, get_queue, ["default_queue"]),
-% 		?CONSOLE("dah qs:  ~p and ~p", [MasterQ, SlaveQ]),
+% 		?debugFmt("dah qs:  ~p and ~p", [MasterQ, SlaveQ]),
 % 		?assert(node(MasterQ) =:= node(SlaveQ)),
 % 		?assert(MasterQ =:= SlaveQ)
 % 	end} end,
 % 	fun(_) -> Name = "Queue migration", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		Oldq = rpc:call(Master, queue_manager, get_queue, ["default_queue"]),
-% 		?debugFmt("Queue is at ~p ~p", [Oldq, node(Oldq)]),
+% 		lager:debugFmt("Queue is at ~p ~p", [Oldq, node(Oldq)]),
 % 		call_queue:migrate(Oldq, Slave),
 % 		timer:sleep(10),
 % 		OldNode = node(Oldq),
@@ -796,10 +795,10 @@ find_queue_name(NeedlePid, Dict) ->
 % 		?assertNot(OldNode =:= NewNode)
 % 	end} end,
 % 	fun(_Whatever) -> Name = "The slave dies, but the queue on that is brought back by master", {Name, fun() ->
-% 		?DEBUG("Starting test ~s", [Name]),
+% 		lager:debug("Starting test ~s", [Name]),
 % 		call_queue_config:new_queue(#call_queue{name = "queue2"}),
 % 		{ok, Pid} = rpc:call(Slave, ?MODULE, add_queue, ["queue2", []]),
-% 		?DEBUG("~p", [rpc:call(Master, ?MODULE, get_queue, ["queue2"])]),
+% 		lager:debug("~p", [rpc:call(Master, ?MODULE, get_queue, ["queue2"])]),
 % 		?assertEqual(Pid, rpc:call(Master, ?MODULE, get_queue, ["queue2"])),
 % 		slave:stop(Slave),
 % 		timer:sleep(100), % because starting a queue takes time.

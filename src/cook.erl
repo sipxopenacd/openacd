@@ -41,7 +41,6 @@
 
 -behaviour(gen_server).
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include("queue.hrl").
@@ -116,7 +115,7 @@ start_at(Node, Call, Recipe, Queue, Qpid, Key) ->
 	F = fun() ->
 		case init([Call, Recipe, Queue, Qpid, Key]) of
 			{ok, State} ->
-				?DEBUG("about to enter loop ~p, ~p", [get('$ancestors'), Call]),
+				lager:debug("about to enter loop ~p, ~p", [get('$ancestors'), Call]),
 				put('$ancestors', [Call]), % we don't want to die with the queue
 				gen_server:enter_loop(?MODULE, [], State);
 			{stop, Reason} ->
@@ -154,8 +153,8 @@ init([Call, InRecipe, Queue, Qpid, {_Priority, {MSec, Sec, _MsSec}} = Key]) ->
 	process_flag(trap_exit, true),
 	try gen_media:get_call(Call) of
 		CallRec ->
-			?DEBUG("Cook starting for call ~p from queue ~p (~p)", [CallRec#call.id, Queue, Qpid]),
-			?DEBUG("node check.  self:  ~p;  call:  ~p", [node(self()), node(Call)]),
+			lager:debug("Cook starting for call ~p from queue ~p (~p)", [CallRec#call.id, Queue, Qpid]),
+			lager:debug("node check.  self:  ~p;  call:  ~p", [node(self()), node(Call)]),
 			Tref = erlang:send_after(?TICK_LENGTH, self(), do_tick),
 			OptRecipe = optimize_recipe(InRecipe),
 			Now = util:now(),
@@ -163,7 +162,7 @@ init([Call, InRecipe, Queue, Qpid, {_Priority, {MSec, Sec, _MsSec}} = Key]) ->
 				tref=Tref, key = Key, callid = CallRec#call.id},
 			Recipe = case round(Now - (MSec * 1000000 + Sec)) of
 				Ticked when Ticked > 1 ->
-					?DEBUG("fast forwarding", []),
+					lager:debug("fast forwarding", []),
 					fast_forward(OptRecipe, util:floor(Ticked / (?TICK_LENGTH / 1000)),
 						Qpid, Call);
 				_Else ->
@@ -174,7 +173,7 @@ init([Call, InRecipe, Queue, Qpid, {_Priority, {MSec, Sec, _MsSec}} = Key]) ->
 			{ok, State1}
 	catch
 		Why:Reason ->
-			?ERROR("~p:~p", [Why, Reason]),
+			lager:error("~p:~p", [Why, Reason]),
 			{stop, Reason}
 	end.
 
@@ -183,10 +182,10 @@ init([Call, InRecipe, Queue, Qpid, {_Priority, {MSec, Sec, _MsSec}} = Key]) ->
 %%--------------------------------------------------------------------
 %% @private
 handle_call(stop, From, #state{callid = CallID} = State) ->
-	?NOTICE("Stop requested from ~p for ~p", [From, CallID]),
+	lager:notice("Stop requested from ~p for ~p", [From, CallID]),
 	{stop, normal, ok, State};
 handle_call({stop, Reason}, From, #state{callid = CallID} = State) ->
-	?NOTICE("Stop requested from ~p for ~p with reason ~p.", [From, CallID, Reason]),
+	lager:notice("Stop requested from ~p for ~p with reason ~p.", [From, CallID, Reason]),
 	{stop, {normal, Reason}, ok, State};
 handle_call(Request, _From, State) ->
     {reply, {unknown_call, Request}, State}.
@@ -207,7 +206,7 @@ handle_cast(restart_tick, #state{qpid = Qpid} = State) ->
 			{noreply, State3#state{tref=Tref}}
 	end;
 handle_cast(stop_ringing, #state{qpid = Qpid} = State) ->
-	?DEBUG("rang out or ring aborted, trying to find new candidate", []),
+	lager:debug("rang out or ring aborted, trying to find new candidate", []),
 	case do_route(none, Qpid, State#state.call) of
 		nocall ->
 			{stop, {call_not_queued, State#state.call}, State};
@@ -230,7 +229,7 @@ handle_cast(stop_tick, State) ->
 handle_cast(stop, State) ->
 	{stop, normal, State};
 handle_cast(Msg, #state{callid = CallID} = State) ->
-	?DEBUG("unhandled cast ~p ~p", [Msg, CallID]),
+	lager:debug("unhandled cast ~p ~p", [Msg, CallID]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -251,7 +250,7 @@ handle_info(do_tick, #state{qpid = Qpid} = State) ->
 	{noreply, State2};
 handle_info(grab, #state{qpid = Qpid} = State) ->
 	% TODO - we should wait to see if more nodes want to bind to make distributed delivery fairer
-	%?DEBUG("a dispatcher grabbed the call", []),
+	%lager:debug("a dispatcher grabbed the call", []),
 	case do_route(State#state.ringstate, Qpid, State#state.call) of
 		nocall ->
 			{stop, {call_not_queued, State#state.call}, State};
@@ -262,13 +261,13 @@ handle_info(grab, #state{qpid = Qpid} = State) ->
 handle_info({'EXIT', From, Reason}, #state{qpid = From} = State) when Reason == shutdown; Reason == normal ->
 	{stop, Reason, State};
 handle_info({'EXIT', From, _Reason}, #state{qpid = From, callid = CallID} = State) ->
-	?NOTICE("queue ~p died unexpectedly - trying to add call ~p back into the new queue", [State#state.queue, CallID]),
+	lager:notice("queue ~p died unexpectedly - trying to add call ~p back into the new queue", [State#state.queue, CallID]),
 	Qpid = wait_for_queue(State#state.queue),
 	call_queue:add_at(Qpid, State#state.key, State#state.call),
 	gen_media:set_queue(State#state.call, Qpid),
 	{stop, normal, State};
 handle_info(Info, #state{callid = CallID} = State) ->
-	?DEBUG("received random info message: ~p ~p", [Info, CallID]),
+	lager:debug("received random info message: ~p ~p", [Info, CallID]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -276,22 +275,22 @@ handle_info(Info, #state{callid = CallID} = State) ->
 %%--------------------------------------------------------------------
 %% @private
 terminate(normal, #state{callid = CallID}) ->
-	?DEBUG("normal cook death for ~p", [CallID]),
+	lager:debug("normal cook death for ~p", [CallID]),
 	ok;
 terminate(shutdown, #state{callid = CallID}) ->
-	?DEBUG("shutdown cook death for ~p", [CallID]),
+	lager:debug("shutdown cook death for ~p", [CallID]),
 	ok;
 terminate({normal, Reason}, #state{callid = CallID}) ->
-	?NOTICE("An inelegant cook shutdown requested for ~p with reason ~p", [CallID, Reason]),
+	lager:notice("An inelegant cook shutdown requested for ~p with reason ~p", [CallID, Reason]),
 	ok;
 terminate(Reason, #state{callid = CallID}) ->
-	?WARNING("Unusual cook death for ~p with reason ~p", [CallID, Reason]),
+	lager:warning("Unusual cook death for ~p with reason ~p", [CallID, Reason]),
 	%erlang:cancel_timer(State#state.tref),
 	%Qpid = wait_for_queue(State#state.queue),
-	%?INFO("Looks like the queue ~s recovered (~w), dieing now",[State#state.queue, Qpid]),
+	%lager:info("Looks like the queue ~s recovered (~w), dieing now",[State#state.queue, Qpid]),
 	%case call_queue:get_call(Qpid, State#state.call) of
 		%none ->
-			%?INFO("Call was not in queue ~s - adding it", [State#state.queue]),
+			%lager:info("Call was not in queue ~s - adding it", [State#state.queue]),
 			%call_queue:add_at(Qpid, State#state.key, State#state.call);
 		%_ ->
 			%ok
@@ -323,43 +322,43 @@ stop_tick(Pid) ->
 wait_for_queue(Qname) ->
 	case whereis(queue_manager) of
 		undefined ->
-			?INFO("Waiting on the queue manager", []),
+			lager:info("Waiting on the queue manager", []),
 			receive
 			after 1000 ->
 				ok
 			end;
 		QMPid when is_pid(QMPid) ->
-			?DEBUG("Queue manager is available", []),
+			lager:debug("Queue manager is available", []),
 			ok
 	end,
 	case queue_manager:get_queue(Qname) of
 		undefined ->
-			?INFO("Waiting on queue ~p" , [Qname]),
+			lager:info("Waiting on queue ~p" , [Qname]),
 			receive
 			after 300 ->
 				ok
 			end,
 			wait_for_queue(Qname);
 		Qpid when is_pid(Qpid) ->
-			?DEBUG("Queue ~p is back up", [Qname]),
+			lager:debug("Queue ~p is back up", [Qname]),
 			Qpid
 	end.
 
 %% @private
 -spec(do_route/3 :: (Ringstate :: 'ringing' | 'none', Queue :: pid(), Callpid :: pid()) -> 'nocall' | 'ringing' | 'none').
 do_route(ringing, _Qpid, _Callpid) ->
-	%?DEBUG("still ringing", []),
+	%lager:debug("still ringing", []),
 	ringing;
 do_route(none, Qpid, Callpid) ->
-	%?DEBUG("Searching for agent to ring to...",[]),
+	%lager:debug("Searching for agent to ring to...",[]),
 	case call_queue:get_call(Qpid, Callpid) of
 		{_Key, Call} ->
 			Dispatchers = Call#queued_call.dispatchers,
 			Agents = sort_agent_list(Dispatchers),
-			%?DEBUG("Dispatchers:  ~p; Agents:  ~p", [Dispatchers, Agents]),
+			%lager:debug("Dispatchers:  ~p; Agents:  ~p", [Dispatchers, Agents]),
 			offer_call(Agents, Call);
 		none ->
-			?DEBUG("No call to ring",[]),
+			lager:debug("No call to ring",[]),
 			nocall
 	end.
 
@@ -371,7 +370,7 @@ sort_agent_list(Dispatchers) when is_list(Dispatchers) ->
 	F = fun(Dpid) ->
 		try dispatcher:get_agents(Dpid) of
 			[] ->
-				%?DEBUG("empty list, might as well tell this dispatcher to regrab", []),
+				%lager:debug("empty list, might as well tell this dispatcher to regrab", []),
 				%dispatcher:regrab(Dpid),
 				[];
 			{unknown_call, get_agents} ->
@@ -380,7 +379,7 @@ sort_agent_list(Dispatchers) when is_list(Dispatchers) ->
 				[{K, {Apid, Aid, Askills, node(Dpid)}} || {K, #agent_cache{pid = Apid, id = Aid, skills = Askills}} <- Ag]
 		catch
 			What:Why ->
-				?INFO("Caught:  ~p:~p", [What, Why]),
+				lager:info("Caught:  ~p:~p", [What, Why]),
 				[]
 		end
 	end,
@@ -393,13 +392,13 @@ sort_agent_list(Dispatchers) when is_list(Dispatchers) ->
 -spec(offer_call/2 :: (Agents :: [{string(), {Pid :: pid(), Id :: string(),
 	Skills :: [atom()], Node :: atom()}}], Call :: #queued_call{}) -> 'none' | 'ringing').
 offer_call([], _Call) ->
-	%?DEBUG("No valid agents found", []),
+	%lager:debug("No valid agents found", []),
 	none;
 offer_call([{_Key, {Apid, Aid, _Skills, _Node}} | Tail], Call) ->
 	case gen_media:ring(Call#queued_call.media, Apid, Call, ?getRingout) of
 		ok ->
 			%Callrec = gen_media:get_call(Call#queued_call.media),
-			?INFO("cook offering call:  ~p to ~p", [Call#queued_call.id, Aid]),
+			lager:info("cook offering call:  ~p to ~p", [Call#queued_call.id, Aid]),
 			ringing;
 		invalid ->
 			offer_call(Tail, Call)
@@ -431,7 +430,7 @@ check_conditions([{eligible_agents, Comparision, Number} | Conditions], Ticked, 
 	{_Key, Callrec} = call_queue:get_call(Qpid, Call),
 	L = agent_manager:find_by_skill(Callrec#queued_call.skills),
 	Agents = length(L),
-	%?DEBUG("Number: ~p; agents: ~p", [Number, Agents]),
+	%lager:debug("Number: ~p; agents: ~p", [Number, Agents]),
 	case Comparision of
 		'>' when Agents > Number ->
 			check_conditions(Conditions, Ticked, Qpid, Call);
@@ -534,7 +533,7 @@ check_conditions([{caller_name, Comparison, RegEx} | Conditions], Ticked, Qpid, 
 	{Name, _} = Callrec#call.callerid,
 	case re:compile(RegEx) of
 		{error, Err} ->
-			?WARNING("Err compiling regex:  ~p", [Err]),
+			lager:warning("Err compiling regex:  ~p", [Err]),
 			false;
 		{ok, CompiledReg} ->
 			Match = case re:run(Name, CompiledReg) of
@@ -553,7 +552,7 @@ check_conditions([{caller_id, Comparison, RegEx} | Conditions], Ticked, Qpid, Ca
 	{_, Id} = Callrec#call.callerid,
 	case re:compile(RegEx) of
 		{error, Err} ->
-			?WARNING("Err compiling regex:  ~p", [Err]),
+			lager:warning("Err compiling regex:  ~p", [Err]),
 			false;
 		{ok, Compiled} ->
 			Match = case re:run(Id, Compiled) of
@@ -664,7 +663,7 @@ do_operation(Operations, Qpid, Callpid, State) when is_pid(Qpid), is_pid(Callpid
 do_operation([], _Qpid, _Callpid, _State, Acc) ->
 	lists:reverse(Acc);
 do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
-	?INFO("Doing operation: ~p", [Op]),
+	lager:info("Doing operation: ~p", [Op]),
 	Out = case Op of
 		add_skills ->
 			call_queue:add_skills(Qpid, Callpid, Args),
@@ -686,10 +685,10 @@ do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 		voicemail ->
 			case gen_media:voicemail(Callpid) of
 				ok ->
-					?DEBUG("voicemail successfully, removing from queue", []),
+					lager:debug("voicemail successfully, removing from queue", []),
 					call_queue:bgremove(Qpid, Callpid);
 				invalid ->
-					?WARNING("voicemail failed.", []),
+					lager:warning("voicemail failed.", []),
 					ok
 			end;
 		add_recipe ->
@@ -699,7 +698,7 @@ do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 			ok;
 		%% TODO added for testing only (implemented with focus on real Calls - no other media)
 		end_call ->
-			?INFO("Recipte end_call for ~p recived~n",[Callpid]),
+			lager:info("Recipte end_call for ~p recived~n",[Callpid]),
 			%% here should be the function call to hangup the qued call
 			gen_media:end_call(Callpid),
 			ok;
@@ -743,7 +742,7 @@ transfer_queue(OQPid, QName, MPid, Key) ->
 		NQPid when is_pid(NQPid) ->
 			transfer_to_qpid(OQPid, NQPid, MPid, Key);
 		_ ->
-			?WARNING("call transfer to queue failed. queue not found: ~p", [QName]),
+			lager:warning("call transfer to queue failed. queue not found: ~p", [QName]),
 			{error, no_queue}
 	end.
 
@@ -754,7 +753,7 @@ transfer_to_qpid(OQPid, NQPid, MPid, Key) ->
 				gen_media:set_queue(MPid, NQPid, true),
 				call_queue:add_at(NQPid, Key, MPid);
 			_ ->
-				?WARNING("call no longer present in queue", []),
+				lager:warning("call no longer present in queue", []),
 				{error, no_call}
 		end
 	end).
@@ -779,7 +778,7 @@ transfer_to_qpid(OQPid, NQPid, MPid, Key) ->
 % 				{ok, MediaRec, State}
 % 			end)
 % 		end,
-% 		?DEBUG("init test call ~p", [MediaRec]),
+% 		lager:debug("init test call ~p", [MediaRec]),
 % 		{MediaRec, Qpid, MakeTime, SeedMedia}
 % 	end,
 % 	fun({Media, Qpid, _, _}) ->
@@ -793,7 +792,7 @@ transfer_to_qpid(OQPid, NQPid, MPid, Key) ->
 % 			SeedMedia(),
 % 			SeedMedia(),
 % 			gen_server_mock:expect_call(Qpid, fun({get_call, _}, _, GState) -> {ok, {{1, "whatever"}, "whatever"}, GState} end),
-% 			gen_server_mock:expect_call(Qpid, fun({set_priority, _, _}, _, _) -> ?DEBUG("prioritizing", []), ok end),
+% 			gen_server_mock:expect_call(Qpid, fun({set_priority, _, _}, _, _) -> lager:debug("prioritizing", []), ok end),
 % 			{ok, State} = init([Media#call.source, Recipe, "default_queue", Qpid, {1, os:timestamp()}]),
 % 			?assertEqual([], State#state.recipe),
 % 			gen_server_mock:assert_expectations(Qpid)
@@ -820,7 +819,7 @@ fast_forward_test_() ->
 				{ok, MediaRec, State}
 			end)
 		end,
-		?DEBUG("dsaflhadslkfhkjsadfL ~p", [MediaRec]),
+		lager:debug("dsaflhadslkfhkjsadfL ~p", [MediaRec]),
 		{MediaRec, Qpid, MakeTime, SeedMedia}
 	end,
 	fun({Media, Qpid, _, _}) ->
@@ -943,7 +942,7 @@ do_operation_test_() ->
 			gen_server_mock:assert_expectations(QPid),
 			gen_server_mock:assert_expectations(Mpid)
 		end,
-		?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, Assertmocks}]),
+		?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, Assertmocks}]),
 		{QMPid, QPid, Mpid, Assertmocks}
 	end,
 	fun({QMPid, QPid, Mpid, _Assertmocks}) ->
@@ -1090,7 +1089,7 @@ check_conditions_test_() ->
 			gen_server_mock:assert_expectations(QPid),
 			gen_server_mock:assert_expectations(Mpid)
 		end,
-		?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, Assertmocks}]),
+		?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, Assertmocks}]),
 		{QMPid, QPid, Mpid, AMpid, Assertmocks}
 	end,
 	fun({QMPid, QPid, Mpid, AMpid, _Assertmocks}) ->
@@ -1141,9 +1140,9 @@ check_conditions_test_() ->
 	% 		gen_server_mock:assert_expectations(Mpid),
 	% 		gen_leader_mock:assert_expectations(AMpid)
 	% 	end,
-	% 	?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
+	% 	?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
 	% 	gen_server_mock:expect_call(QPid, fun({get_call, Incpid}, _From, State) ->
-	% 		?CONSOLE("get_call", []),
+	% 		?debugFmt("get_call", []),
 	% 		Mpid = Incpid,
 	% 		{ok, {"key", #queued_call{id = "testcall", media = Mpid, skills = [english]}}, State}
 	% 	end),
@@ -1224,9 +1223,9 @@ check_conditions_test_() ->
 	% 		gen_server_mock:assert_expectations(Mpid),
 	% 		gen_leader_mock:assert_expectations(AMpid)
 	% 	end,
-	% 	?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
+	% 	?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
 	% 	gen_server_mock:expect_call(QPid, fun({get_call, Incpid}, _From, State) ->
-	% 		?CONSOLE("get_call", []),
+	% 		?debugFmt("get_call", []),
 	% 		Mpid = Incpid,
 	% 		{ok, {"key", #queued_call{id = "testcall", media = Mpid, skills = [english]}}, State}
 	% 	end),
@@ -1308,7 +1307,7 @@ check_conditions_test_() ->
 			gen_server_mock:assert_expectations(Mpid),
 			gen_leader_mock:assert_expectations(AMpid)
 		end,
-		?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
+		?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
 		gen_server_mock:expect_call(QPid, fun(call_count, _From, State) ->
 			{ok, 3, State}
 		end),
@@ -1376,7 +1375,7 @@ check_conditions_test_() ->
 			gen_server_mock:assert_expectations(Mpid),
 			gen_leader_mock:assert_expectations(AMpid)
 		end,
-		?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
+		?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
 		gen_server_mock:expect_call(QPid, fun(to_list, _From, State) ->
 			Out = [#queued_call{media = undefined, id = 1},
 				#queued_call{media = Mpid, id = 2},
@@ -1447,7 +1446,7 @@ check_conditions_test_() ->
 	% 		gen_server_mock:assert_expectations(Mpid),
 	% 		gen_leader_mock:assert_expectations(AMpid)
 	% 	end,
-	% 	?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
+	% 	?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
 	% 	gen_server_mock:expect_call(Mpid, fun('$gen_media_get_call', _From, State) ->
 	% 			Client = #client{id="00010001"},
 	% 			Out = #call{id="foo", client=Client, source=Mpid},
@@ -1504,7 +1503,7 @@ check_conditions_test_() ->
 	% 		gen_server_mock:assert_expectations(Mpid),
 	% 		gen_leader_mock:assert_expectations(AMpid)
 	% 	end,
-	% 	?CONSOLE("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
+	% 	?debugFmt("Start args:  ~p", [{QMPid, QPid, Mpid, AMpid, Assertmocks}]),
 	% 	gen_server_mock:expect_call(Mpid, fun('$gen_media_get_call', _From, State) ->
 	% 			Out = #call{id="foo", type=voice, source=Mpid},
 	% 		{ok, Out, State}
@@ -1560,7 +1559,7 @@ check_conditions_test_() ->
 	% 		gen_leader_mock:assert_expectations(AMpid)
 	% 	end,
 	% 	Primer = {QMPid, Qpid, Mpid, AMpid, Assertmocks},
-	% 	?CONSOLE("start args:  ~p", [Primer]),
+	% 	?debugFmt("start args:  ~p", [Primer]),
 	% 	gen_server_mock:expect_call(Mpid, fun('$gen_media_get_call', _From, State) ->
 	% 		Out = #call{
 	% 			id = "foo",
@@ -1626,7 +1625,7 @@ check_conditions_test_() ->
 	% 		gen_leader_mock:assert_expectations(AMpid)
 	% 	end,
 	% 	Primer = {QMPid, Qpid, Mpid, AMpid, Assertmocks},
-	% 	?CONSOLE("start args:  ~p", [Primer]),
+	% 	?debugFmt("start args:  ~p", [Primer]),
 	% 	gen_server_mock:expect_call(Mpid, fun('$gen_media_get_call', _From, State) ->
 	% 		Out = #call{
 	% 			id = "foo",
@@ -1692,7 +1691,7 @@ check_conditions_test_() ->
 % 		try call_queue:stop(Pid)
 % 		catch
 % 			exit:{noproc, Detail} ->
-% 				?debugFmt("caught exit:~p ; some tests will kill the original call_queue process.", [Detail])
+% 				lager:debugFmt("caught exit:~p ; some tests will kill the original call_queue process.", [Detail])
 % 		end,
 % 		queue_manager:stop()
 % 	end,
@@ -1744,28 +1743,28 @@ check_conditions_test_() ->
 % 	fun() ->
 % 		test_primer(),
 % 		cdr:start(),
-% 		?DEBUG("queue_manager:  ~p", [queue_manager:start([node()])]),
+% 		lager:debug("queue_manager:  ~p", [queue_manager:start([node()])]),
 % 		{ok, QPid} = queue_manager:add_queue("testqueue", []),
-% 		?DEBUG("call_queue:  ~p", [QPid]),
+% 		lager:debug("call_queue:  ~p", [QPid]),
 % 		{ok, MPid} = dummy_media:start([{id, "testcall"}, {queues, none}]),
-% 		?DEBUG("dummy_media:  ~p", [MPid]),
-% 		?DEBUG("dispatch_manager:  ~p", [dispatch_manager:start()]),
-% 		?DEBUG("agent_manager:  ~p", [agent_manager:start([node()])]),
+% 		lager:debug("dummy_media:  ~p", [MPid]),
+% 		lager:debug("dispatch_manager:  ~p", [dispatch_manager:start()]),
+% 		lager:debug("agent_manager:  ~p", [agent_manager:start([node()])]),
 % 		{ok, APid} = agent_manager:start_agent(#agent{login = "testagent"}),
-% 		?DEBUG("agent:  ~p", [APid]),
+% 		lager:debug("agent:  ~p", [APid]),
 % 		{QPid, MPid, APid}
 % 	end,
 % 	fun({QPid, MPid, APid}) ->
-% 		?DEBUG("stopping dummy_media:  ~p", [dummy_media:stop(MPid)]),
-% 		?DEBUG("stopping dispatch_manager:  ~p", [dispatch_manager:stop()]),
+% 		lager:debug("stopping dummy_media:  ~p", [dummy_media:stop(MPid)]),
+% 		lager:debug("stopping dispatch_manager:  ~p", [dispatch_manager:stop()]),
 % 		try call_queue:stop(QPid)
 % 		catch
 % 			exit:{noproc, Detail} ->
-% 				?debugFmt("caught exit:~p ; some tests will kill the original call_queue process.", [Detail])
+% 				lager:debugFmt("caught exit:~p ; some tests will kill the original call_queue process.", [Detail])
 % 		end,
-% 		?DEBUG("stopping queue_manager:  ~p", [queue_manager:stop()]),
-% 		?DEBUG("stopping agent:  ~p", [agent:stop(APid)]),
-% 		?DEBUG("Stopping agent_manager:  ~p", [agent_manager:stop()]),
+% 		lager:debug("stopping queue_manager:  ~p", [queue_manager:stop()]),
+% 		lager:debug("stopping agent:  ~p", [agent:stop(APid)]),
+% 		lager:debug("Stopping agent_manager:  ~p", [agent_manager:stop()]),
 % 		gen_event:stop(cdr)
 % 	end,
 % 	[
@@ -1794,7 +1793,7 @@ check_conditions_test_() ->
 % 				after ?TICK_LENGTH + 100 ->
 % 					ok
 % 				end,
-% 				?CONSOLE("test time!",[]),
+% 				?debugFmt("test time!",[]),
 % 				{ok, Statename} = agent:query_state(APid),
 % 				{ok, Statename2} = agent:query_state(APid2),
 % 				?assertEqual(ringing, Statename),
@@ -1808,7 +1807,7 @@ check_conditions_test_() ->
 % 				after ?TICK_LENGTH * (?RINGOUT) + 100 ->
 % 					ok
 % 				end,
-% 				?CONSOLE("2nd test time!", []),
+% 				?debugFmt("2nd test time!", []),
 % 				{ok, Statename3} = agent:query_state(APid),
 % 				{ok, Statename4} = agent:query_state(APid2),
 % 				?assertEqual(idle, Statename3),
@@ -1837,7 +1836,7 @@ check_conditions_test_() ->
 % 			fun() ->
 % 				{ok, Media} = dummy_media:start([{id, "testcall"}, {skills, [german]}, {queues, none}]),
 % 				%dummy_media:set_skills(Media, [german]),
-% 				?CONSOLE("Media response to getting call:  ~p", [gen_media:get_call(Media)]),
+% 				?debugFmt("Media response to getting call:  ~p", [gen_media:get_call(Media)]),
 % 				call_queue:add(QPid, Media),
 % 				agent:set_state(APid, idle),
 % 				receive
@@ -1890,7 +1889,7 @@ check_conditions_test_() ->
 % 			Slave = list_to_atom(lists:append("slave@", Host)),
 % 			M = slave:start(net_adm:localhost(), master, " -pa debug_ebin"),
 % 			S = slave:start(net_adm:localhost(), slave, " -pa debug_ebin"),
-% 			?CONSOLE("M start:  ~p;  S start:  ~p", [M, S]),
+% 			?debugFmt("M start:  ~p;  S start:  ~p", [M, S]),
 % 			mnesia:stop(),
 
 % 			mnesia:change_config(extra_db_nodes, [Master, Slave]),
@@ -1924,11 +1923,11 @@ check_conditions_test_() ->
 % 			fun({Master, Slave}) ->
 % 				{"Media goes into a queue on a different node",
 % 				fun() ->
-% 					?CONSOLE("cook multi 1", []),
+% 					?debugFmt("cook multi 1", []),
 % 					{ok, Media} = rpc:call(Slave, dummy_media, start, [[{id, "testcall"}, {queues, none}]]),
 % 					?assert(node(Media) =:= Slave),
 % 					QPid = rpc:call(Master, queue_manager, get_queue, ["default_queue"]),
-% 					?CONSOLE("das pid:  ~p", [QPid]),
+% 					?debugFmt("das pid:  ~p", [QPid]),
 % 					?assert(is_pid(QPid)),
 % 					%QPid = queue_manager:get_queue("default_queue"),
 % 					call_queue:set_recipe(QPid, [{[{ticks, 1}], [{prioritize, []}], run_many, "Comment"}]),

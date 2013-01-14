@@ -46,7 +46,6 @@
 -ifdef(PROFILE).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
--include("log.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 
 -type(proplist_item() :: atom() | {any(), any()}).
@@ -172,7 +171,7 @@ drop({_Type, _Name} = Key) ->
 %% or monitoring done for this.
 -spec(info/1 :: (Params :: any()) -> 'ok').
 info(Params) ->
-	%?DEBUG("infoing initial:  ~p", [Params]),
+	%lager:debug("infoing initial:  ~p", [Params]),
 	gen_leader:leader_cast(?MODULE, {info, os:timestamp(), Params}).
 
 %% @doc Subscribe the calling process to all events from ?MODULE.
@@ -224,7 +223,7 @@ init(Args) when is_list(Args) ->
 
 %% @hidden
 elected(State, Election, Node) ->
-	?INFO("elected by ~w", [Node]),
+	lager:info("elected by ~w", [Node]),
 	% what was down and is now up?
 	Cands = gen_leader:candidates(Election),
 	lists:foreach(fun(Cnode) ->
@@ -262,9 +261,9 @@ elected(State, Election, Node) ->
 			% P = spawn_link(agent_auth, merge, [[node() | Mergenodes], Oldest, self()]),
 			% Qspawn = spawn_link(call_queue_config, merge, [[node() | Mergenodes], Oldest, self()]),
 			Cdrspawn = spawn_link(cdr, merge, [[node() | Mergenodes], Oldest, self()]),
-			% ?DEBUG("spawned for agent_auth:  ~p", [P]),
-			% ?DEBUG("Spawned for call_queue_config:  ~w", [Qspawn]),
-			?DEBUG("Spawned for cdr:  ~w", [Cdrspawn]),
+			% lager:debug("spawned for agent_auth:  ~p", [P]),
+			% lager:debug("Spawned for call_queue_config:  ~w", [Qspawn]),
+			lager:debug("Spawned for cdr:  ~w", [Cdrspawn]),
 			{ok, {Merge, Stilldown}, State#state{status = merging, merge_status = dict:new(), merging = Mergenodes, splits = Stilldown}}
 	end.
 
@@ -302,7 +301,7 @@ surrendered(State, {_Merge, _Stilldown}, Election) ->
 
 %% @hidden
 handle_DOWN(Node, State, Election) ->
-	?ERROR("Node ~p is down!", [Node]),
+	lager:error("Node ~p is down!", [Node]),
 	Newsplits = case proplists:get_value(Node, State#state.splits) of
 		undefined ->
 			[{Node, util:now()} | State#state.splits];
@@ -343,7 +342,7 @@ handle_leader_call({get, What}, _From, State, _Election) when is_atom(What) ->
 	Results = qlc:e(qlc:q([X || {{GetWhat, _}, _, _, _, _, _} = X <- ets:table(?MODULE), GetWhat =:= What])),
 	{reply, {ok, Results}, State};
 handle_leader_call(Message, From, State, _Election) ->
-	?WARNING("received unexpected leader_call ~p from ~p", [Message, From]),
+	lager:warning("received unexpected leader_call ~p from ~p", [Message, From]),
 	{reply, ok, State}.
 
 % =====
@@ -426,9 +425,9 @@ handle_leader_cast({ensure_live, Node, Time}, State, Election) ->
 	Alive = gen_leader:alive(Election),
 	case lists:member(Node, Alive) of
 		true ->
-			?DEBUG("Node ~w is in election alive list", [Node]);
+			lager:debug("Node ~w is in election alive list", [Node]);
 		false ->
-			?WARNING("Node ~w does not appear in the election alive list", [Node])
+			lager:warning("Node ~w does not appear in the election alive list", [Node])
 	end,
 	Message = {{node, Node}, [{up, Time}], Node},
 	cache_event(Message, Time, none, undefined),
@@ -470,12 +469,12 @@ handle_leader_cast(clear_dead_media, State, Election) ->
 	end || Id <- Dropples],
 	{noreply, State};
 handle_leader_cast(Message, State, _Election) ->
-	?WARNING("received unexpected leader_cast ~p", [Message]),
+	lager:warning("received unexpected leader_cast ~p", [Message]),
 	{noreply, State}.
 
 %% @hidden
 from_leader(_Msg, State, _Election) ->
-	?DEBUG("Stub from leader.", []),
+	lager:debug("Stub from leader.", []),
 	{ok, State}.
 
 %%--------------------------------------------------------------------
@@ -485,7 +484,7 @@ from_leader(_Msg, State, _Election) ->
 handle_call(stop, _From, State, _Election) ->
 	{stop, normal, ok, State};
 handle_call(Request, _From, State, _Election) ->
-	?WARNING("Unable to fulfill call request ~p", [Request]),
+	lager:warning("Unable to fulfill call request ~p", [Request]),
 	Reply = ok,
 	{reply, Reply, State}.
 
@@ -494,7 +493,7 @@ handle_call(Request, _From, State, _Election) ->
 %%--------------------------------------------------------------------
 %% @hidden
 handle_cast(Request, State, _Election) ->
-	?WARNING("Unable to fulfill cast request ~p.", [Request]),
+	lager:warning("Unable to fulfill cast request ~p.", [Request]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -505,7 +504,7 @@ handle_info({leader_event, report}, State) ->
 	gen_leader:leader_cast(?MODULE, {reporting, node()}),
 	{noreply, State};
 handle_info({leader_event, Message}, State) ->
-	?DEBUG("Got message leader_event ~p", [Message]),
+	lager:debug("Got message leader_event ~p", [Message]),
 	case Message of
 		{drop, _Time, Key} ->
 			ets:delete(?MODULE, Key),
@@ -515,7 +514,7 @@ handle_info({leader_event, Message}, State) ->
 			{noreply, State}
 	end;
 handle_info({merge_complete, Mod, _Recs}, #state{merge_status = none, status = Status}= State) when Status == stable; Status == split ->
-	?INFO("Prolly a late merge complete from ~w.", [Mod]),
+	lager:info("Prolly a late merge complete from ~w.", [Mod]),
 	{noreply, State};
 handle_info({merge_complete, Mod, Recs}, #state{status = merging} = State) ->
 	Newmerged = dict:store(Mod, Recs, State#state.merge_status),
@@ -525,7 +524,7 @@ handle_info({merge_complete, Mod, Recs}, #state{status = merging} = State) ->
 			case State#state.auto_restart_mnesia of
 				true ->
 					P = restart_mnesia(State#state.monitoring -- [node()]),
-					?DEBUG("process to restart mnesia:  ~p", [P]);
+					lager:debug("process to restart mnesia:  ~p", [P]);
 				false ->
 					ok
 			end,
@@ -539,7 +538,7 @@ handle_info({merge_complete, Mod, Recs}, #state{status = merging} = State) ->
 			{noreply, State#state{merge_status = Newmerged}}
 	end;
 handle_info({'DOWN', Monref, process, WatchWhat, Why}, State) ->
-	?INFO("Down message for reference ~p of ~p due to ~p", [Monref, WatchWhat, Why]),
+	lager:info("Down message for reference ~p of ~p due to ~p", [Monref, WatchWhat, Why]),
 	case qlc:e(qlc:q([Key ||
 		{Key, _Time, _, _, TestWatchWhat, TestMonref} <- ets:table(?MODULE),
 		TestWatchWhat =:= WatchWhat,
@@ -552,11 +551,11 @@ handle_info({'DOWN', Monref, process, WatchWhat, Why}, State) ->
 	end,
 	{noreply, State};
 handle_info({'EXIT', From, Reason}, #state{subscribers = Subs} = State) ->
-	?INFO("~p said it died due to ~p.", [From, Reason]),
+	lager:info("~p said it died due to ~p.", [From, Reason]),
 	Newsubs = proplists:delete(From, Subs),
 	{noreply, State#state{subscribers = Newsubs}};
 handle_info(dump_subs, #state{subscribers = Subs} = State) ->
-	?DEBUG("Subs:  ~p", [Subs]),
+	lager:debug("Subs:  ~p", [Subs]),
 	{noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -566,7 +565,7 @@ handle_info(_Info, State) ->
 %%--------------------------------------------------------------------
 %% @hidden
 terminate(Reason, _State) ->
-	?INFO("~s going down for ~p", [?MODULE, Reason]),
+	lager:info("~s going down for ~p", [?MODULE, Reason]),
     ok.
 
 %%--------------------------------------------------------------------
@@ -582,16 +581,16 @@ code_change(_OldVsn, State, _Election, _Extra) ->
 
 restart_mnesia(Nodes) ->
 	F = fun() ->
-		?WARNING("automatically restarting mnesia on formerly split nodes: ~p", [Nodes]),
+		lager:warning("automatically restarting mnesia on formerly split nodes: ~p", [Nodes]),
 		lists:foreach(fun(N) ->
 			case net_adm:ping(N) of
 				pong ->
 					S = rpc:call(N, mnesia, stop, [], 1000),
-					?DEBUG("stoping mnesia on ~w got ~p", [N, S]),
+					lager:debug("stoping mnesia on ~w got ~p", [N, S]),
 					G = rpc:call(N, mnesia, start, [], 1000),
-					?DEBUG("Starting mnesia on ~w got ~p", [N, G]);
+					lager:debug("Starting mnesia on ~w got ~p", [N, G]);
 				pang ->
-					?ALERT("Not restarting mnesia on ~w, it's not pingable!", [N])
+					lager:alert("Not restarting mnesia on ~w, it's not pingable!", [N])
 			end
 		end, Nodes)
 	end,
@@ -633,10 +632,10 @@ write_rows(Dict) ->
 	write_rows_loop(dict:to_list(Dict)).
 
 write_rows_loop([]) ->
-	%?DEBUG("No more to write.", []),
+	%lager:debug("No more to write.", []),
 	ok;
 write_rows_loop([{_Mod, Recs} | Tail]) ->
-	%?DEBUG("Writing ~p to mnesia", [Recs]),
+	%lager:debug("Writing ~p to mnesia", [Recs]),
 	F = fun() ->
 		lists:foreach(fun(R) -> mnesia:write(R) end, Recs)
 	end,
@@ -670,7 +669,7 @@ tell_sub_fun(Message, Pid, Fun) ->
 tell_cands(Message, Election) ->
 	Nodes = gen_leader:candidates(Election),
 	Leader = gen_leader:leader_node(Election),
-	%?DEBUG("Leader ~p is telling nodes ~p", [Leader, Nodes]),
+	%lager:debug("Leader ~p is telling nodes ~p", [Leader, Nodes]),
 	tell_cands(Message, Nodes, Leader).
 
 tell_cands(_Message, [], _Leader) ->
@@ -1213,7 +1212,7 @@ profile_tc_test_() ->
 			end
 		end || X <- lists:seq(1, 1000)],
 		Avg = avg(Acc),
-		?INFO("Average time:  ~f", [Avg]),
+		lager:info("Average time:  ~f", [Avg]),
 		record_res(File, Group, Name, Avg)
 	end}} end,
 	fun(File) -> Name = "info message with lots of data", {timeout, 60, {Name, fun() ->
@@ -1231,7 +1230,7 @@ profile_tc_test_() ->
 			end
 		end || X <- lists:seq(1, 1000)],
 		Avg = avg(Acc),
-		?INFO("Average time:  ~f", [avg(Acc)]),
+		lager:info("Average time:  ~f", [avg(Acc)]),
 		record_res(File, Group, Name, Avg)
 	end}} end,
 	fun(File) -> Name = "alternating sets and drops, no data", {timeout, 60, {Name, fun() ->
@@ -1249,7 +1248,7 @@ profile_tc_test_() ->
 			end
 		end || X <- lists:seq(1, 1000)],
 		Avg = avg(Acc),
-		?INFO("Average time:  ~f", [Avg]),
+		lager:info("Average time:  ~f", [Avg]),
 		record_res(File, Group, Name, Avg)
 	end}} end,
 	fun(File) -> Name = "set, set, set, drop", {timeout, 60, {Name, fun() ->
@@ -1271,7 +1270,7 @@ profile_tc_test_() ->
 			end
 		end || X <- lists:seq(1, 1024)],
 		Avg = avg(Acc),
-		?INFO("Average time:  ~f", [Avg]),
+		lager:info("Average time:  ~f", [Avg]),
 		record_res(File, Group, Name, Avg)
 	end}} end,
 	fun(File) -> Name = "dumb sets", {timeout, 60, {Name, fun() ->
@@ -1287,7 +1286,7 @@ profile_tc_test_() ->
 			end
 		end || X <- lists:seq(1, 1000)],
 		Avg = avg(Acc),
-		?INFO("Average time:  ~f", [Avg]),
+		lager:info("Average time:  ~f", [Avg]),
 		record_res(File, Group, Name, Avg)
 	end}} end]}.
 
@@ -1336,7 +1335,7 @@ profile_test_() ->
 					timer:now_diff(os:timestamp(), InTime)
 			end
 		end || X <- lists:seq(1, 1000)],
-		?INFO("Average time:  ~f", [avg(Acc)]),
+		lager:info("Average time:  ~f", [avg(Acc)]),
 		write_result(File, profile, Name, avg(Acc))
 	end}} end,
 	fun(File) -> Name = "set, set, set, drop", {timeout, 60, {Name, fun() ->
@@ -1355,7 +1354,7 @@ profile_test_() ->
 			end
 		end || X <- lists:seq(1, 1024)],
 		Avg = avg(Acc),
-		?INFO("Average time:`~f", [Avg]),
+		lager:info("Average time:`~f", [Avg]),
 		write_result(File, profile, Name, avg(Acc))
 	end}} end]}.
 

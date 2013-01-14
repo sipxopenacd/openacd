@@ -33,7 +33,6 @@
 -module(dispatcher).
 -author("Micah").
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 
@@ -88,15 +87,15 @@ get_queue_info(Pid) ->
 %%====================================================================
 %% @private
 init([]) ->
-	%?DEBUG("Dispatcher starting", []),
+	%lager:debug("Dispatcher starting", []),
 	State = #state{},
 	case grab_best() of
 		none ->
-			?DEBUG("no call to grab, lets start a timer", []),
+			lager:debug("no call to grab, lets start a timer", []),
 			Tref = erlang:send_after(?POLL_INTERVAL, self(), grab_best),
 			{ok, State#state{tref=Tref}};
 		{Qpid, Call} ->
-			?DEBUG("sweet, grabbed a call: ~p", [Call#queued_call.id]),
+			lager:debug("sweet, grabbed a call: ~p", [Call#queued_call.id]),
 			{ok, State#state{call=Call, qpid=Qpid, tried_queues = [Qpid]}}
 	end.
 
@@ -148,7 +147,7 @@ handle_cast(regrab, #state{tried_queues = Tried, call = OldCall} = State) ->
 	Filtered = [Elem || {_Qnom, Qpid, {_Pos, _QueuedCall}, _Weight} = Elem <- Queues, not lists:member(Qpid, Tried)],
 	case loop_queues(Filtered) of
 		none ->
-			%?DEBUG("No new queue found, maintaining same state, releasing hold for another dispatcher", []),
+			%lager:debug("No new queue found, maintaining same state, releasing hold for another dispatcher", []),
 			call_queue:ungrab(State#state.qpid, OldCall#queued_call.id),
 			Tref = erlang:send_after(?POLL_INTERVAL, self(), grab_best),
 			case State#state.cook_mon of
@@ -158,7 +157,7 @@ handle_cast(regrab, #state{tried_queues = Tried, call = OldCall} = State) ->
 			{noreply, State#state{qpid = undefined, call = undefined, tref = Tref, tried_queues = [], cook_mon = undefined}};
 		{Qpid, Call} ->
 			call_queue:ungrab(State#state.qpid, OldCall#queued_call.id),
-			?DEBUG("updating from call ~s in ~p to ~s in ~p", [OldCall#queued_call.id, State#state.qpid, Call#queued_call.id, Qpid]),
+			lager:debug("updating from call ~s in ~p to ~s in ~p", [OldCall#queued_call.id, State#state.qpid, Call#queued_call.id, Qpid]),
 			Cookmon = erlang:monitor(process, Call#queued_call.cook),
 			{noreply, State#state{qpid=Qpid, call=Call, tried_queues = [Qpid | Tried], cook_mon = Cookmon}}
 	end;
@@ -178,13 +177,13 @@ handle_info(grab_best, State) ->
 			{noreply, State#state{call=Call, qpid=Qpid, tref=undefined}}
 	end;
 handle_info({'DOWN', Mon, process, Pid, Reason}, #state{cook_mon = Mon} = State) when Reason =:= normal orelse Reason =:= shutdown ->
-	?DEBUG("Monitor'ed cook (~p) exited cleanly, going down", [Pid]),
+	lager:debug("Monitor'ed cook (~p) exited cleanly, going down", [Pid]),
 	{stop, Reason, State};
 handle_info({'DOWN', Mon, process, Pid, Reason}, #state{cook_mon = Mon} = State) ->
-	?DEBUG("Monitored cook (~p) died messily (~p), moving onto another call.", [Pid, Reason]),
+	lager:debug("Monitored cook (~p) died messily (~p), moving onto another call.", [Pid, Reason]),
 	handle_cast(regrab, State);
 handle_info(Info, State) ->
-	?DEBUG("unexpected info ~p", [Info]),
+	lager:debug("unexpected info ~p", [Info]),
 	{noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -192,7 +191,7 @@ handle_info(Info, State) ->
 %%--------------------------------------------------------------------
 %% @private
 terminate(Reason, State) ->
-	?NOTICE("Teminated:  ~p", [Reason]),
+	lager:notice("Teminated:  ~p", [Reason]),
 	Call = State#state.call,
 	catch call_queue:ungrab(State#state.qpid, Call#queued_call.id),
 	ok.
@@ -216,19 +215,19 @@ get_agents(Pid) ->
 
 -spec(loop_queues/1 :: (Queues :: [{string(), pid(), {any(), #queued_call{}}, non_neg_integer()}]) -> {pid(), #queued_call{}} | 'none').
 loop_queues([]) ->
-	%?DEBUG("queue list is empty", []),
+	%lager:debug("queue list is empty", []),
 	none;
 loop_queues(Queues) ->
-	%?DEBUG("queues: ~p", [Queues]),
+	%lager:debug("queues: ~p", [Queues]),
 	Total = lists:foldl(fun(Elem, Acc) -> Acc + element(4, Elem) end, 0, Queues),
 	Rand = case Total of 0 -> 0; _ -> random:uniform(Total) end,
 	{Name, Qpid, Call, Weight} = biased_to(Queues, 0, Rand),
-	%?DEBUG("grabbing call", []),
+	%lager:debug("grabbing call", []),
 	case call_queue:grab(Qpid) of
 			none ->
 				loop_queues(lists:delete({Name, Qpid, Call, Weight}, Queues));
 			{_Key, Call2} ->
-				%?DEBUG("grabbed call ~p", [Call2#queued_call.id]),
+				%lager:debug("grabbed call ~p", [Call2#queued_call.id]),
 				link(Call2#queued_call.cook),
 				{Qpid, Call2}
 	end.
@@ -262,7 +261,7 @@ grab_best() ->
 %% @doc tries to grab a new call ignoring the queue it's current call is bound to
 -spec(regrab/1 :: (pid()) -> 'ok').
 regrab(Pid) ->
-	%?DEBUG("dispatcher trying to regrab", []),
+	%lager:debug("dispatcher trying to regrab", []),
 	gen_server:cast(Pid, regrab),
 	ok.
 
@@ -287,15 +286,15 @@ stop(Pid, Force) ->
 % 	{_, Pid3} = queue_manager:add_queue("queue3", [{weight, 3}]),
 % 	{_, Pid4} = queue_manager:add_queue("queue4", [{weight, 3}]),
 % 	PCalls = [Call || N <- [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], Call <- ["C" ++ integer_to_list(N)]],
-% 	?debugFmt("PCalls:  ~p", [PCalls]),
+% 	lager:debugFmt("PCalls:  ~p", [PCalls]),
 % 	F = fun(Callrec) ->
 % 		{ok, Mpid} = dummy_media:start([{id, Callrec}, {queues, none}]),
 % 		Mpid
 % 	end,
 % 	Mediapids = lists:map(F, PCalls),
-% 	?debugFmt("Mediapids ~p", [Mediapids]),
+% 	lager:debugFmt("Mediapids ~p", [Mediapids]),
 % 	Calls = list_to_tuple(Mediapids),
-% 	?debugFmt("Calls is:  ~p", [Calls]),
+% 	lager:debugFmt("Calls is:  ~p", [Calls]),
 % 	call_queue:add(Pid1, 1, element(1, Calls)),
 % 	call_queue:add(Pid1, 1, element(2, Calls)),
 % 	call_queue:add(Pid1, 1, element(3, Calls)),
@@ -314,20 +313,20 @@ stop(Pid, Force) ->
 % 	Dict4 = dict:store("queue3", 0, Dict3),
 % 	Dict5 = dict:store("queue4", 0, Dict4),
 % 	Out = randomtest_loop(Queues, Total, Dict5, 0),
-% 	?debugFmt("queue1:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [1, 4, 11]),
-% 	?debugFmt("queue2:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [2, 3, 33]),
-% 	?debugFmt("queue3:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [3, 3, 55]),
-% 	?debugFmt("queue4:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [3, 0, 0]),
-% 	?debugFmt("Total: ~p~n", [Total]),
-% 	?debugFmt("out:  ~p~n", [Out]),
+% 	lager:debugFmt("queue1:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [1, 4, 11]),
+% 	lager:debugFmt("queue2:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [2, 3, 33]),
+% 	lager:debugFmt("queue3:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [3, 3, 55]),
+% 	lager:debugFmt("queue4:~n	w:  ~p~n	Calls:~p~n	Ratio:~p~n", [3, 0, 0]),
+% 	lager:debugFmt("Total: ~p~n", [Total]),
+% 	lager:debugFmt("out:  ~p~n", [Out]),
 % 	V1 = dict:fetch("queue1", Out) div (?MAX_RANDOM_TEST div 100), %div by 100 to make a percentage.
 % 	V2 = dict:fetch("queue2", Out) div (?MAX_RANDOM_TEST div 100),
 % 	V3 = dict:fetch("queue3", Out) div (?MAX_RANDOM_TEST div 100),
 % 	V4 = dict:fetch("queue4", Out) div (?MAX_RANDOM_TEST div 100),
-% 	?debugFmt("q1:  ~p~n", [V1]),
-% 	?debugFmt("q2:  ~p~n", [V2]),
-% 	?debugFmt("q3:  ~p~n", [V3]),
-% 	?debugFmt("q4:  ~p~n", [V4]),
+% 	lager:debugFmt("q1:  ~p~n", [V1]),
+% 	lager:debugFmt("q2:  ~p~n", [V2]),
+% 	lager:debugFmt("q3:  ~p~n", [V3]),
+% 	lager:debugFmt("q4:  ~p~n", [V4]),
 % 	% these 3 were valid when queueing strategy multiplied weight by calls
 % 	% that is no longer true.
 % %	?assert((V1 > 17) and (V1 < 22)),
@@ -414,7 +413,7 @@ stop(Pid, Force) ->
 % 		timer:sleep(100),
 % 		{ok, State} = init([]),
 % 		{Regrabs, Grab_bests} = O = recloop(0, 0, State),
-% 		?DEBUG("regrabs and grab_bests:  ~p", [O]),
+% 		lager:debug("regrabs and grab_bests:  ~p", [O]),
 % 		?assertEqual(2, Regrabs),
 % 		% two because the dispatcher will start bound to q1.
 % 		% the regrab bounds it to q2 (regrab 1)
@@ -433,7 +432,7 @@ stop(Pid, Force) ->
 % recloop(Regrabs, Grab_bests, State) ->
 % 	receive
 % 		{'$gen_call',{Pid, Ref} = From, Msg} ->
-% 			?DEBUG("recloop ~p", [Msg]),
+% 			lager:debug("recloop ~p", [Msg]),
 % 			case handle_call(Msg, From, State) of
 % 				{reply, Reply, Newstate} ->
 % 					gen_server:reply(From, Reply),
@@ -442,7 +441,7 @@ stop(Pid, Force) ->
 % 					recloop(Regrabs+1, Grab_bests, NewState)
 % 			end;
 % 		{'$gen_cast', Msg} ->
-% 			?DEBUG("recloop ~p", [Msg]),
+% 			lager:debug("recloop ~p", [Msg]),
 % 			{noreply, Newstate} = handle_cast(Msg, State),
 % 			Newgrabs = case Msg of
 % 				regrab ->
@@ -453,7 +452,7 @@ stop(Pid, Force) ->
 % 			recloop(Newgrabs, Grab_bests, Newstate);
 % 		Msg ->
 % 			{noreply, Newstate} = handle_info(Msg, State),
-% 			?DEBUG("recloop ~p", [Msg]),
+% 			lager:debug("recloop ~p", [Msg]),
 % 			Newgrabs = case Msg of
 % 				grab_best ->
 % 					Grab_bests + 1;
@@ -501,7 +500,7 @@ stop(Pid, Force) ->
 % 			Mpid
 % 		end,
 % 		Calls = lists:map(F, PCalls),
-% 		?DEBUG("calls:  ~p", [Calls]),
+% 		lager:debug("calls:  ~p", [Calls]),
 % 		call_queue:add(Pid1, 1, lists:nth(1, Calls)),
 % 		call_queue:add(Pid2, 1, lists:nth(2, Calls)),
 % 		call_queue:add(Pid3, 1, lists:nth(3, Calls)),
@@ -564,7 +563,7 @@ bias_to_test() ->
 % 		mnesia:delete_schema([node()]),
 % 		mnesia:create_schema([node()]),
 % 		mnesia:start(),
-% 		?debugFmt("~p~n", [mnesia:system_info(tables)]),
+% 		lager:debugFmt("~p~n", [mnesia:system_info(tables)]),
 % 		{ok, _Pid2} = queue_manager:start([node()]),
 % 		{ok, Pid} = start(),
 % 		Pid

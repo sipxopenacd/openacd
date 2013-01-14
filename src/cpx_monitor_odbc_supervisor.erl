@@ -46,7 +46,6 @@
 
 -define(DEFAULT_ANI, "Unknown").
 
--include("log.hrl").
 -include("call.hrl").
 -include("cpx.hrl").
 -include("odbc_kgb.hrl").
@@ -194,16 +193,16 @@ handle_call(_Request, _From, State) ->
 handle_cast(start_odbc, #state{odbc_sup_pid = undefined} = State) ->
 	{ok, SupOdbc} = start_odbc_super(State#state.max_r, State#state.max_t),
 	{ok, Odbc} = start_odbc_process(SupOdbc, State#state.dsn, State#state.trace),
-	?INFO("New sup:  ~p;  new odbc:  ~p.", [SupOdbc, Odbc]),
+	lager:info("New sup:  ~p;  new odbc:  ~p.", [SupOdbc, Odbc]),
 	link(Odbc),
 	Resend = lists:reverse(State#state.event_cache),
 	[Odbc ! X || X <- Resend],
 	{noreply, State#state{odbc_pid = Odbc, odbc_sup_pid = SupOdbc}};
 handle_cast(start_odbc, State) ->
-	?INFO("Supervisor for odbc still up", []),
+	lager:info("Supervisor for odbc still up", []),
 	{noreply, State};
 handle_cast(stop, #state{odbc_sup_pid = undefined} = State) ->
-	?WARNING("Stopping while writer process is stopped.", []),
+	lager:warning("Stopping while writer process is stopped.", []),
 	{stop, normal, State};
 handle_cast(stop, State) ->
 	Event = build_event_log(acd_stop, os:timestamp(), []),
@@ -219,33 +218,33 @@ handle_cast(_Msg, State) ->
 
 %% === handle exits ===
 handle_info({'EXIT', Pid, _Reason} = Msg, #state{odbc_sup_pid = Pid, odbc_pid = OdbcPid} = State) when is_pid(OdbcPid) ->
-	?DEBUG("bing", []),
+	lager:debug("bing", []),
 	MidState = State#state{odbc_pid = undefined},
 	handle_info(Msg, MidState);
 handle_info({'EXIT', Pid, _Reason} = Msg, #state{odbc_sup_pid = Pid, odbc_pid = Ref} = State) when is_reference(Ref) ->
-	?DEBUG("bing", []),
+	lager:debug("bing", []),
 	erlang:cancel_timer(Ref),
 	MidState = State#state{odbc_pid = undefined},
 	handle_info(Msg, MidState);
 handle_info({'EXIT', Pid, Reason}, #state{odbc_sup_pid = Pid, odbc_pid = undefined} = State) ->
-	?ERROR("Odbc supervisor process ~p has died due to ~p; manual intervention required.", [Pid, Reason]),
+	lager:error("Odbc supervisor process ~p has died due to ~p; manual intervention required.", [Pid, Reason]),
 	NewState = State#state{odbc_sup_pid = undefined},
 	{noreply, NewState};
 handle_info({'EXIT', Pid, Reason}, #state{odbc_sup_pid = undefined} = State) ->
-	?INFO("Likely a late exit for odbc process ~p due to ~p.", [Pid, Reason]),
+	lager:info("Likely a late exit for odbc process ~p due to ~p.", [Pid, Reason]),
 	{noreply, State};
 handle_info({'EXIT', Pid, Reason}, #state{odbc_pid = Pid} = State) ->
-	?INFO("Got exit for odbc process ~p due to ~p; scheduling resend of cache.", [Pid, Reason]),
+	lager:info("Got exit for odbc process ~p due to ~p; scheduling resend of cache.", [Pid, Reason]),
 	Self = self(),
 	Ref = erlang:send_after(?Check_interval, Self, check_odbc),
 	{noreply, State#state{odbc_pid = Ref}};
 
 % === exit recovery ===
 handle_info(check_odbc, #state{odbc_sup_pid = undefined} = State) ->
-	?INFO("likely a late check_odbc since the supervisor is dead.", []),
+	lager:info("likely a late check_odbc since the supervisor is dead.", []),
 	{noreply, State#state{odbc_pid = undefined}};
 handle_info(check_odbc, #state{odbc_sup_pid = Sup} = State) when is_pid(Sup) ->
-	?DEBUG("Checking for odbc recover", []),
+	lager:debug("Checking for odbc recover", []),
 	case supervisor:which_children(Sup) of
 		[{cpx_monitor_kgb_odbc, undefined, _, _}] ->
 			Ref = erlang:send_after(?Check_interval, ?MODULE, check_odbc),
@@ -278,7 +277,7 @@ handle_info({cpx_monitor_event, {set, Timestamp, {{agent, Key}, Details, _Node}}
 			Events = [Astart | Logins],
 			send_events(State#state.odbc_pid, Events, State#state.event_cache);
 		{ok, Current} ->
-			%?NOTICE("Udating agent ~p from  ~p to ~p", [Key, Current, Details]),
+			%lager:notice("Udating agent ~p from  ~p to ~p", [Key, Current, Details]),
 			Events = agent_diff(Key, Details, Current, Timestamp, State),
 			send_events(State#state.odbc_pid, Events, State#state.event_cache)
 	end,
@@ -320,12 +319,12 @@ handle_info({cpx_monitor_event, {drop, Timestamp, {media, Key}}}, State) ->
 			end,
 			case dict:find(Key, State#state.calls) of
 				{ok, New} ->
-					?INFO("~p abandoned", [Key]),
+					lager:info("~p abandoned", [Key]),
 					UseableProps = [{cache_queue, Queue}, {mediaid, Key} | New],
 					Event = build_event_log(call_terminate, Timestamp, UseableProps),
 					send_events(State#state.odbc_pid, [Event], State#state.event_cache);
 				error ->
-					?ERROR("unknown call ~p abandoned", [Key]),
+					lager:error("unknown call ~p abandoned", [Key]),
 					State#state.event_cache
 			end;
 		{ok, _Agent} ->
@@ -340,7 +339,7 @@ handle_info({redrop, {media, Key}}, #state{callqueuemap = Callqmap, callagentmap
 	Newamap = dict:erase(Key, CallAgentMap),
 	{noreply, State#state{callqueuemap = Newcmap, callagentmap = Newamap, calls = Newcalls}};
 handle_info(Info, State) ->
-	?DEBUG("Got message: ~p", [Info]),
+	lager:debug("Got message: ~p", [Info]),
 	{noreply, State}.
 
 % =====
@@ -1026,7 +1025,7 @@ transform_events_tests() ->
 			{callerid, {"ignored", "a*b*c*d"}}
 		], "node"}}},
 		cpx_monitor_odbc_supervisor ! CpxEvent,
-		timer:sleep(10),
+		timer:sleep(100),
 		receive_oks(1),
 		?assertEqual(ok, gen_server_mock:assert_expectations(whereis(test_odbc_writer)))
 	end} end,
@@ -1071,7 +1070,7 @@ transform_events_tests() ->
 		),
 		CpxDropEvent = {cpx_monitor_event, {drop, Rec#test_conf.timestamp, {media, "testmedia"}}},
 		cpx_monitor_odbc_supervisor ! CpxDropEvent,
-		timer:sleep(10),
+		timer:sleep(100),
 		receive_oks(1),
 		?assertEqual(ok, gen_server_mock:assert_expectations(whereis(test_odbc_writer)))
 	end} end,
@@ -1292,7 +1291,7 @@ murder_tests() ->
 	% 	gen_server_mock:crash(whereis(test_odbc_writer)),
 	% 	{noreply, NewState} = receive
 	% 		{'EXIT', Odbc, Reason} = Msg ->
-	% 			?DEBUG("~p", [Reason]),
+	% 			lager:debug("~p", [Reason]),
 	% 			handle_info(Msg, State)
 	% 	after 20 ->
 	% 		?assert("didn't get exit message")

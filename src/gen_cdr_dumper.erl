@@ -38,7 +38,6 @@
 
 -behaviour(gen_server).
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include_lib("stdlib/include/qlc.hrl").
@@ -152,11 +151,11 @@ handle_call(_Request, _From, State) ->
 		%{ok, Substate} ->
 			%[{Module, Substate} | Callbacks];
 		%Else ->
-			%?INFO("Couldn't add handler ~w.  Bad return:  ~w", [Module, Else]),
+			%lager:info("Couldn't add handler ~w.  Bad return:  ~w", [Module, Else]),
 			%Callbacks
 	%catch
 		%What:Why ->
-			%?INFO("Couln't add handler ~w.  ~w:~p", [Module, What, Why]),
+			%lager:info("Couln't add handler ~w.  ~w:~p", [Module, What, Why]),
 			%Callbacks
 	%end,
 	%{noreply, State#state{callbacks = Newcallbacks}, hibernate};
@@ -184,7 +183,7 @@ handle_cast(_Msg, State) ->
 %handle_info({mnesia_table_event, {write, #agent_state{ended = undefined}, _Activityid}}, State) ->
 	%{noreply, State, hibernate};
 %handle_info({mnesia_table_event, {write, #agent_state{nodes = Nodes} = Staterec, _Activityid}}, State) ->
-	%?INFO("write table event: ~p", [Nodes]),
+	%lager:info("write table event: ~p", [Nodes]),
 	%case lists:delete(node(), Nodes) of
 		%Nodes ->
 			%{noreply, State, hibernate};
@@ -193,7 +192,7 @@ handle_cast(_Msg, State) ->
 			%{noreply, NewState, hibernate}
 	%end;
 handle_info({update, TableName}, State) ->
-	?NOTICE("got update for ~p", [TableName]),
+	lager:notice("got update for ~p", [TableName]),
 	NewState = dump_table(TableName, State),
 	flush(TableName),
 	{noreply, NewState, hibernate};
@@ -226,11 +225,11 @@ code_change(OldVsn, #state{module = Module, substate = SubState} = State, Extra)
 			{ok, Newsub} ->
 				Newsub;
 			Else ->
-				?INFO("Improper response to code change for ~w.  ~p", [Module, Else]),
+				lager:info("Improper response to code change for ~w.  ~p", [Module, Else]),
 				SubState
 		catch
 			What:Why ->
-				?INFO("Complete failure for ~w.  ~w:~p", [Module, What, Why]),
+				lager:info("Complete failure for ~w.  ~w:~p", [Module, What, Why]),
 				SubState
 		end,
 		{ok, State#state{substate = NewSubState}}.
@@ -264,8 +263,8 @@ dump_rows(QC, State) ->
 		[Row] ->
 			{NewState, NewRow} = dump_row(Row, State),
 			mnesia:delete_object(Row),
-			%?NOTICE("writing updated row ~p", [NewRow]),
-			%?NOTICE("old row ~p", [Row]),
+			%lager:notice("writing updated row ~p", [NewRow]),
+			%lager:notice("old row ~p", [Row]),
 			case NewRow of
 				#cdr_rec{nodes = []} ->
 					ok;
@@ -306,7 +305,7 @@ dump_table(agent_state, #state{module = Callback} = State) ->
 	{atomic, NewState} = mnesia:transaction(F),
 	NewState;
 dump_table(TableName, State) ->
-	?WARNING("Unknown table ~p", [TableName]),
+	lager:warning("Unknown table ~p", [TableName]),
 	State.
 
 -spec(commit/1 :: (State :: any()) -> {'ok', any()}).

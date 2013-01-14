@@ -37,7 +37,6 @@
 	-include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include("call.hrl").
 -include("cpx.hrl").
 -include("odbc_kgb.hrl").
@@ -103,7 +102,7 @@ init([Dsn, Trace]) ->
 	end,
 	Opts = lists:append(Trace, [{auto_commit, off}, {scrollable_cursors, off}]),
 	{ok, Conn} = odbc:connect(Dsn, Opts),
-	?INFO("Started with dsn ~s", [Dsn]),
+	lager:info("Started with dsn ~s", [Dsn]),
 	{ok, #state{dsn = Dsn, connection = Conn}}.
 
 % =====
@@ -123,7 +122,7 @@ handle_cast(stop, State) ->
 			ok,
 			{stop, normal, State};
 		{error, Reason} ->
-			?WARNING("Disconnect was not clean:  ~p", [Reason]),
+			lager:warning("Disconnect was not clean:  ~p", [Reason]),
 			{stop, {dirty, Reason}, State#state{connection = undefined}}
 	end.
 
@@ -135,7 +134,7 @@ handle_info({Ref, EventLog}, State) when is_record(EventLog, event_log_row) ->
 	Sql = build_sql(EventLog),
 	case odbc:sql_query(State#state.connection, Sql, 2000) of
 		{error, Reason} ->
-			?DEBUG("Sql:  ~p", [Sql]),
+			lager:debug("Sql:  ~p", [Sql]),
 			{stop, {failed_query, Reason}, State};
 		{updated, _N} ->
 			ok = odbc:commit(State#state.connection, commit),
@@ -150,13 +149,13 @@ handle_info(_Msg, State) ->
 % =====
 
 terminate(Why, #state{connection = undefined}) ->
-	?INFO("Ending:  ~p", [Why]);
+	lager:info("Ending:  ~p", [Why]);
 terminate(Why, #state{connection = Conn} = State) ->
 	case odbc:disconnect(Conn) of
 		ok ->
 			ok;
 		{error, Reason} ->
-			?WARNING("Disconnect was not clean:  ~p", [Reason])
+			lager:warning("Disconnect was not clean:  ~p", [Reason])
 	end,
 	terminate(Why, State#state{connection = undefined}).
 

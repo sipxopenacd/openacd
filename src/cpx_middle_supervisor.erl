@@ -33,7 +33,6 @@
 -module(cpx_middle_supervisor).
 -author("Micah").
 
--include("log.hrl").
 -include("cpx.hrl").
 -include("call.hrl").
 
@@ -79,7 +78,7 @@ start_named(Maxr, Maxt, Name) when is_atom(Name) ->
 %% @doc Starts the passed `#cpx_conf{} Spec' on the supervisor registered at `atom() Name' with maximum restart `Maxr' in `Maxt' seconds.
 -spec(add_with_middleman/4 :: (Name :: atom(), Maxr :: pos_integer(), Maxt :: pos_integer(), Spec :: #cpx_conf{}) -> {'ok', pid()} | {'ok', pid(), any()} | {'error', any()}).
 add_with_middleman(Name, Maxr, Maxt, Spec) when is_record(Spec, cpx_conf) ->
-	?DEBUG("~p adding ~p", [Name, Spec]),
+	lager:debug("~p adding ~p", [Name, Spec]),
 	supervisor:start_child(Name, {Spec#cpx_conf.id, {?MODULE, start_anon, [Maxr, Maxt, Spec]}, temporary, 2000, supervisor, [?MODULE]}).
 
 %% @doc Adds the `#cpx_conf{} Spec' directly to the supervisor registered at `atom() Name'.
@@ -105,7 +104,7 @@ drop_child(Name, Childid) ->
 init([Maxr, Maxt]) ->
     {ok,{{one_for_one, Maxr, Maxt}, []}};
 init([Maxr, Maxt, Spec]) ->
-	?DEBUG("Checking spec: ~p", [supervisor:check_childspecs([Spec])]),
+	lager:debug("Checking spec: ~p", [supervisor:check_childspecs([Spec])]),
     {ok,{{one_for_one, Maxr, Maxt}, [Spec]}}.
 
 %%====================================================================
@@ -124,7 +123,7 @@ startup_test_() ->
 			start_args = [{local, dummy_media_manager}]
 		},
 		Out = start_anon(3, 5, Dummyspec),
-		?CONSOLE("1:~p, ~p", [Out, self()]),
+		?debugFmt("1:~p, ~p", [Out, self()]),
 		?assertMatch({ok, _P}, Out),
 		{ok, Pid} = Out,
 		unlink(Pid),
@@ -133,17 +132,17 @@ startup_test_() ->
 	{"start as a neamed supervisor.",
 	fun() ->
 		Out = start_named(3, 5, testsup),
-		?CONSOLE("~p", [Out]),
+		?debugFmt("~p", [Out]),
 		?assertMatch({ok, _P}, Out),
 		{ok, Pid} = Out,
 		unlink(Pid),
 		exit(whereis(testsup), kill),
-		?CONSOLE("~p", [whereis(testsup)])
+		?debugFmt("~p", [whereis(testsup)])
 	end},
 	{"Start a middle man",
 	fun() ->
 		Out = start_named(3, 5, testsup),
-		?CONSOLE("~p", [Out]),
+		?debugFmt("~p", [Out]),
 		?assertMatch({ok, _P}, Out),
 		{ok, Pid} = Out,
 		Dummyspec = #cpx_conf{
@@ -160,7 +159,7 @@ startup_test_() ->
 		?assertNot(Pid2 =:= Dpid),
 		unlink(Pid),
 		exit(whereis(testsup), kill),
-		?CONSOLE("~p", [whereis(testsup)])
+		?debugFmt("~p", [whereis(testsup)])
 	end},
 	{"Stop a child that has a middleman.",
 	fun() ->

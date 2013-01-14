@@ -36,7 +36,6 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include_lib("stdlib/include/qlc.hrl").
@@ -273,7 +272,7 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 		{ok, P} ->
 			P;
 		_ ->
-			?WARNING("Agent ~p has an invalid profile of ~p, using Default", [Agent#agent.login, Agent#agent.profile]),
+			lager:warning("Agent ~p has an invalid profile of ~p, using Default", [Agent#agent.login, Agent#agent.profile]),
 			agent_auth:get_default_profile()
 	catch
 		error:{case_clause, {aborted, _}} ->
@@ -326,7 +325,7 @@ idle({precall, Call}, _From, #state{agent_rec = Agent} = State) ->
 idle({prering, Call}, _From, #state{agent_rec = Agent} = State) ->
 	case start_channel(Agent, Call, prering) of
 		{ok, Pid, NewAgent} ->
-			?DEBUG("Started prering (~s) ~p", [Agent#agent.login, Pid]),
+			lager:debug("Started prering (~s) ~p", [Agent#agent.login, Pid]),
 			%inform_connection(Agent, {set_channel, Pid, prering, Call}),
 			{reply, {ok, Pid}, idle, State#state{agent_rec = NewAgent}};
 		Else ->
@@ -336,7 +335,7 @@ idle({prering, Call}, _From, #state{agent_rec = Agent} = State) ->
 idle({ringing, Call}, _From, #state{agent_rec = Agent} = State) ->
 	case start_channel(Agent, Call, ringing) of
 		{ok, Pid, NewAgent} ->
-			?DEBUG("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
+			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
 			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
 			{reply, {ok, Pid}, idle, State#state{agent_rec = NewAgent}};
 		Else ->
@@ -347,7 +346,7 @@ idle(Msg, _From, State) ->
 	{reply, {invalid, Msg}, idle, State}.
 
 idle(Msg, State) ->
-	?INFO("unhandled while idle: ~p", [Msg]),
+	lager:info("unhandled while idle: ~p", [Msg]),
 	{next_state, idle, State}.
 
 % ======================================================================
@@ -381,7 +380,7 @@ released(Msg, _From, State) ->
 	{reply, {error, Msg}, released, State}.
 
 released(Msg, State) ->
-	?INFO("unhandled while released: ~p", [Msg]),
+	lager:info("unhandled while released: ~p", [Msg]),
 	{next_state, released, State}.
 
 % ======================================================================
@@ -418,7 +417,7 @@ handle_sync_event(dump_state, _From, StateName, #state{agent_rec = Agent} = Stat
 	{reply, Agent, StateName, State};
 
 handle_sync_event({set_connection, _Pid}, _From, StateName, #state{agent_rec = Agent} = State) ->
-	?WARNING("An attempt to set connection to ~w when there is already a connection ~w", [_Pid, Agent#agent.connection]),
+	lager:warning("An attempt to set connection to ~w when there is already a connection ~w", [_Pid, Agent#agent.connection]),
 	{reply, error, StateName, State};
 
 handle_sync_event({change_profile, Profile}, _From, StateName, #state{agent_rec = Agent} = State) ->
@@ -480,7 +479,7 @@ handle_sync_event(Msg, _From, StateName, State) ->
 % ======================================================================
 
 handle_event({blab, Text}, Statename, #state{agent_rec = Agent} = State) ->
-	?DEBUG("sending blab ~p", [Text]),
+	lager:debug("sending blab ~p", [Text]),
 	inform_connection(Agent, {blab, Text}),
 	{next_state, Statename, State};
 
@@ -514,7 +513,7 @@ handle_event(_Msg, StateName, State) ->
 % ======================================================================
 
 handle_info({'EXIT', From, Reason}, StateName, #state{agent_rec = #agent{connection = From} = _Agent} = State) ->
-	?WARNING("agent connection died while ~w", [StateName]),
+	lager:warning("agent connection died while ~w", [StateName]),
 	Stopwhy = case Reason of
 		normal ->
 			normal;
@@ -536,7 +535,7 @@ handle_info({'EXIT', Pid, Reason}, StateName, #state{agent_rec = Agent} = State)
 						From when is_pid(From), From =:= Pid ->
 							agent_manager_exit(Reason, StateName, State);
 						_Else ->
-							?INFO("unknown exit from ~p", [Pid]),
+							lager:info("unknown exit from ~p", [Pid]),
 							{next_state, StateName, State}
 					end;
 				{End, Orig} ->
@@ -546,7 +545,7 @@ handle_info({'EXIT', Pid, Reason}, StateName, #state{agent_rec = Agent} = State)
 					Agent1 = case PrivRes of
 						{ok, AgentEnds} -> AgentEnds;
 						{error, Err} ->
-							?NOTICE("Endpoint ~p's pid exited, could not recover due to ~p", [End, Err]),
+							lager:notice("Endpoint ~p's pid exited, could not recover due to ~p", [End, Err]),
 							Agent#agent{endpoints = Ends0}
 					end,
 					{next_state, StateName, State#state{agent_rec = Agent1}}
@@ -555,7 +554,7 @@ handle_info({'EXIT', Pid, Reason}, StateName, #state{agent_rec = Agent} = State)
 			NewDict = dict:erase(Pid, Agent#agent.used_channels),
 			Blockers = dict:fold(fun(_, ChanType, Acc) -> [ChanType | Acc] end, [], NewDict),
 			NewAvail = block_channels(Blockers, Agent#agent.all_channels, ?default_category_blocks),
-			?DEBUG("unblocking channels ~p", [NewAvail]),
+			lager:debug("unblocking channels ~p", [NewAvail]),
 			NewAgent = Agent#agent{
 				available_channels = NewAvail,
 				used_channels = NewDict
@@ -573,7 +572,7 @@ handle_info({'EXIT', Pid, Reason}, StateName, #state{agent_rec = Agent} = State)
 	end;
 
 handle_info(Msg, Statename, State) ->
-	?DEBUG("Disregarding:  ~p", [Msg]),
+	lager:debug("Disregarding:  ~p", [Msg]),
 	{next_state, Statename, State}.
 
 % ======================================================================
@@ -583,7 +582,7 @@ handle_info(Msg, Statename, State) ->
 %% @private
 %-spec(terminate/3 :: (Reason :: any(), StateName :: statename(), State :: #state{}) -> 'ok').
 terminate(Reason, StateName, #state{agent_rec = Agent} = _State) ->
-	?NOTICE("Agent terminating:  ~p, State:  ~p", [Reason, StateName]),
+	lager:notice("Agent terminating:  ~p, State:  ~p", [Reason, StateName]),
 	cpx_monitor:drop({agent, Agent#agent.id}),
 	ok.
 
@@ -644,12 +643,12 @@ find_endpoint(Module, Ends) ->
 % ----------------------------------------------------------------------
 
 priv_set_endpoint(_Agent, Module, {module, Module}) ->
-	?DEBUG("endpoint ~s is a circular reference", [Module]),
+	lager:debug("endpoint ~s is a circular reference", [Module]),
 	{error, self_reference};
 priv_set_endpoint(Agent, Module, {module, OtherMod} = Endpoint) ->
 	case dict:find(OtherMod, Agent#agent.endpoints) of
 		error ->
-			?DEBUG("Endpoint ~s references non-existant endpoing ~s", [Module, OtherMod]),
+			lager:debug("Endpoint ~s references non-existant endpoing ~s", [Module, OtherMod]),
 			{error, module_noexists};
 		{ok, _} ->
 			NewEndpoints = dict:store(Module, Endpoint, Agent#agent.endpoints),
@@ -660,7 +659,7 @@ priv_set_endpoint(Agent, Module, {module, OtherMod} = Endpoint) ->
 priv_set_endpoint(Agent, Module, Data) ->
 	case catch Module:prepare_endpoint(Agent, Data) of
 		{error, Err} ->
-			?DEBUG("Didn't set endpoint ~s due to ~p", [Module, Err]),
+			lager:debug("Didn't set endpoint ~s due to ~p", [Module, Err]),
 			{error, Err};
 		{ok, NewData} ->
 			NewEndpoints = dict:store(Module, {Data, NewData}, Agent#agent.endpoints),
@@ -668,7 +667,7 @@ priv_set_endpoint(Agent, Module, Data) ->
 			inform_connection(Agent, {new_endpoint, Module, NewData}),
 			{ok, NewAgent};
 		Else ->
-			?NOTICE("prepare endpoint failed:  ~p", [Else]),
+			lager:notice("prepare endpoint failed:  ~p", [Else]),
 			{error, Else}
 	end.
 
@@ -691,14 +690,14 @@ filter_endpoints([], Acc) ->
 filter_endpoints([{Module, _Data} = Head | Tail], Acc) ->
 	case code:ensure_loaded(Module) of
 		{error, Err} ->
-			?DEBUG("Code not loaded for endpoint ~s:  ~p", [Module, Err]),
+			lager:debug("Code not loaded for endpoint ~s:  ~p", [Module, Err]),
 			filter_endpoints(Tail, Acc);
 		{module, Module} ->
 			case proplists:get_value(behaviour, Module:module_info(attributes)) of
 				[gen_media] ->
 					filter_endpoints(Tail, [Head | Acc]);
 				_ ->
-					?DEBUG("endpoint ~s is not a gen_media", [Module]),
+					lager:debug("endpoint ~s is not a gen_media", [Module]),
 					filter_endpoints(Tail, Acc)
 			end
 	end.
@@ -771,19 +770,19 @@ block_channels([Chan | Tail], InBlockables, BlocklistDefs) ->
 agent_manager_exit(Reason, StateName, State) ->
 	case Reason of
 		normal ->
-			?INFO("Agent manager exited normally", []),
+			lager:info("Agent manager exited normally", []),
 			{stop, normal, State};
 		shutdown ->
-			?INFO("Agent manager shutdown", []),
+			lager:info("Agent manager shutdown", []),
 			{stop, shutdown, State};
 		_Else ->
-			?INFO("Agent manager exited abnormally with reason ~p", [Reason]),
+			lager:info("Agent manager exited abnormally with reason ~p", [Reason]),
 			wait_for_agent_manager(5, StateName, State)
 	end.
 
 -spec(wait_for_agent_manager/3 :: (Count :: non_neg_integer(), StateName :: statename(), State :: #state{}) -> {'stop', 'timeout', #state{}} | {'next_state', statename(), #state{}}).
 wait_for_agent_manager(0, _StateName, State) ->
-	?WARNING("Timed out waiting for agent manager respawn", []),
+	lager:warning("Timed out waiting for agent manager respawn", []),
 	{stop, timeout, State};
 wait_for_agent_manager(Count, StateName, #state{agent_rec = Agent} = State) ->
 	case whereis(agent_manager) of
@@ -791,10 +790,10 @@ wait_for_agent_manager(Count, StateName, #state{agent_rec = Agent} = State) ->
 			timer:sleep(1000),
 			wait_for_agent_manager(Count - 1, StateName, State);
 		Else when is_pid(Else) ->
-			?INFO("Agent manager respawned as ~p", [Else]),
+			lager:info("Agent manager respawned as ~p", [Else]),
 			% this will throw an error if the agent is already registered as
 			% a different pid and that error will crash this process
-			?INFO("Notifying new agent manager of agent ~p at ~p", [Agent#agent.login, self()]),
+			lager:info("Notifying new agent manager of agent ~p at ~p", [Agent#agent.login, self()]),
 			Time = util:now(),
 			agent_manager:notify(Agent#agent.login, Agent#agent.id, self(), Time, Agent#agent.skills),
 			{next_state, StateName, State}
@@ -1432,12 +1431,12 @@ handle_event_test_() ->
 	% 		{ok, self_ring}
 	% 	end),
 	% 	meck:expect(agent_manager, set_ends, fun(A,B) ->
-	% 		?ERROR("~p  ~p", [A,B]),
+	% 		lager:error("~p  ~p", [A,B]),
 	% 		ok
 	% 	end),
 	% 	Expected = {next_state, idle, #state{agent_rec = NewAgent}},
 	% 	Got = handle_event({set_endpoints, [{dummy_media, inband}]}, idle, #state{agent_rec = Agent}),
-	% 	?DEBUG("Expect:  ~p;\ngot:  ~p", [Expected, Got]),
+	% 	lager:debug("Expect:  ~p;\ngot:  ~p", [Expected, Got]),
 	% 	?assertEqual(Expected, Got),
 	% 	L(1),
 	% 	meck:validate(dummy_media),

@@ -43,7 +43,6 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 
@@ -156,7 +155,7 @@ update_skill_list(Login, Skills) ->
 %% @doc Locally find all available agents with a particular skillset that contains the subset `Skills'.
 -spec(find_avail_agents_by_skill/1 :: (Skills :: [atom()]) -> [{string(), pid(), #agent{}}]).
 find_avail_agents_by_skill(Skills) ->
-	%?DEBUG("skills passed:  ~p.", [Skills]),
+	%lager:debug("skills passed:  ~p.", [Skills]),
 	List = list_avail(),
 	filter_avail_agents_by_skill(List, Skills).
 
@@ -302,23 +301,23 @@ set_ends(AgentLogin, Endpoints) ->
 
 %% @hidden
 init(_Opts) ->
-	?DEBUG("~p starting at ~p", [?MODULE, node()]),
+	lager:debug("~p starting at ~p", [?MODULE, node()]),
 	process_flag(trap_exit, true),
 
 	try agent_auth:start() of
 		Whatever ->
-			?DEBUG("building agent_state table:  ~p", [Whatever]),
+			lager:debug("building agent_state table:  ~p", [Whatever]),
 			ok
 	catch
 		What:Why ->
-			?WARNING("What:  ~w; Why:  ~p", [What, Why]),
+			lager:warning("What:  ~w; Why:  ~p", [What, Why]),
 			ok
 	end,
 	{ok, #state{}}.
 
 %% @hidden
 elected(State, _Election, Node) ->
-	?INFO("elected by ~w", [Node]),
+	lager:info("elected by ~w", [Node]),
 	mnesia:subscribe(system),
 	{ok, ok, State}.
 
@@ -326,7 +325,7 @@ elected(State, _Election, Node) ->
 %% if an agent is started at two locations, the 2nd notify will be told that
 %% the register failed, allowing the agent to hagurk at that point.
 surrendered(#state{agents = Agents} = State, _LeaderState, _Election) ->
-	?INFO("surrendered", []),
+	lager:info("surrendered", []),
 	mnesia:unsubscribe(system),
 
 	% clean out non-local pids
@@ -348,7 +347,7 @@ surrendered(#state{agents = Agents} = State, _LeaderState, _Election) ->
 
 %% @hidden
 handle_DOWN(Node, #state{agents = Agents} = State, _Election) ->
-	?INFO("Node ~p died", [Node]),
+	lager:info("Node ~p died", [Node]),
 	% clean out the pids associated w/ the dead node
 	F = fun(_Login, #agent_cache{pid = Apid}) ->
 		Node =/= node(Apid)
@@ -361,7 +360,7 @@ handle_DOWN(Node, #state{agents = Agents} = State, _Election) ->
 
 %% @hidden
 handle_leader_call({exists, Agent}, From, #state{agents = _Agents} = State, Election) when is_list(Agent) ->
-	?DEBUG("Trying to determine if ~p exists", [Agent]),
+	lager:debug("Trying to determine if ~p exists", [Agent]),
 	case handle_leader_call({full_data, Agent}, From, State, Election) of
 		{reply, false, _State} = O ->
 			O;
@@ -392,16 +391,16 @@ handle_leader_call({get_login, Id}, _From, #state{agents = Agents} = State, _Ele
 	Out = find_via_id(Id, List),
 	{reply, Out, State};
 handle_leader_call(Message, From, State, _Election) ->
-	?WARNING("received unexpected leader_call ~p from ~p", [Message, From]),
+	lager:warning("received unexpected leader_call ~p from ~p", [Message, From]),
 	{reply, ok, State}.
 
 %% @hidden
 handle_leader_cast({notify, Agent, AgentCache}, #state{agents = Agents} = State, _Election) ->
-	?INFO("Notified of ~p (~p)", [Agent, AgentCache]),
+	lager:info("Notified of ~p (~p)", [Agent, AgentCache]),
 	Apid = AgentCache#agent_cache.pid,
 	case dict:find(Agent, Agents) of
 		error ->
-			?DEBUG("Adding agent ~p", [Agent]),
+			lager:debug("Adding agent ~p", [Agent]),
 			Agents2 = dict:store(Agent, AgentCache, Agents),
 			Routelist = gb_trees:enter(#agent_key{
 				rotations = 0,
@@ -411,10 +410,10 @@ handle_leader_cast({notify, Agent, AgentCache}, #state{agents = Agents} = State,
 			AgentCache, State#state.route_list),
 			{noreply, State#state{agents = Agents2, route_list = Routelist}};
 		{ok, #agent_cache{pid = Apid}} ->
-			?DEBUG("Agent ~p already know", [Agent]),
+			lager:debug("Agent ~p already know", [Agent]),
 			{noreply, State};
 		_Else ->
-			?DEBUG("agent pid mismatch, telling imposter", []),
+			lager:debug("agent pid mismatch, telling imposter", []),
 			agent:register_rejected(AgentCache#agent_cache.pid),
 			{noreply, State}
 	end;
@@ -430,7 +429,7 @@ handle_leader_cast({update_notify, Login, #agent_cache{pid = Pid} = Value}, #sta
 		idle_time = Time}, Value, Midroutelist),
 	{noreply, State#state{agents = NewAgents, route_list = Routelist}};
 handle_leader_cast({notify_down, Agent}, #state{agents = Agents} = State, _Election) ->
-	?NOTICE("leader notified of ~p exiting", [Agent]),
+	lager:notice("leader notified of ~p exiting", [Agent]),
 	Routelist = case dict:find(Agent, Agents) of
 		error ->
 			State#state.route_list;
@@ -470,7 +469,7 @@ handle_leader_cast({blab, Text, {profile, Value}}, #state{agents = Agents} = Sta
 				ok
 		catch
 			What:Why ->
-				?WARNING("could not blab to ~p.  ~p:~p", [Apid, What, Why]),
+				lager:warning("could not blab to ~p.  ~p:~p", [Apid, What, Why]),
 				ok
 		end
 	end,
@@ -486,15 +485,15 @@ handle_leader_cast({blab, Text, all}, #state{agents = Agents} = State, _Election
 	spawn(fun() -> dict:map(F, Agents) end),
 	{noreply, State};
 handle_leader_cast(dump_election, State, Election) ->
-	?DEBUG("Dumping leader election.~nSelf:  ~p~nDump:  ~p", [self(), Election]),
+	lager:debug("Dumping leader election.~nSelf:  ~p~nDump:  ~p", [self(), Election]),
 	{noreply, State};
 handle_leader_cast(Message, State, _Election) ->
-	?WARNING("received unexpected leader_cast ~p", [Message]),
+	lager:warning("received unexpected leader_cast ~p", [Message]),
 	{noreply, State}.
 
 %% @hidden
 from_leader(_Msg, State, _Election) ->
-	?DEBUG("Stub from leader.", []),
+	lager:debug("Stub from leader.", []),
 	{ok, State}.
 
 %% @hidden
@@ -518,7 +517,7 @@ handle_call(stop, _From, State, _Election) ->
 handle_call({start_agent, #agent{login = ALogin, id=Aid} = InAgent}, _From, #state{agents = Agents} = State, Election) ->
 	% This should not be called directly!  use the wrapper start_agent/1
 	Agent = InAgent#agent{release_data = ?DEFAULT_RELEASE},
-	?INFO("Starting new agent ~p", [Agent]),
+	lager:info("Starting new agent ~p", [Agent]),
 	{ok, Apid} = agent:start(Agent, [logging, gen_leader:candidates(Election)]),
 	link(Apid),
 	Value = #agent_cache{
@@ -589,7 +588,7 @@ handle_call({notify, Login, #agent_cache{pid = Pid} = AgentCache}, _From, #state
 			{reply, ok, State}
 	end;
 handle_call(Message, From, State, _Election) ->
-	?WARNING("received unexpected call ~p from ~p", [Message, From]),
+	lager:warning("received unexpected call ~p from ~p", [Message, From]),
 	{reply, ok, State}.
 
 
@@ -626,8 +625,8 @@ handle_cast({set_avail, Nom, Chans}, #state{agents = Agents} = State, Election) 
 		Out
 	end,
 	NewAgents = dict:update(Nom, F, Agents),
-	%?INFO("Updated key ~p to ~p", [Key, Out]),
-	%?DEBUG("rl:  ~p", [Routelist]),
+	%lager:info("Updated key ~p to ~p", [Key, Out]),
+	%lager:debug("rl:  ~p", [Routelist]),
 	{noreply, State#state{agents = NewAgents, lists_requested = 0, route_list = clear_rotates(Routelist)}};
 
 handle_cast({set_ends, Nom, Ends}, #state{agents = Agents} = State, Election) ->
@@ -690,17 +689,17 @@ handle_cast({update_skill_list, Login, Skills}, #state{agents = Agents} = State,
 	NewAgents = dict:update(Login, F, Agents),
 	{noreply, State#state{agents = NewAgents, lists_requested = 0, route_list = Routelist}};
 handle_cast(_Request, State, _Election) ->
-	?DEBUG("Stub handle_cast", []),
+	lager:debug("Stub handle_cast", []),
 	{noreply, State}.
 
 %% @hidden
 handle_info({'EXIT', Pid, Reason}, #state{agents=Agents} = State) ->
-	?NOTICE("Caught exit for ~p with reason ~p", [Pid, Reason]),
+	lager:notice("Caught exit for ~p with reason ~p", [Pid, Reason]),
 	F = fun(Key, #agent_cache{ pid = Value, id = Id}) ->
 		case Value =/= Pid of
 			true -> true;
 			false ->
-				?NOTICE("notifying leader of ~p exit", [{Key, Id}]),
+				lager:notice("notifying leader of ~p exit", [{Key, Id}]),
 				cpx_monitor:drop({agent, Id}),
 				gen_leader:leader_cast(?MODULE, {notify_down, Key}),
 				false
@@ -711,15 +710,15 @@ handle_info({'EXIT', Pid, Reason}, #state{agents=Agents} = State) ->
 	end, State#state.route_list)),
 	{noreply, State#state{agents=dict:filter(F, Agents), lists_requested = 0, route_list = Routelist}};
 handle_info({mnesia_system_event, {mnesia_down, Node}}, State) ->
-	?WARNING("mnesia down at ~w", [Node]),
+	lager:warning("mnesia down at ~w", [Node]),
 	{noreply, State};
 handle_info(Msg, State) ->
-	?DEBUG("Stub handle_info for ~p", [Msg]),
+	lager:debug("Stub handle_info for ~p", [Msg]),
 	{noreply, State}.
 
 %% @hidden
 terminate(Reason, _State) ->
-	?NOTICE("Terminating:  ~p", [Reason]),
+	lager:notice("Terminating:  ~p", [Reason]),
 	ok.
 
 %% @hidden
@@ -1897,7 +1896,7 @@ adding_agents_tc_test_() ->
 			false ->
 				ok
 		end || A <- Agents],
-		?INFO("Average for ~s:  ~f", [Name, avg(Times)]),
+		lager:info("Average for ~s:  ~f", [Name, avg(Times)]),
 		?assert(true),
 		io:format(File, "~p	~s:~s(~s)	~f~n", [os:timestamp(), ?MODULE, adding_agents_tc_test, Name, avg(Times)])
 	end}} end,
@@ -1916,7 +1915,7 @@ adding_agents_tc_test_() ->
 			false ->
 				ok
 		end || A <- Agents],
-		?INFO("Average:  ~f", [avg(Times)]),
+		lager:info("Average:  ~f", [avg(Times)]),
 		io:format(File, "~p	~s:~s(~s)	~f~n", [os:timestamp(), ?MODULE, adding_agent_tc_test, Name, avg(Times)]),
 		?assert(true)
 	end}} end,
@@ -1941,7 +1940,7 @@ adding_agents_tc_test_() ->
 			timer:sleep(10),
 			T
 		end || _X <- lists:seq(1, 1000)],
-		?INFO("Average:  ~f", [avg(Times)]),
+		lager:info("Average:  ~f", [avg(Times)]),
 		io:format(File, "~p	~s:~s(~s)	~f~n", [os:timestamp(), ?MODULE, adding_agent_tc_test, Name, avg(Times)]),
 		?assert(true)
 	end}} end]}.
@@ -1983,7 +1982,7 @@ adding_agents_test_() ->
 			false ->
 				ok
 		end || A <- Agents],
-		?INFO("Average:  ~f", [avg(Times)]),
+		lager:info("Average:  ~f", [avg(Times)]),
 		?assert(true)
 	end}} end,
 	fun(_) -> {timeout, 60, {"agents with variable length skills", fun() ->
@@ -2003,7 +2002,7 @@ adding_agents_test_() ->
 			false ->
 				ok
 		end || A <- Agents],
-		?INFO("Average:  ~f", [avg(Times)]),
+		lager:info("Average:  ~f", [avg(Times)]),
 		?assert(true)
 	end}} end]}.
 

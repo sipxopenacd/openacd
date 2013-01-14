@@ -133,7 +133,6 @@
 
 -define(DEFAULT_STORAGE, call_queue_config_ets).
 
--include("log.hrl").
 -include("queue.hrl").
 -include("call.hrl").
 -include_lib("stdlib/include/qlc.hrl").

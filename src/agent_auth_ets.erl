@@ -28,7 +28,6 @@
 
 -module(agent_auth_ets).
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 

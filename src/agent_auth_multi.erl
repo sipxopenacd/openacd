@@ -107,7 +107,6 @@
 
 -module(agent_auth_multi).
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include_lib("stdlib/include/qlc.hrl").
@@ -213,7 +212,7 @@ get_releases() ->
 %% @doc Create a new agent profile.
 -spec(new_profile/1 :: (Rec :: #agent_profile{}) -> {'error', any()} | {'atomic', 'ok'}).
 new_profile(#agent_profile{name = "Default"}) ->
-	?ERROR("Default cannot be added as a new profile", []),
+	lager:error("Default cannot be added as a new profile", []),
 	{error, not_allowed};
 new_profile(Rec) when is_record(Rec, agent_profile)->
 	case cpx_hooks:trigger_hooks(new_profile, [Rec], first) of
@@ -242,7 +241,7 @@ set_profile(Oldname, Name, Skills) ->
 set_profile(Oldname, #agent_profile{name = Newname} = Rec) ->
 	case Oldname =:= "Default" andalso Newname =/= "Default" of
 		true ->
-			?ERROR("Cannot change the name of the default profile", []),
+			lager:error("Cannot change the name of the default profile", []),
 			{error, not_allowed};
 		_ ->
 			case cpx_hooks:trigger_hooks(set_profile, [Oldname, Rec], first) of

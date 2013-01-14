@@ -32,7 +32,6 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 
 % gen_server
@@ -154,7 +153,7 @@ handle_call(_, _, Ets) ->
 
 %% @private
 handle_cast({set_hook, Id, Hook, M, F, A, Priority} = H, Ets) ->
-	?DEBUG("Setting ~p", [H]),
+	lager:debug("Setting ~p", [H]),
 	ets:insert(Ets, {Id, Hook, M, F, A, Priority}),
 	{noreply, Ets};
 
@@ -203,16 +202,16 @@ run_hooks([{_P, M, F, A, Id} | Tail], Args, StopWhen) ->
 	Args0 = lists:append(Args, A),
 	try {apply(M, F, Args0), StopWhen} of
 		{{ok, Val}, first} ->
-%			?DEBUG("hook ~p supplied value", [Id]),
+%			lager:debug("hook ~p supplied value", [Id]),
 			{ok, Val};
 		{{ok, Val}, Acc} ->
 			run_hooks(Tail, Args, [Val | Acc]);
 		{_Else, _} ->
-%			?DEBUG("Hook ~p gave back a weird value:  ~p", [Id, Else]),
+%			lager:debug("Hook ~p gave back a weird value:  ~p", [Id, Else]),
 			run_hooks(Tail, Args, StopWhen)
 	catch
 		What:Why ->
-			?NOTICE("Hook ~p failed with ~p:~p", [Id, What, Why]),
+			lager:notice("Hook ~p failed with ~p:~p", [Id, What, Why]),
 			drop_hook(Id),
 			run_hooks(Tail, Args, StopWhen)
 	end.

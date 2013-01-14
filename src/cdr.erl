@@ -36,7 +36,6 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--include("log.hrl").
 -include("call.hrl").
 -include("agent.hrl").
 -include_lib("stdlib/include/qlc.hrl").
@@ -112,7 +111,7 @@ start(Nodes) ->
 	case build_tables(Nodes) of
 		ok -> ok;
 		Else ->
-			?WARNING("Some tables didn't build, this may crash and burn later.  ~p", [Else])
+			lager:warning("Some tables didn't build, this may crash and burn later.  ~p", [Else])
 	end,
 	gen_event:start({local, ?MODULE}).
 
@@ -128,7 +127,7 @@ start_link(Nodes) ->
 	case build_tables(Nodes) of
 		ok -> ok;
 		Else ->
-			?WARNING("Some tables didn't build, this may crash and burn later.  ~p", [Else])
+			lager:warning("Some tables didn't build, this may crash and burn later.  ~p", [Else])
 	end,
 	gen_event:start_link({local, ?MODULE}).
 
@@ -141,18 +140,18 @@ cdrinit(Call) ->
 				ok ->
 					ok;
 				Else ->
-					?ERROR("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),
+					lager:error("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),
 					error
 				catch
 					What:Why ->
-						?ERROR("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+						lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
 						error
 			end;
 		true ->
-			?WARNING("CDR already initialized for ~s", [Call#call.id])
+			lager:warning("CDR already initialized for ~s", [Call#call.id])
 	catch
 		What:Why ->
-			?ERROR("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+			lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
 			error
 	end.
 
@@ -308,19 +307,19 @@ truncate(Callid) when is_list(Callid) ->
 	end),
 	case Res of
 		{atomic, []} ->
-			?INFO("no cdr_rec found for ~p; thus, no truncating", [Callid]),
+			lager:info("no cdr_rec found for ~p; thus, no truncating", [Callid]),
 			none;
 		{atomic, [Callrec]} ->
 			truncate(Callrec)
 	end;
 truncate(Callrec) when is_record(Callrec, call) ->
-	?NOTICE("Beginning truncate for ~p", [Callrec#call.id]),
+	lager:notice("Beginning truncate for ~p", [Callrec#call.id]),
 	{atomic, Raws} = mnesia:transaction(fun() ->
 		qlc:e(qlc:q([X || #cdr_raw{id = Id} = X <- mnesia:table(cdr_raw), Id =:= Callrec#call.id]))
 	end),
 	case Raws of
 		[] ->
-			?WARNING("~p has nothing in cdr_raws (already summarized?)", [Callrec#call.id]);
+			lager:warning("~p has nothing in cdr_raws (already summarized?)", [Callrec#call.id]);
 		_ ->
 			[R | _] = Raws,
 			case attached_agent(Raws) of
@@ -394,7 +393,7 @@ get_unsummarized() ->
 
 %% @private
 init([Call]) ->
-	?NOTICE("Starting new CDR handler for ~s", [Call#call.id]),
+	lager:notice("Starting new CDR handler for ~s", [Call#call.id]),
 	Nodes = case application:get_env(openacd, nodes) of
 		undefined ->
 			[node()];
@@ -423,7 +422,7 @@ handle_event({mutate, Oldid, Newcallrec}, #state{id = Oldid} = State) when is_re
 		{atomic, ok} ->
 			{ok, State#state{id = Newcallrec#call.id}};
 		Else ->
-			?ERROR("could not update cdr handle ~p to ~p:  ~p", [Oldid, Newcallrec, Else]),
+			lager:error("could not update cdr handle ~p to ~p:  ~p", [Oldid, Newcallrec, Else]),
 			{ok, State}
 	end;
 handle_event({Transaction, #call{id = Callid} = Call, Time, Data}, #state{id = Callid, limbo_wrapup_count = Limbocount} = State) ->
@@ -445,7 +444,7 @@ handle_event({Transaction, #call{id = Callid} = Call, Time, Data}, #state{id = C
 		nodes = State#state.nodes
 	},
 	{atomic, Termed} = push_raw(Call, Cdr),
-	%?DEBUG("Termed:  ~p", [Termed]),
+	%lager:debug("Termed:  ~p", [Termed]),
 	Extra = analyze(Transaction, Call, Time, Data, Termed),
 	[cpx_monitor:info({cdr_raw, ExtraRaw}) || ExtraRaw <- Extra],
 	mnesia:transaction(fun() ->
@@ -516,7 +515,7 @@ terminate(remove_handler, #state{callrec = Callrec} = State) ->
 	push_raw(Callrec, Cdr),
 	spawn_summarizer(Callrec);
 terminate(Args, _State) ->
-	?NOTICE("terminating with args ~p", [Args]),
+	lager:notice("terminating with args ~p", [Args]),
 	ok.
 
 %% @private
@@ -558,7 +557,7 @@ push_raw(#call{id = Cid} = Callrec, #cdr_raw{id = Cid, start = Now} = Trans) ->
 	F = fun() ->
 		Untermed = find_untermed(Trans#cdr_raw.transaction, Callrec, Trans#cdr_raw.eventdata),
 		Termedatoms = lists:map(fun(#cdr_raw{transaction = T, eventdata = E}) -> {T, E} end, Untermed),
-		%?DEBUG("closing cdr records ~p", [Untermed]),
+		%lager:debug("closing cdr records ~p", [Untermed]),
 		Terminate = fun(Rec) ->
 			mnesia:delete_object(Rec),
 			NewRec = Rec#cdr_raw{ended = Now},
@@ -566,7 +565,7 @@ push_raw(#call{id = Cid} = Callrec, #cdr_raw{id = Cid, start = Now} = Trans) ->
 			mnesia:write(NewRec)
 		end,
 		lists:foreach(Terminate, Untermed),
-		%?DEBUG("Writing ~p", [Trans]),
+		%lager:debug("Writing ~p", [Trans]),
 		FullTrans = Trans#cdr_raw{terminates = lists:map(fun({T, _}) -> T end, Termedatoms)},
 		cpx_monitor:info({cdr_raw, FullTrans}),
 		mnesia:write(FullTrans),
@@ -753,7 +752,7 @@ spawn_summarizer(UsortedTransactions, #call{id = CallID} = Callrec) ->
 	Summarize = fun() ->
 		Sort = fun summarize_sorter/2,
 		Transactions = lists:sort(Sort, UsortedTransactions),
-		?DEBUG("Summarize inprogress for ~p", [CallID]),
+		lager:debug("Summarize inprogress for ~p", [CallID]),
 		Summary = summarize(Transactions),
 		{ok, Nodes} = cpx:get_env(nodes, [node()]),
 		CdrRec = #cdr_rec{
@@ -785,7 +784,7 @@ spawn_summarizer(UsortedTransactions, #call{id = CallID} = Callrec) ->
 %% breakdown :: `[{agent_login() | queue_name(), total()}]'
 -spec(summarize/1 :: (Transactions :: [#cdr_raw{}]) -> [dict()]).
 summarize(Transactions) ->
-	%?DEBUG("Summarizing ~p", [Transactions]),
+	%lager:debug("Summarizing ~p", [Transactions]),
 	summarize(Transactions, dict:new()).
 
 -spec(summarize/2 :: (Transactions :: [#cdr_raw{}], Sumacc :: dict()) -> any()).
@@ -820,14 +819,14 @@ summarize(Cdr, Catagory, Individual, Acc) ->
 		{ok, Else} ->
 			Else
 	end,
-	%?DEBUG("total:  ~p;  propdict:  ~p", [Total, Propdict]),
+	%lager:debug("total:  ~p;  propdict:  ~p", [Total, Propdict]),
 	Duration = Cdr#cdr_raw.ended - Cdr#cdr_raw.start,
 	Detail = proplists:get_value(Individual, Propdict, 0),
 	Cleanedprops = proplists:delete(Individual, Propdict),
 	Newdetail = Detail + Duration,
 	Newtotal = Total + Duration,
 	Newprops = [{Individual, Newdetail} | Cleanedprops],
-	%?DEBUG("newtotal:  ~p;  newpropdict:  ~p", [Newtotal, Newprops]),
+	%lager:debug("newtotal:  ~p;  newpropdict:  ~p", [Newtotal, Newprops]),
 	Newacc = dict:store(Catagory, {Newtotal, Newprops}, Acc),
 	Newacc.
 
@@ -897,7 +896,7 @@ get_summaries([Node | Nodes], Ids, Acc) when Node == node() ->
 		{atomic, _Rows} = Rez ->
 			get_summaries(Nodes, Ids, [Rez | Acc]);
 		_Else ->
-			?WARNING("Could not get cdr_rec from ~w", [Node]),
+			lager:warning("Could not get cdr_rec from ~w", [Node]),
 			get_summaries(Nodes, Ids, Acc)
 	end;
 get_summaries([Node | Nodes], Ids, Acc) ->
@@ -905,7 +904,7 @@ get_summaries([Node | Nodes], Ids, Acc) ->
 		{atomic, _Rows} = Rez ->
 			get_summaries(Nodes, Ids, [Rez | Acc]);
 		_Else ->
-			?WARNING("Could not get cdr_rec from ~w", [Node]),
+			lager:warning("Could not get cdr_rec from ~w", [Node]),
 			get_summaries(Nodes, Ids, Acc)
 	end.
 
@@ -985,7 +984,7 @@ push_raw_test_() ->
 	% {spawn, N, {foreach,
 	{foreach,
 	fun() ->
-		?DEBUG("node:  ~p", [node()]),
+		lager:debug("node:  ~p", [node()]),
 		mnesia:stop(),
 		mnesia:delete_schema([node()]),
 		mnesia:create_schema([node()]),
@@ -1795,7 +1794,7 @@ summarize_test_() ->
 %			{inqueue, 5, 10, 5, "testqueue"}
 %		],
 %		Expected = {Expecteduntermed, Expectedtermed, true},
-%		?DEBUG("recovery:  ~p", [recover(Transactions, [], [], false)]),
+%		lager:debug("recovery:  ~p", [recover(Transactions, [], [], false)]),
 %		?assertEqual(Expected, recover(Transactions, [], [], false))
 %	end}
 %	].

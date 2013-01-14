@@ -29,7 +29,6 @@
 -module(cpx_queue_util).
 
 -include("queue.hrl").
--include("log.hrl").
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -65,7 +64,7 @@ find_qgroup(Mod, Q) ->
 		{ok, V} ->
 			V;
 		_ ->
-			?WARNING("Queue group ~p for queue ~p not found. Using default",
+			lager:warning("Queue group ~p for queue ~p not found. Using default",
 				[QGName, Q#call_queue.name]),
 			{ok, V} = Mod:get_default_queue_group(),
 			V

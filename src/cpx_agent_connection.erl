@@ -151,7 +151,6 @@
 
 -module(cpx_agent_connection).
 
--include("log.hrl").
 -include("agent.hrl").
 -include("call.hrl").
 -include("queue.hrl").
@@ -590,16 +589,16 @@ start_agent_with_auth(Auth) ->
 % 		{_ChanPid, #channel_state{call = #call{source = CallPid}}} ->
 % 			try gen_media:call(CallPid, {?MODULE, Command, Args}) of
 % 				invalid ->
-% 					?DEBUG("media call returned invalid", []),
+% 					lager:debug("media call returned invalid", []),
 % 					{error, <<"invalid media call">>, <<"INVALID_MEDIA_CALL">>};
 % 				Response ->
 % 					{ok, Response}
 % 			catch
 % 				exit:{noproc, _} ->
-% 					?DEBUG("Media no longer exists.", []),
+% 					lager:debug("Media no longer exists.", []),
 % 					{error, <<"media no longer exists">>, <<"MEDIA_NOEXISTS">>};
 % 				What:Why ->
-% 					?DEBUG("Media exploded:  ~p:~p", [What,Why]),
+% 					lager:debug("Media exploded:  ~p:~p", [What,Why]),
 % 					ErrBin = list_to_binary(io_lib:format("~p:~p", [What,Why])),
 % 					{error, ErrBin, <<"UNKNOWN_ERROR">>}
 % 			end
@@ -689,7 +688,7 @@ start_agent_with_auth(Auth) ->
 % % 		none ->
 % % 			{error, <<"no such channel">>, <<"CHANNEL_NOEXISTS">>};
 % % 		{_ChanPid, #channel_state{call = Call}} when is_record(Call, call) ->
-% % 			?DEBUG("The agent is committing call murder!", []),
+% % 			lager:debug("The agent is committing call murder!", []),
 % % 			exit(Call#call.source, agent_connection_request),
 % % 			ok;
 % % 		_ ->
@@ -1118,7 +1117,7 @@ handle_monitor_event({info, _, _}, State) ->
 	% TODO fix the subscribe, or start using this.
 	{ok, undefined, State};
 handle_monitor_event(Message, State) ->
-	%?DEBUG("Ingesting cpx_monitor_event ~p", [Message]),
+	%lager:debug("Ingesting cpx_monitor_event ~p", [Message]),
 	Json = case Message of
 		{drop, _Timestamp, {Type, Name}} ->
 			Fixedname = if
@@ -1284,7 +1283,7 @@ encode_call(Call) ->
 % 		media ->
 % 			case {proplists:get_value(agent, Protodetails), proplists:get_value(queue, Protodetails)} of
 % 				{undefined, undefined} ->
-% 					?DEBUG("Ignoring ~p as it's likely in ivr (no agent/queu)", [ProtoName]),
+% 					lager:debug("Ignoring ~p as it's likely in ivr (no agent/queu)", [ProtoName]),
 % 					[];
 % 				{undefined, Queue} ->
 % 					[{queue, list_to_binary(Queue)}];
@@ -1300,7 +1299,7 @@ encode_call(Call) ->
 
 % -spec(encode_groups/2 :: (Stats :: [{string(), string()}], Count :: non_neg_integer()) -> {non_neg_integer(), [tuple()]}).
 % encode_groups(Stats, Count) ->
-% 	%?DEBUG("Stats to encode:  ~p", [Stats]),
+% 	%lager:debug("Stats to encode:  ~p", [Stats]),
 % 	encode_groups(Stats, Count + 1, [], [], []).
 
 % -spec(encode_groups/5 :: (Groups :: [{string(), string()}], Count :: non_neg_integer(), Acc :: [tuple()], Gotqgroup :: [string()], Gotaprof :: [string()]) -> {non_neg_integer(), [tuple()]}).
