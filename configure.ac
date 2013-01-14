@@ -13,6 +13,7 @@ EZ_NEED_PROG([TO_ERL], [to_erl], [Erlang/OTP interpreter runner [autodetected]])
 EZ_ERLANG_NEED_LIB(gen_leader)
 EZ_ERLANG_NEED_LIB(ejrpc2)
 EZ_ERLANG_NEED_LIB(gproc)
+EZ_ERLANG_NEED_LIB(lager)
 
 # Test dependencies
 EZ_ERLANG_NEED_LIB(meck)
