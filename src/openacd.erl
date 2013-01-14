@@ -29,6 +29,7 @@ my_apps() -> [
 
 	ejrpc2,
 	gproc,
+	lager,
 
 	openacd
 ].

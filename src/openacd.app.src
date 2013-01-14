@@ -26,7 +26,8 @@
 		crypto,
 		public_key,
 %		ejprc2,
-		gproc
+		gproc,
+		lager
 	]},
 	{start_phases, []},
 	{included_applications, []}
