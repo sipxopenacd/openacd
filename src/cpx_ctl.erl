@@ -127,6 +127,7 @@ process(["kick-agent", Agent]) ->
 	?RET_SUCCESS;
 
 process(_) ->
+	print_commands(),
 	?RET_INVALID_COMMAND.
 
 get_calls_in_queue(Name) ->
@@ -156,3 +157,19 @@ print_call(C) ->
 	?PRINT("~-10s ", [C#ctl_call.line]),
 	{{Y,M,D}, {H,Mi,S}} = calendar:now_to_local_time(proplists:get_value(init, C#ctl_call.state_changes)),
 	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B~n", [Y,M,D,H,Mi,S]).
+
+print_commands() ->
+	?PRINT("List of commands~n~n"),
+	?PRINT("  stop~n"),
+	?PRINT("  restart~n"),
+	?PRINT("  pid~n"),
+	?PRINT("  status~n"),
+	?PRINT("~n"),
+	?PRINT("  list-agents~n"),
+	?PRINT("  list-queues~n"),
+	?PRINT("  list-calls~n"),
+	?PRINT("  show-agent [agent]~n"),
+	?PRINT("  show-queue [queue]~n"),
+	?PRINT("  trace-agent [agent]~n"),
+	?PRINT("~n"),
+	?PRINT("  kick-agent [agent]~n").
