@@ -53,6 +53,7 @@ process(["status"]) ->
 process(["list-agents"]) ->
 	Agents = qlc:e(qlc:q([#ctl_agent{agent=Login, profile=Profile, state=State, login_time=StartTime} || 
 		{_, _, #cpx_agent_prop{login=Login, profile=Profile, state=State, start_time=StartTime}} <- gproc:table({l, p})])),
+	?PRINT("~-10s ~-15s ~-24s ~s~n", ["Login", "Profile", "Login Time", "State"]),
 	lists:foreach(fun(A) ->
 		print_agent(A)
 	end, Agents),
@@ -60,10 +61,11 @@ process(["list-agents"]) ->
 
 process(["list-queues"]) ->
 	{ok, Queues} = call_queue_config:get_queues(),
+	?PRINT("~-20s ~s~n", ["Queue", "Calls in Queue"]),
 	lists:foreach(fun(Queue) ->
 		QueueName = Queue#call_queue.name,
 		CallsInQueue = get_calls_in_queue(QueueName),
-		?PRINT("~-15s", [QueueName]),
+		?PRINT("~-20s ", [QueueName]),
 		?PRINT("~B~n", [length(CallsInQueue)])
 	end, Queues),
 	?RET_SUCCESS;
@@ -71,6 +73,7 @@ process(["list-queues"]) ->
 process(["list-calls"]) ->
 	Calls = qlc:e(qlc:q([#ctl_call{client=Client, state=State, caller_id=CallerId, queue=Queue, line=Dnis, state_changes=StateChanges} || 
 		{_, _, #cpx_gen_media_prop{state=State, call=#call{callerid=CallerId, dnis=Dnis, queue=Queue}, client=#client{label=Client}, state_changes=StateChanges}} <- gproc:table({l, p})])),
+	?PRINT("~-15s ~-20s ~-20s ~-20s ~-10s ~s~n", ["Client", "Caller ID", "State", "Queue", "Line", "Start Time"]),
 	lists:foreach(fun(C) ->
 		print_call(C)
 	end, Calls),
@@ -83,6 +86,7 @@ process(["show-agent", Agent]) ->
 			 	{gproc, [{{p,l,cpx_agent}, #cpx_agent_prop{} = Prop}]} ->
 			 		CtlAgent = #ctl_agent{agent=Prop#cpx_agent_prop.login, profile=Prop#cpx_agent_prop.profile,
 			 			state=Prop#cpx_agent_prop.state, login_time=Prop#cpx_agent_prop.start_time},
+			 			?PRINT("~-10s ~-15s ~-24s ~s~n", ["Login", "Profile", "Login Time", "State"]),
 			 		print_agent(CtlAgent);
 			 	_ ->
 		 			ignore
@@ -134,21 +138,21 @@ get_calls_in_queue(Name) ->
 	end.
 
 print_agent(A) ->
-	?PRINT("~-10s", [A#ctl_agent.agent]),
-	?PRINT("~-15s", [A#ctl_agent.profile]),
+	?PRINT("~-10s ", [A#ctl_agent.agent]),
+	?PRINT("~-15s ", [A#ctl_agent.profile]),
 	{{Y,M,D}, {H,Mi,S}} = calendar:now_to_local_time(A#ctl_agent.login_time),
-	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B     ", [Y,M,D,H,Mi,S]),
+	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B      ", [Y,M,D,H,Mi,S]),
 	case A#ctl_agent.state of
 		available -> ?PRINT("Available~n");
 		{released, {Reason,_,_}} -> ?PRINT("Released: ~s~n", [Reason])
 	end.
 
 print_call(C) ->
-	?PRINT("~-15s", [C#ctl_call.client]),
+	?PRINT("~-15s ", [C#ctl_call.client]),
 	{CallerId1, CallerId2} = C#ctl_call.caller_id,
-	?PRINT("~-20s", [CallerId1 ++ " " ++ CallerId2]),
-	?PRINT("~-20s", [C#ctl_call.state]),
-	?PRINT("~-20s", [C#ctl_call.queue]),
-	?PRINT("~-10s", [C#ctl_call.line]),
+	?PRINT("~-20s ", [CallerId1 ++ " " ++ CallerId2]),
+	?PRINT("~-20s ", [C#ctl_call.state]),
+	?PRINT("~-20s ", [C#ctl_call.queue]),
+	?PRINT("~-10s ", [C#ctl_call.line]),
 	{{Y,M,D}, {H,Mi,S}} = calendar:now_to_local_time(proplists:get_value(init, C#ctl_call.state_changes)),
 	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B~n", [Y,M,D,H,Mi,S]).
