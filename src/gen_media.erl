@@ -764,7 +764,7 @@ init([Callback, Args]) ->
 	end,
 	case Res of
 		{ok, NextSt, {BaseSt, _}} ->
-			gproc:reg({p, l, cpx_media}, get_gproc_prop(NextSt, BaseSt)),
+			init_gproc_prop(NextSt, BaseSt),
 			Res;
 		_ ->
 			Res
@@ -816,7 +816,7 @@ inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
 				ringout = Tref
 			},
 			BaseState2 = BaseState1#base_state{state_changes = [{inqueue_ringing, os:timestamp()} | StateChanges]},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue_ringing, BaseState2)),
+			set_gproc_prop(inqueue, inqueue_ringing, BaseState2),
 			{reply, ok, inqueue_ringing, {BaseState2, NewInternal}};
 		RingErr ->
 			lager:info("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call1#call.id]),
@@ -993,7 +993,7 @@ inqueue_ringing({{'$gen_media', voicemail}, undefined}, _From, {BaseState, Inter
 					},
 					StateChanges = [{inqueue, os:timestamp()} | BaseState#base_state.state_changes],
 					NewBase = BaseState#base_state{substate = Substate, state_changes = StateChanges},
-					gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue, NewBase)),
+					set_gproc_prop(inqueue_ringing, inqueue, NewBase),
 					{reply, ok, inqueue, {NewBase, NewInternal}};
 				{invalid, Substate} ->
 					{reply, invalid, inqueue_ringing, {BaseState#base_state{substate = Substate}, Internal}}
@@ -1022,7 +1022,7 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, {Apid, _Tag},
 			cdr:oncall(Call, Agent),
 			StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
 			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall, NewBase)),
+			set_gproc_prop(inqueue_ringing, oncall, NewBase),
 			NewInternal = #oncall_state{
 				oncall_pid = {Agent, Apid},
 				oncall_mon = Internal#inqueue_ringing_state.ring_mon
@@ -1057,7 +1057,7 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, From, {BaseState, Int
 					call_queue:remove(Qpid, self()),
 					StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
 					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-					gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall, NewBase)),
+					set_gproc_prop(inqueue_ringing, oncall, NewBase),
 					NewInternal = #oncall_state{
 						oncall_pid = {Agent, Apid},
 						oncall_mon = Mon
@@ -1077,7 +1077,7 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, From, {BaseState, Int
 			erlang:demonitor(Internal#inqueue_ringing_state.ring_mon),
 			StateChanges = [{inqueue, os:timestamp()} | BaseState#base_state.state_changes],
 			NewBase = BaseState#base_state{substate = NewSubstate, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue, NewBase)),
+			set_gproc_prop(inqueue_ringing, inqueue, NewBase),
 			#inqueue_ringing_state{ queue_mon = Qmon, queue_pid = Qpid, cook = Cook, cook_mon = CookMon} = Internal,
 			NewInternal = #inqueue_state{
 				queue_mon = Qmon,
@@ -1147,7 +1147,7 @@ inqueue_ringing({{'$gen_media', ring}, {{_Agent, Apid}, QCall, _Timeout}},
 	},
 	StateChanges = [{inqueue, os:timestamp()} | BaseState#base_state.state_changes],
 	NewBase = BaseState#base_state{state_changes = StateChanges},
-	gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue, NewBase)),
+	set_gproc_prop(inqueue_ringing, inqueue, NewBase),
 	{reply, deferred, inqueue, {NewBase, NewInternal}};
 
 inqueue_ringing({{'$gen_media', end_call}, _}, {Cook, _}, {#base_state{
@@ -1253,7 +1253,7 @@ oncall({{'$gen_media', queue}, Queue}, From, {BaseState, Internal}) ->
 				queue_mon = NewMon, queue_pid = {Queue, Qpid}
 			},
 			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue, NewBase)),
+			set_gproc_prop(oncall, inqueue, NewBase),
 			set_cpx_mon({NewBase, NewInternal}, []),
 			{reply, ok, inqueue, {NewBase, NewInternal}};
 		Qpid when is_pid(Qpid) ->
@@ -1265,7 +1265,7 @@ oncall({{'$gen_media', queue}, Queue}, From, {BaseState, Internal}) ->
 			erlang:demonitor(Mon),
 			NewMon = erlang:monitor(process, Qpid),
 			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue, NewBase)),
+			set_gproc_prop(oncall, inqueue, NewBase),
 			NewInternal = #inqueue_state{
 				queue_mon = NewMon, queue_pid = {Queue, Qpid}
 			},
@@ -1310,7 +1310,7 @@ oncall({{'$gen_media', agent_transfer}, {{Agent, Apid}, Timeout}}, _From, {BaseS
 						oncall_pid = {OcAgent, Ocpid},
 						oncall_mon = Mon
 					},
-					gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall_ringing, NewBase)),
+					set_gproc_prop(oncall, oncall_ringing, NewBase),
 					{reply, ok, oncall_ringing, {NewBase, NewInternal}};
 				{error, Error, NewState} ->
 					lager:notice("Could not set agent ringing for transfer ~p due to ~p", [Error, Call#call.id]),
@@ -1334,7 +1334,7 @@ oncall({{'$gen_media', warm_transfer_hold}, undefined}, _From, {BaseState, Inter
 					% cdr:warm_transfer_hold(Call, Apid),
 					StateChanges = [{warm_transfer_hold, os:timestamp()} | BaseState#base_state.state_changes],
 					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-					gproc:set_value({p, l, cpx_media}, get_gproc_prop(warm_transfer_hold, NewBase)),
+					set_gproc_prop(oncall, warm_transfer_hold, NewBase),
 					NewInternal = #warm_transfer_hold_state{
 						oncall_pid = Internal#oncall_state.oncall_pid,
 						oncall_mon = Internal#oncall_state.oncall_mon,
@@ -1385,7 +1385,7 @@ oncall({{'$gen_media', wrapup}, undefined}, {Ocpid, _Tag} = From,
 			erlang:demonitor(Oncall#oncall_state.oncall_mon),
 			StateChanges = [{wrapup, os:timestamp()} | BaseState#base_state.state_changes],
 			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall_ringing, NewBase)),
+			set_gproc_prop(oncall, wrapup, NewBase),
 			{reply, ok, wrapup, {NewBase, #wrapup_state{}}};
 		{hangup, NewState} ->
 			cdr:hangup(BaseState#base_state.callrec, "agent"),
@@ -1427,7 +1427,7 @@ oncall({{'$gen_media', queue}, Queue}, {Ocpid, _},
 			set_cpx_mon({BaseState#base_state{substate = NewState}, NewInternal}, [{queue, Queue}]),
 			StateChanges = [{inqueue, os:timestamp()} | BaseState#base_state.state_changes],
 			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall_ringing, NewBase)),
+			set_gproc_prop(oncall, inqueue, NewBase),
 			{reply, ok, inqueue, {NewBase, NewInternal}}
 	end;
 
@@ -1479,7 +1479,7 @@ oncall_ringing({{'$gen_media', agent_oncall}, undefined}, {Rpid, _},
 			erlang:demonitor(Ocmon),
 			StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
 			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall, NewBase)),
+			set_gproc_prop(oncall_ringing, oncall, NewBase),
 			NewInternal = #oncall_state{
 				oncall_pid = Internal#oncall_ringing_state.ring_pid,
 				oncall_mon = Internal#oncall_ringing_state.ring_mon
@@ -1511,7 +1511,7 @@ oncall_ringing({{'$gen_media', agent_oncall}, undefined}, _, State) ->
 					cdr:wrapup(Call, OcAgent),
 					StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
 					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-					gproc:set_value({p, l, cpx_media}, get_gproc_prop(oncall, NewBase)),
+					set_gproc_prop(oncall_ringing, oncall, NewBase),
 					NewInternal = #oncall_state{
 						oncall_pid = {Ragent, Rpid},
 						oncall_mon = Internal#oncall_ringing_state.ring_mon
@@ -1770,6 +1770,7 @@ handle_info(Msg, StateName, {#base_state{callback = Callback,
 terminate(Reason, StateName, {#base_state{callback = Callback, callrec =
 		Call} = BaseState, Extra} = State) ->
 	set_cpx_mon(State, delete),
+	set_gproc_prop(StateName, stop, State),
 	Callback:terminate(Reason, StateName, Call, Extra, BaseState#base_state.substate).
 
 %%--------------------------------------------------------------------
@@ -2248,7 +2249,7 @@ requeue_ringing(Reason, {BaseState, Internal}) ->
 		state_changes = StateChanges} = BaseState,
 	NewStateChanges = [{inqueue, os:timestamp()} | StateChanges],
 	NewBase = BaseState#base_state{state_changes = NewStateChanges},
-	gproc:set_value({p, l, cpx_media}, get_gproc_prop(inqueue, NewBase)),
+	set_gproc_prop(inqueue_ringing, inqueue, NewBase),
 
 	case Call#call.cook of
 		CookPid when is_pid(CookPid) ->
@@ -2405,6 +2406,20 @@ agent_interact({hangup, _Who}, State, #base_state{callrec = Callrec} =
 		is_record(Callrec, call) ->
 	lager:info("hangup for ~p while in state ~p; not taking action at this time.", [Callrec#call.id, State]),
 	{State, {BaseState, Internal}}.
+
+init_gproc_prop(MediaState, FsmState) ->
+	Prop = get_gproc_prop(MediaState, FsmState),
+	gproc:reg({p, l, cpx_media}, Prop),
+
+	Event = #cpx_gen_media_init{pid = self(), now = now(), prop = Prop},
+	gproc:send({p, l, cpx_media_change}, Event).
+
+set_gproc_prop(OldMediaState, MediaState, FsmState) ->
+	Prop = get_gproc_prop(MediaState, FsmState),
+	gproc:set_value({p, l, cpx_media}, Prop),
+
+	Event = #cpx_gen_media_update{pid = self(), now = now(), state = MediaState, old_state = OldMediaState, prop = Prop},
+	gproc:send({p, l, cpx_media_change}, Event).
 
 -spec get_gproc_prop(MediaState :: atom(), BaseState :: #base_state{}) -> #cpx_gen_media_prop{}.
 get_gproc_prop(State, BaseState) ->
