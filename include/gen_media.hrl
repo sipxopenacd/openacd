@@ -70,3 +70,17 @@
 	client,
 	state_changes = [] :: [{atom(), tuple()}]
 }).
+
+-record(cpx_gen_media_init, {
+	pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_gen_media_prop{}
+}).
+
+-record(cpx_gen_media_update, {
+	pid :: pid(),
+	now :: tuple(),
+	state :: atom(),
+	old_state :: atom(),
+	prop :: #cpx_gen_media_prop{}
+}).
