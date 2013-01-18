@@ -117,7 +117,8 @@ load_queue(Name) ->
 						{recipe, Qrec#call_queue.recipe},
 						{group, Qrec#call_queue.group}
 					])
-			end;
+			end,
+			gproc:send({p, l, cpx_queue_config_change}, {cpx_queue_config_change, {loaded_queue, Name}});
 		_Else ->
 			noexists
 	end.
