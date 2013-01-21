@@ -439,8 +439,8 @@ external_api_test_() ->
 			FakeAgent
 		end,
 		fun(_) ->
-			meck:unload(dispatcher),
-			dispatch_manager:stop()
+			dispatch_manager:stop(),
+			meck:unload()
 		end,
 		[fun(_) ->
 			{"count_dispatchers/0", fun() ->
