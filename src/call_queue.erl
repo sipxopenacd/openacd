@@ -1308,7 +1308,7 @@ queue_manager_and_cook_test_() ->
 			?assertEqual(Cook1, QCall#queued_call.cook),
 
 			Cook1 ! headshot,
-			timer:sleep(10),
+			timer:sleep(100),
 			?assert(meck:called(gen_media, set_cook, [MediaPid(1), Cook2], Pid)),
 			QCall2 = call_queue:get_qcall(Pid, MediaId(1)),
 			?assertEqual(Cook2, QCall2#queued_call.cook)
@@ -1320,7 +1320,7 @@ queue_manager_and_cook_test_() ->
 			Exited = receive
 				{'DOWN', _, process, Pid, {queue_manager, headshot}} ->
 					true
-			after 10 ->
+			after 100 ->
 				false
 			end,
 			?assert(Exited)
