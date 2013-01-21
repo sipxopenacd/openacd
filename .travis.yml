@@ -1,6 +1,4 @@
 language: erlang
-before_script:
-  - sudo rm -f ~/.erlang.cookie
 notifications:
   email: false
 otp_release:
