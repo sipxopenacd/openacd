@@ -1770,7 +1770,7 @@ handle_info(Msg, StateName, {#base_state{callback = Callback,
 terminate(Reason, StateName, {#base_state{callback = Callback, callrec =
 		Call} = BaseState, Extra} = State) ->
 	set_cpx_mon(State, delete),
-	set_gproc_prop(StateName, stop, State),
+	set_gproc_prop(StateName, stop, BaseState),
 	Callback:terminate(Reason, StateName, Call, Extra, BaseState#base_state.substate).
 
 %%--------------------------------------------------------------------
