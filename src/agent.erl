@@ -310,7 +310,7 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
-	NewState = State#state{agent_rec = NewAgent},
+	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	{reply, ok, released, NewState};
 
@@ -373,7 +373,7 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
 	cpx_agent_event:change_agent(Agent, NewAgent),
-	NewState = State#state{agent_rec = NewAgent},
+	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	{reply, ok, released, NewState};
 
