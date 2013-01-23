@@ -49,6 +49,7 @@
 %-type(channel_category() :: 'dummy' | 'voice' | 'visual' | 'slow_text' | 'fast_text').
 -record(state, {
 	start_time,
+	time_avail,
 	agent_rec :: #agent{},
 	original_endpoints = dict:new()
 }).
@@ -360,7 +361,7 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	NewAgent = Agent#agent{release_data = undefined, last_change = Now},
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	inform_connection(Agent, {set_release, none, Now}),
-	NewState = State#state{agent_rec = NewAgent},
+	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp()},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	{reply, ok, idle, NewState};
 
@@ -817,12 +818,13 @@ set_gproc_prop({PrevReleaseData, State}) ->
 -spec get_agent_prop(#state{}) -> #cpx_agent_prop{}.
 get_agent_prop(State) ->
 	StartTime = State#state.start_time,
+	TimeAvail = State#state.time_avail,
 	Agent = State#state.agent_rec,
 	Login = Agent#agent.login,
 	Profile = Agent#agent.profile,
 	Skills = Agent#agent.skills,
 	AgentState = get_agent_state(Agent#agent.release_data),
-	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, state=AgentState, start_time=StartTime}.
+	#cpx_agent_prop{login=Login, profile=Profile, skills=Skills, state=AgentState, start_time=StartTime, time_avail=TimeAvail}.
 
 -spec get_agent_state(release_code() | 'undefined') -> init | available | {released, term()}.
 get_agent_state(Release) ->
