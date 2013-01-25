@@ -51,7 +51,8 @@
 	start_time,
 	time_avail,
 	agent_rec :: #agent{},
-	original_endpoints = dict:new()
+	original_endpoints = dict:new(),
+	event_manager :: pid()
 }).
 
 -type(state() :: #state{}).
@@ -108,7 +109,10 @@
 	set_endpoint/3,
 	set_endpoints/2,
 	get_endpoint/2,
-	blab/2]).
+	blab/2,
+	subscribe_events/2,
+	subscribe_events/3
+]).
 
 %% Channel Starters
 -export([
@@ -260,6 +264,14 @@ prering(Apid, Data) ->
 ringing(Apid, Call) ->
 	gen_fsm:sync_send_event(Apid, {ringing, Call}).
 
+%% @doc Initialize and subscribe `Handler' to `Pid' events.
+subscribe_events(Pid, Handler) ->
+	subscribe_events(Pid, Handler, []).
+
+%% @doc Initialize and subscribe `Handler' with initial `Args' to `Pid' events.
+subscribe_events(Pid, Handler, Args) ->
+	gen_fsm:send_all_state_event(Pid, {subscribe_events, Handler, Args}).
+
 % ======================================================================
 % INIT
 % ======================================================================
@@ -293,7 +305,9 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 			released
 	end,
 	cpx_agent_event:agent_init(Agent2),
-	State = #state{start_time = os:timestamp(), agent_rec = Agent2, original_endpoints = OriginalEnds},
+	{ok, EventMgr} = gen_event:start_link(),
+	cpx_hooks:trigger_hooks(agent_feed_subscribe, [self()]),
+	State = #state{start_time = os:timestamp(), agent_rec = Agent2, original_endpoints = OriginalEnds, event_manager = EventMgr},
 	init_gproc_prop({init, State}),
 	{ok, StateName, State}.
 
@@ -312,6 +326,8 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
+	gen_event:notify(State#state.event_manager, {agent_feed, 
+		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
 	{reply, ok, released, NewState};
 
 idle({precall, Call}, _From, #state{agent_rec = Agent} = State) ->
@@ -363,6 +379,8 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	inform_connection(Agent, {set_release, none, Now}),
 	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp()},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
+	gen_event:notify(State#state.event_manager, {agent_feed, 
+		#cpx_agent_state_update{pid = self(), state = undefined, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
 	{reply, ok, idle, NewState};
 
 released({set_release, default}, From, State) ->
@@ -375,6 +393,8 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
+	gen_event:notify(State#state.event_manager, {agent_feed, 
+		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
 	{reply, ok, released, NewState};
 
 released(Msg, _From, State) ->
@@ -505,6 +525,10 @@ handle_event({set_endpoints, InEnds}, StateName, State) ->
 	NewAgent = priv_set_endpoints(State#state.agent_rec, State#state.original_endpoints, Ends),
 	agent_manager:set_ends(NewAgent#agent.login, dict:fetch_keys(NewAgent#agent.endpoints)),
 	{next_state, StateName, State#state{agent_rec = NewAgent}};
+
+handle_event({subscribe_events, Handler, Args}, StateName, State) ->
+	gen_event:add_handler(State#state.event_manager, Handler, Args),
+	{next_state, StateName, State};
 
 handle_event(_Msg, StateName, State) ->
 	{next_state, StateName, State}.

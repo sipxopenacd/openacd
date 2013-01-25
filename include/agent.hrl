@@ -161,10 +161,12 @@
 
 -record(cpx_agent_state_update, {
 	pid :: pid(),
-	now :: tuple(),
+	now = os:timestamp(),
 	prop :: #cpx_agent_prop{},
 	state,
-	old_state
+	old_state,
+	agent :: #agent{},
+	start_time :: tuple()
 }).
 
 -record(cpx_agent_channel_prop, {
