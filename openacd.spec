@@ -20,6 +20,8 @@ BuildRequires: erlang-gen_server_mock
 BuildRequires: erlang-lager
 BuildRequires: erlang-cowboy
 BuildRequires: erlang-mimetypes
+BuildRequires: erlang-gproc
+BuildRequires: erlang-meck
 BuildRequires: erlmongo
 BuildRequires: openssh
 
@@ -31,6 +33,8 @@ Requires: erlang-gen_server_mock
 Requires: erlang-lager
 Requires: erlang-cowboy
 Requires: erlang-mimetypes
+Requires: erlang-gproc
+Requires: erlang-meck
 Requires: erlmongo
 
 BuildRoot: %{_builddir}/%{name}-root
