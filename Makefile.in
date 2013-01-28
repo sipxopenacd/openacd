@@ -75,7 +75,10 @@ $(distdir): FORCE
 	mkdir -p $(distdir)/rel/files/bin
 	mkdir -p $(distdir)/rel/files/conf
 	mkdir -p $(distdir)/test # for test
-	cp Makefile $(distdir)
+	cp Makefile.in $(distdir)
+	cp configure.ac $(distdir)
+	cp aclocal.m4 $(distdir)
+	cp openacd.spec $(distdir)/openacd.spec
 	cp rebar.config $(distdir)/rebar.config
 	cp rebar.config.script $(distdir)/rebar.config.script
 	cp $(wildcard src/$(realname).app.src) $(distdir)/src
@@ -85,6 +88,7 @@ $(distdir): FORCE
 	cp $(wildcard rel/files/conf/*.in) $(distdir)/rel/files/conf
 	cp $(wildcard rel/files/bin/*.in) $(distdir)/rel/files/bin
 	cp $(wildcard test/*.erl) $(distdir)/test
+	cd $(distdir); autoreconf -i
 
 distcheck: $(distdir).tar.gz
 	gzip -cd $(distdir).tar.gz | tar xvf -
