@@ -431,6 +431,7 @@ init([Name, Opts]) ->
 			_ -> undefined
 		end
 	},
+	init_gproc_prop(State),
 	% set_cpx_mon(State, self()),
 	{ok, State}.
 
@@ -784,6 +785,13 @@ clean_pid_(Deadpid, Recipe, QName, [{Key, Call} | Calls], Acc) ->
 			Cleancall = Call#queued_call{dispatchers = Cleanbound},
 			lists:append(lists:reverse(Acc), [{Key, Cleancall} | Calls])
 	end.
+
+init_gproc_prop(State) ->
+	Prop = get_call_queue_prop(State),
+	gproc:reg({p, l, cpx_call_queue}, Prop).
+
+get_call_queue_prop(State) ->
+	#cpx_call_queue_prop{name = State#state.name, skills = State#state.call_skills}.
 
 % begin the defintions of the tests.
 

@@ -106,3 +106,8 @@
 	description = "Default description" :: string(),
 	group = "Misc" :: string()
 }).
+
+-record(cpx_call_queue_prop, {
+	name,
+	skills
+}).
