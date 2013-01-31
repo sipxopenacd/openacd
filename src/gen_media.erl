@@ -465,7 +465,8 @@
 	init_callrec :: 'undefined' | #call{},
 	queue_failover,
 	url_pop_get_vars = [],
-	state_changes = []
+	state_changes = [],
+	agent :: #agent{}
 }).
 
 -spec(behaviour_info/1 ::
@@ -1021,7 +1022,8 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, {Apid, _Tag},
 			unqueue(Internal#inqueue_ringing_state.queue_pid, self()),
 			cdr:oncall(Call, Agent),
 			StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
-			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
+			{ok, AgentRec} = agent_channel:get_agent(Apid),
+			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges, agent = AgentRec},
 			set_gproc_prop(inqueue_ringing, oncall, NewBase),
 			NewInternal = #oncall_state{
 				oncall_pid = {Agent, Apid},
@@ -1056,7 +1058,8 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, From, {BaseState, Int
 					{_, Qpid} = Internal#inqueue_ringing_state.queue_pid,
 					call_queue:remove(Qpid, self()),
 					StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
-					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
+					{ok, AgentRec} = agent_channel:get_agent(Apid),
+					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges, agent = AgentRec},
 					set_gproc_prop(inqueue_ringing, oncall, NewBase),
 					NewInternal = #oncall_state{
 						oncall_pid = {Agent, Apid},
@@ -1478,7 +1481,8 @@ oncall_ringing({{'$gen_media', agent_oncall}, undefined}, {Rpid, _},
 			cdr:wrapup(Call, OcAgent),
 			erlang:demonitor(Ocmon),
 			StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
-			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
+			{ok, AgentRec} = agent_channel:get_agent(Rpid),
+			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges, agent = AgentRec},
 			set_gproc_prop(oncall_ringing, oncall, NewBase),
 			NewInternal = #oncall_state{
 				oncall_pid = Internal#oncall_ringing_state.ring_pid,
@@ -1510,7 +1514,8 @@ oncall_ringing({{'$gen_media', agent_oncall}, undefined}, _, State) ->
 					set_agent_state(Ocpid, [wrapup, Call]),
 					cdr:wrapup(Call, OcAgent),
 					StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
-					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
+					{ok, AgentRec} = agent_channel:get_agent(Rpid),
+					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges, agent = AgentRec},
 					set_gproc_prop(oncall_ringing, oncall, NewBase),
 					NewInternal = #oncall_state{
 						oncall_pid = {Ragent, Rpid},
@@ -2424,13 +2429,20 @@ set_gproc_prop(OldMediaState, MediaState, FsmState) ->
 -spec get_gproc_prop(MediaState :: atom(), BaseState :: #base_state{}) -> #cpx_gen_media_prop{}.
 get_gproc_prop(State, BaseState) ->
 	CallRec = BaseState#base_state.callrec,
+	AgentRec = BaseState#base_state.agent,
 	Client = case CallRec of
 		#call{client = Cl} ->
 			Cl;
 		_ ->
 			undefined
 	end,
-	#cpx_gen_media_prop{state = State, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes}.
+	{ALogin, AProfile} = case AgentRec of
+		#agent{login = L, profile = P} ->
+			{L, P};
+		_ ->
+			{undefined, undefined}
+	end,
+	#cpx_gen_media_prop{state = State, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes, agent_login = ALogin, agent_profile = AProfile}.
 
 -ifdef(TEST).
 

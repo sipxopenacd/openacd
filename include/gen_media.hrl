@@ -68,7 +68,9 @@
 	state,
 	call :: #call{},
 	client,
-	state_changes = [] :: [{atom(), tuple()}]
+	state_changes = [] :: [{atom(), tuple()}],
+	agent_login :: string(),
+	agent_profile :: string()
 }).
 
 -record(cpx_gen_media_init, {
