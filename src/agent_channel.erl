@@ -45,6 +45,7 @@
 
 
 -record(state, {
+	agent_rec :: #agent{},
 	agent_fsm :: pid(),
 	agent_connection :: pid(),
 	agent_login :: string(),
@@ -106,6 +107,7 @@
 	start_link/2,
 	start_link/4,
 	stop/1,
+	get_agent/1,
 	get_media/1,
 	set_state/2,
 	set_state/3,
@@ -165,6 +167,11 @@ media_call(Apid, Request) ->
 -spec(media_cast/2 :: (Apid :: pid(), Request :: any()) -> 'ok').
 media_cast(Apid, Request) ->
 	gen_fsm:send_event(Apid, {mediacast, Request}).
+
+%% @doc Returns the #agent{} from the current state.
+-spec(get_agent/1 :: (Apid :: pid()) -> {ok, #agent{}}).
+get_agent(Apid) ->
+	gen_fsm:sync_send_all_state_event(Apid, get_agent).
 
 %% @doc Returns the #call{} of the current state if there is on, otherwise
 %% returns `invalid'.
@@ -284,6 +291,7 @@ subscribe_events(Pid, Handler, Args) ->
 init([Agent, Call, Endpoint, StateName]) ->
 	process_flag(trap_exit, true),
 	State = #state{
+		agent_rec = Agent,
 		agent_fsm = Agent#agent.source,
 		agent_connection = Agent#agent.connection,
 		agent_login = Agent#agent.login,
@@ -585,6 +593,9 @@ handle_event(_Event, StateName, State) ->
 % ======================================================================
 % HANDLE_SYNC_EVENT
 % ======================================================================
+
+handle_sync_event(get_agent, _From, StateName, State) ->
+	{reply, {ok, State#state.agent_rec}, StateName, State};
 
 handle_sync_event(query_state, _From, StateName, State) ->
 	{reply, {ok, StateName}, StateName, State};
