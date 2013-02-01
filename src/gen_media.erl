@@ -1836,9 +1836,10 @@ handle_custom_return({queue, Queue, PCallrec, NewState}, inivr, Reply, {BaseStat
 				queue_pid = {QueueName, QPid}
 			},
 			NewBase = BaseState#base_state{
-				callrec = Callrec,
+				callrec = Callrec#call{queue = QueueName},
 				substate = NewState
 			},
+			set_gproc_prop(inivr, inqueue, NewBase),
 			case Reply of
 				reply ->
 					{reply, ok, inqueue, {NewBase, InternalState}};
@@ -2442,7 +2443,7 @@ get_gproc_prop(State, BaseState) ->
 		_ ->
 			{undefined, undefined}
 	end,
-	#cpx_gen_media_prop{state = State, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes, agent_login = ALogin, agent_profile = AProfile}.
+	#cpx_gen_media_prop{state = State, queue = CallRec#call.queue, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes, agent_login = ALogin, agent_profile = AProfile}.
 
 -ifdef(TEST).
 

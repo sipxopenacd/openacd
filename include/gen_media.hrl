@@ -66,6 +66,7 @@
 
 -record(cpx_gen_media_prop, {
 	state,
+	queue :: string(),
 	call :: #call{},
 	client,
 	state_changes = [] :: [{atom(), tuple()}],
