@@ -440,6 +440,7 @@ handle_sync_event({set_connection, Pid}, _From, StateName, #state{agent_rec = #a
 		O -> O
 	end,
 	inform_connection(NewAgent, {set_release, R}),
+	gen_event:notify(State#state.event_manager, {agent_feed, {set_connection, Pid}}),
 	{reply, ok, StateName, State#state{agent_rec = NewAgent}};
 
 handle_sync_event(dump_state, _From, StateName, #state{agent_rec = Agent} = State) ->
