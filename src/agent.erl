@@ -326,12 +326,12 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
-	gen_event:notify(State#state.event_manager, {agent_feed, 
+	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
 	{reply, ok, released, NewState};
 
-idle({precall, Call}, _From, #state{agent_rec = Agent} = State) ->
-	case start_channel(Agent, Call, precall) of
+idle({precall, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+	case start_channel(Agent, Call, precall, EventManager) of
 		{ok, Pid, NewAgent} ->
 			%inform_connection(Agent, {set_channel, Pid, precall, Call}),
 			{reply, {ok, Pid}, idle, State#state{agent_rec = NewAgent}};
@@ -339,8 +339,8 @@ idle({precall, Call}, _From, #state{agent_rec = Agent} = State) ->
 			{reply, Else, idle, State}
 	end;
 
-idle({prering, Call}, _From, #state{agent_rec = Agent} = State) ->
-	case start_channel(Agent, Call, prering) of
+idle({prering, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+	case start_channel(Agent, Call, prering, EventManager) of
 		{ok, Pid, NewAgent} ->
 			lager:debug("Started prering (~s) ~p", [Agent#agent.login, Pid]),
 			%inform_connection(Agent, {set_channel, Pid, prering, Call}),
@@ -349,8 +349,8 @@ idle({prering, Call}, _From, #state{agent_rec = Agent} = State) ->
 			{reply, Else, idle, State}
 	end;
 
-idle({ringing, Call}, _From, #state{agent_rec = Agent} = State) ->
-	case start_channel(Agent, Call, ringing) of
+idle({ringing, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+	case start_channel(Agent, Call, ringing, EventManager) of
 		{ok, Pid, NewAgent} ->
 			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
 			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
@@ -379,7 +379,7 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	inform_connection(Agent, {set_release, none, Now}),
 	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp()},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
-	gen_event:notify(State#state.event_manager, {agent_feed, 
+	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = undefined, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
 	{reply, ok, idle, NewState};
 
@@ -393,7 +393,7 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	cpx_agent_event:change_agent(Agent, NewAgent),
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
-	gen_event:notify(State#state.event_manager, {agent_feed, 
+	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
 	{reply, ok, released, NewState};
 
@@ -741,7 +741,7 @@ inform_connection(#agent{connection = undefined}, _Msg) ->
 inform_connection(#agent{connection = Conn}, Msg) ->
 	Conn ! {agent, Msg}.
 
-start_channel(Agent, Call, StateName) ->
+start_channel(Agent, Call, StateName, EventManager) ->
 	ChanAvail = lists:member(Call#call.type, Agent#agent.available_channels),
 	EndPoint = get_endpoint(Call#call.source_module, Agent),
 	case {ChanAvail, EndPoint} of
@@ -750,7 +750,7 @@ start_channel(Agent, Call, StateName) ->
 		{true, {error, notfound}} ->
 			{error, noendpoint};
 		{true, {ok, {_Orig, Endpoint}}} ->
-			case agent_channel:start_link(Agent, Call, Endpoint, StateName) of
+			case agent_channel:start_link(Agent, Call, Endpoint, StateName, EventManager) of
 				{ok, Pid} ->
 					Available = block_channels(Call#call.type, Agent#agent.available_channels, ?default_category_blocks),
 					dispatch_manager:now_avail(self(), Available),
