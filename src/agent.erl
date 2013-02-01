@@ -111,7 +111,8 @@
 	get_endpoint/2,
 	blab/2,
 	subscribe_events/2,
-	subscribe_events/3
+	subscribe_events/3,
+	call_event_handler/3
 ]).
 
 %% Channel Starters
@@ -271,6 +272,10 @@ subscribe_events(Pid, Handler) ->
 %% @doc Initialize and subscribe `Handler' with initial `Args' to `Pid' events.
 subscribe_events(Pid, Handler, Args) ->
 	gen_fsm:send_all_state_event(Pid, {subscribe_events, Handler, Args}).
+
+%% @doc Sends the given `Request' to a `Handler' of `Pid'.
+call_event_handler(Pid, Handler, Request) ->
+	gen_fsm:sync_send_all_state_event(Pid, {call_event_handler, Handler, Request}).
 
 % ======================================================================
 % INIT
@@ -494,6 +499,10 @@ handle_sync_event({set_endpoint, Module, Data}, _From, StateName, #state{agent_r
 		{error, _Err} = Error ->
 			{reply, Error, StateName, State}
 	end;
+
+handle_sync_event({call_event_handler, Handler, Request}, _From, StateName, State) ->
+	Reply = gen_event:call(State#state.event_manager, Handler, Request),
+	{reply, Reply, StateName, State};
 
 handle_sync_event(Msg, _From, StateName, State) ->
 	{reply, {error, Msg}, StateName, State}.
