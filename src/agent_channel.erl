@@ -102,10 +102,10 @@
 
 %% api
 -export([
-	start/2,
-	start/4,
-	start_link/2,
-	start_link/4,
+	% start/2,
+	start/5,
+	% start_link/2,
+	start_link/5,
 	stop/1,
 	get_agent/1,
 	get_media/1,
@@ -131,22 +131,22 @@
 % API
 % ======================================================================
 
--type(start_opts() :: [{atom(), any()}]).
-%% @doc start an fsm with the given options.
--spec(start/2 :: (AgentRec :: #agent{}, Options :: start_opts()) -> {'ok', pid()}).
-start(AgentRec, Options) ->
-	gen_fsm:start(?MODULE, [AgentRec, Options], []).
+% -type(start_opts() :: [{atom(), any()}]).
+% %% @doc start an fsm with the given options.
+% -spec(start/2 :: (AgentRec :: #agent{}, Options :: start_opts()) -> {'ok', pid()}).
+% start(AgentRec, Options) ->
+% 	gen_fsm:start(?MODULE, [AgentRec, Options], []).
 
-start(AgentRec, CallRec, EndpointData, InitState) ->
-	gen_fsm:start(?MODULE, [AgentRec, CallRec, EndpointData, InitState], []).
+start(AgentRec, CallRec, EndpointData, InitState, EventManager) ->
+	gen_fsm:start(?MODULE, [AgentRec, CallRec, EndpointData, InitState, EventManager], []).
 
-%% @doc Start an fsm linked to the calling process.
--spec(start_link/2 :: (AgentRec :: #agent{}, Options :: start_opts()) -> {'ok', pid()}).
-start_link(AgentRec, Options) ->
-	gen_fsm:start_link(?MODULE, [AgentRec, Options], []).
+% %% @doc Start an fsm linked to the calling process.
+% -spec(start_link/2 :: (AgentRec :: #agent{}, Options :: start_opts()) -> {'ok', pid()}).
+% start_link(AgentRec, Options) ->
+% 	gen_fsm:start_link(?MODULE, [AgentRec, Options], []).
 
-start_link(AgentRec, CallRec, EndpointData, InitState) ->
-	gen_fsm:start_link(?MODULE, [AgentRec, CallRec, EndpointData, InitState], []).
+start_link(AgentRec, CallRec, EndpointData, InitState, EventManager) ->
+	gen_fsm:start_link(?MODULE, [AgentRec, CallRec, EndpointData, InitState, EventManager], []).
 
 %% @doc Stop the passed agent fsm `Pid'.
 -spec(stop/1 :: (Pid :: pid()) -> 'ok').
@@ -288,7 +288,7 @@ subscribe_events(Pid, Handler, Args) ->
 %			{stop, badstate}
 %	end;
 
-init([Agent, Call, Endpoint, StateName]) ->
+init([Agent, Call, Endpoint, StateName, EventManager]) ->
 	process_flag(trap_exit, true),
 	State = #state{
 		agent_rec = Agent,
@@ -300,10 +300,11 @@ init([Agent, Call, Endpoint, StateName]) ->
 		endpoint = Endpoint,
 		client = Call#call.client,
 		callerid = Call#call.callerid,
-		state_data = Call
+		state_data = Call,
+		event_manager = EventManager
 	},
 	init_gproc_prop({State, init, StateName}),
-	Res = case StateName of
+	case StateName of
 		prering when is_record(Call, call); Call =:= undefined ->
 			case start_endpoint(Endpoint, Agent, Call) of
 				{ok, Pid} ->
@@ -333,14 +334,6 @@ init([Agent, Call, Endpoint, StateName]) ->
 		_ ->
 			lager:warning("Failed start:  ~p", [{StateName, Call}]),
 			{stop, badstate}
-	end,
-	case Res of
-		{ok, NextSt, State1} ->
-			{ok, EventMgr} = gen_event:start_link(),
-			cpx_hooks:trigger_hooks(channel_feed_subscribe, [self()]),
-			{ok, NextSt, State1#state{event_manager = EventMgr}};
-		_ ->
-			Res
 	end.
 
 
@@ -773,44 +766,44 @@ public_api_test_() ->
 		meck:unload(gen_fsm)
 	end, [
 
-	fun(_) -> {"start/2, simple_sucess", fun() ->
-		meck:expect(gen_fsm, start, fun(?MODULE, [agentrecord, options], []) ->
-			?assert(true)
-		end),
+	% fun(_) -> {"start/2, simple_sucess", fun() ->
+	% 	meck:expect(gen_fsm, start, fun(?MODULE, [agentrecord, options], []) ->
+	% 		?assert(true)
+	% 	end),
 
-		start(agentrecord, options),
-		?assertEqual(1, length(meck:history(gen_fsm))),
-		?assert(meck:validate(gen_fsm))
-	end} end,
+	% 	start(agentrecord, options),
+	% 	?assertEqual(1, length(meck:history(gen_fsm))),
+	% 	?assert(meck:validate(gen_fsm))
+	% end} end,
 
-	fun(_) -> {"start/4, simple_sucess", fun() ->
+	fun(_) -> {"start/5, simple_sucess", fun() ->
 		meck:expect(gen_fsm, start, fun(?MODULE, [agentrecord, callrecord,
-			endpointdata, initstate], []) ->
+			endpointdata, initstate, ev_manager], []) ->
 			?assert(true)
 		end),
 
-		start(agentrecord, callrecord, endpointdata, initstate),
+		start(agentrecord, callrecord, endpointdata, initstate, ev_manager),
 		?assertEqual(1, length(meck:history(gen_fsm))),
 		?assert(meck:validate(gen_fsm))
 	end} end,
 
-	fun(_) -> {"start_link/2, simple_sucess", fun() ->
-		meck:expect(gen_fsm, start_link, fun(?MODULE, [agentrecord, options], []) ->
-			?assert(true)
-		end),
+	% fun(_) -> {"start_link/2, simple_sucess", fun() ->
+	% 	meck:expect(gen_fsm, start_link, fun(?MODULE, [agentrecord, options], []) ->
+	% 		?assert(true)
+	% 	end),
 
-		start_link(agentrecord, options),
-		?assertEqual(1, length(meck:history(gen_fsm))),
-		?assert(meck:validate(gen_fsm))
-	end} end,
+	% 	start_link(agentrecord, options),
+	% 	?assertEqual(1, length(meck:history(gen_fsm))),
+	% 	?assert(meck:validate(gen_fsm))
+	% end} end,
 
-	fun(_) -> {"start_link/4, simple_sucess", fun() ->
+	fun(_) -> {"start_link/5, simple_sucess", fun() ->
 		meck:expect(gen_fsm, start_link, fun(?MODULE, [agentrecord,
-			callrecord, endpointdata, initstate], []) ->
+			callrecord, endpointdata, initstate, ev_manager], []) ->
 			?assert(true)
 		end),
 
-		start_link(agentrecord, callrecord, endpointdata, initstate),
+		start_link(agentrecord, callrecord, endpointdata, initstate, ev_manager),
 		?assertEqual(1, length(meck:history(gen_fsm))),
 		?assert(meck:validate(gen_fsm))
 	end} end,
