@@ -2,12 +2,12 @@
 # -*- tab-width:4;indent-tabs-mode:nil -*-
 # ex: ts=4 sw=4 et
 
-RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
+RUNNER_SCRIPT=$(cd $(dirname "$0") && pwd)/$(basename "$0")
 RUNNER_USER=@runuser@
 
 # Make sure this script is running as the appropriate user
 if [ ! -z "$RUNNER_USER" ] && [ `whoami` != "$RUNNER_USER" ]; then
-    exec sudo -u $RUNNER_USER -i $0 $@
+    SHELL=/bin/sh exec sudo -u $RUNNER_USER -i "$RUNNER_SCRIPT" $@
 fi
 
 # erlang binaries
