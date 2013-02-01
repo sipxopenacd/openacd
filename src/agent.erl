@@ -306,7 +306,10 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 	end,
 	cpx_agent_event:agent_init(Agent2),
 	{ok, EventMgr} = gen_event:start_link(),
-	cpx_hooks:trigger_hooks(agent_feed_subscribe, [self()]),
+	{ok, EventHandlers} = cpx_hooks:trigger_hooks(agent_feed_subscribe, [Agent2], all),
+	lists:foreach(fun({Handler, Args}) ->
+		gen_event:add_handler(EventMgr, Handler, Args)
+	end, EventHandlers),
 	State = #state{start_time = os:timestamp(), agent_rec = Agent2, original_endpoints = OriginalEnds, event_manager = EventMgr},
 	init_gproc_prop({init, State}),
 	{ok, StateName, State}.
