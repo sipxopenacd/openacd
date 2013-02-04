@@ -39,7 +39,8 @@
 
 -record(state, {
 	agent_pid :: pid(),
-	agent_login :: erlang:error({undefined, login}) | string(),
+	agent_login :: string(),
+	security_level :: security_level(),
 	channels = [] :: list(),
 	chan_count = 0 :: non_neg_integer()
 }).
@@ -47,8 +48,8 @@
 -type state() :: #state{}.
 -export_type([state/0]).
 
-new(#agent{source=APid, login=Login}) ->
-	#state{agent_pid = APid, agent_login=Login}.
+new(#agent{source=APid, login=Login, securitylevel=Level}) ->
+	#state{agent_pid = APid, agent_login=Login, security_level=Level}.
 
 get(#state{agent_pid=APid}, agent_pid) ->
 	APid;
@@ -57,7 +58,9 @@ get(#state{agent_login=ALogin}, agent_login) ->
 get(#state{agent_pid=APid}, agent) ->
 	agent:dump_state(APid);
 get(#state{channels=Channels}, channels) ->
-	Channels.
+	Channels;
+get(#state{security_level=Level}, security_level) ->
+	Level.
 
 set(State, channels, Channels) ->
 	State#state{channels = Channels}.
@@ -110,10 +113,12 @@ count_to_id(Id) ->
 new_test() ->
 	APid = spawn(fun() -> ok end),
 	ALogin = "agent",
-	St = new(#agent{login=ALogin, source=APid}),
+	ALevel = supervisor,
+	St = new(#agent{login=ALogin, source=APid, securitylevel=ALevel}),
 
 	?assertEqual(APid, get(St, agent_pid)),
-	?assertEqual(ALogin, get(St, agent_login)).
+	?assertEqual(ALogin, get(St, agent_login)),
+	?assertEqual(ALevel, get(St, security_level)).
 
 get_agent_rec_test_() ->
 	APid = spawn(fun() -> ok end),
