@@ -1830,13 +1830,14 @@ handle_custom_return({queue, Queue, PCallrec, NewState}, inivr, Reply, {BaseStat
 		{reply, {error, _}} ->
 			{reply, QData, inivr, {BaseState#base_state{substate = NewState}, CurState}};
 		{_, {ok, {QueueName, QPid}}} ->
+			#queued_call{skills = Skills} = call_queue:get_qcall(QPid, self()),
 			Mon = erlang:monitor(process, QPid),
 			InternalState = #inqueue_state{
 				queue_mon = Mon,
 				queue_pid = {QueueName, QPid}
 			},
 			NewBase = BaseState#base_state{
-				callrec = Callrec#call{queue = QueueName},
+				callrec = Callrec#call{queue = QueueName, skills = Skills},
 				substate = NewState
 			},
 			set_gproc_prop(inivr, inqueue, NewBase),
@@ -2431,6 +2432,12 @@ set_gproc_prop(OldMediaState, MediaState, FsmState) ->
 get_gproc_prop(State, BaseState) ->
 	CallRec = BaseState#base_state.callrec,
 	AgentRec = BaseState#base_state.agent,
+	Queue = case CallRec of
+		#call{queue = Q} ->
+			Q;
+		_ ->
+			undefined
+	end,
 	Client = case CallRec of
 		#call{client = Cl} ->
 			Cl;
@@ -2443,7 +2450,7 @@ get_gproc_prop(State, BaseState) ->
 		_ ->
 			{undefined, undefined}
 	end,
-	#cpx_gen_media_prop{state = State, queue = CallRec#call.queue, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes, agent_login = ALogin, agent_profile = AProfile}.
+	#cpx_gen_media_prop{state = State, queue = Queue, call = CallRec, client = Client, state_changes = BaseState#base_state.state_changes, agent_login = ALogin, agent_profile = AProfile}.
 
 -ifdef(TEST).
 
