@@ -33,16 +33,29 @@
 
 -include("agent.hrl").
 
--export([new/1, get/2, set/3,
+-export([
+	% new
+	new/1,
+
+	% fixed properties
+	get/2, set/3,
+
+	%% arbitrary properties
+	get_prop/2, set_prop/3, unset_prop/2,
+
+	% channels
 	get_channel_pid_by_id/2, get_id_by_channel_pid/2,
-	store_channel/2, remove_channel/2]).
+	store_channel/2, remove_channel/2
+]).
 
 -record(state, {
 	agent_pid :: pid(),
 	agent_login :: string(),
 	security_level :: security_level(),
 	channels = [] :: list(),
-	chan_count = 0 :: non_neg_integer()
+	chan_count = 0 :: non_neg_integer(),
+	%% arbitrary properties
+	props = dict:new()
 }).
 
 -type state() :: #state{}.
@@ -64,6 +77,20 @@ get(#state{security_level=Level}, security_level) ->
 
 set(State, channels, Channels) ->
 	State#state{channels = Channels}.
+
+-spec get_prop(state(), K::any()) -> {ok, V::any()} | error.
+get_prop(#state{props=Props}, K) ->
+	dict:find(K, Props).
+
+-spec set_prop(state(), K::any(), V::any()) -> state().
+set_prop(#state{props=Props}=St, K, V) ->
+	Props1 = dict:store(K, V, Props),
+	St#state{props=Props1}.
+
+-spec unset_prop(state(), K::any()) -> state().
+unset_prop(#state{props=Props}=St, K) ->
+	Props1 = dict:erase(K, Props),
+	St#state{props=Props1}.
 
 -spec get_id_by_channel_pid(state(), pid()) -> binary() | none.
 get_id_by_channel_pid(St, Pid) ->
@@ -163,5 +190,14 @@ channel_test() ->
 
 	?assertEqual(none, get_id_by_channel_pid(St4, Pid1)).
 
+props_test() ->
+	St = t_st(),
+	?assertEqual(error, get_prop(St, key)),
+
+	St1 = set_prop(St, key, value),
+	?assertEqual({ok, value}, get_prop(St1, key)),
+
+	St2 = unset_prop(St1, key),
+	?assertEqual(error, get_prop(St2, key)).
 
 -endif.
