@@ -1,20 +1,20 @@
 [{openacd, [
-    {nodes, []},
-    , {rsakey, ["@localstatedir@/openacd/key/openacd.key"]},
+	{nodes, []}
+	, {rsakey, ["@localstatedir@/openacd/key/openacd.key"]}
 
-    %% List plugins here
-    , {plugins, []}
+	%% List plugins here
+	, {plugins, []}
 
-    %% Change storage backends here
-    % , {agent_auth_storage, agent_auth_ets},
-    % , {call_queue_config_storage, call_queue_config_ets}
-]},
-{lager, [
-    {handlers, [
+	%% Change storage backends here
+	% , {agent_auth_storage, agent_auth_ets}
+	% , {call_queue_config_storage, call_queue_config_ets}
+]}
+, {lager, [
+	{handlers, [
 		{lager_console_backend, info}
 		, {lager_file_backend, [
-			{"@localstatedir@/log/openacd/error.log", error, 10485760, "$D0", 5},
-			{"@localstatedir@/log/openacd/console.log", info, 10485760, "$D0", 5}
+			{"@localstatedir@/log/openacd/error.log", error, 10485760, "$D0", 5}
+			, {"@localstatedir@/log/openacd/console.log", info, 10485760, "$D0", 5}
 		]}
 	]}
 ]}
