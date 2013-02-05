@@ -51,7 +51,7 @@ process(["status"]) ->
 	?RET_SUCCESS;
 
 process(["list-agents"]) ->
-	Agents = qlc:e(qlc:q([#ctl_agent{agent=Login, profile=Profile, state=State, login_time=StartTime} || 
+	Agents = qlc:e(qlc:q([#ctl_agent{agent=Login, profile=Profile, state=State, login_time=StartTime} ||
 		{_, _, #cpx_agent_prop{login=Login, profile=Profile, state=State, start_time=StartTime}} <- gproc:table({l, p})])),
 	?PRINT("~-10s ~-15s ~-24s ~s~n", ["Login", "Profile", "Login Time", "State"]),
 	lists:foreach(fun(A) ->
@@ -71,7 +71,7 @@ process(["list-queues"]) ->
 	?RET_SUCCESS;
 
 process(["list-calls"]) ->
-	Calls = qlc:e(qlc:q([#ctl_call{client=Client, state=State, caller_id=CallerId, queue=Queue, line=Dnis, state_changes=StateChanges} || 
+	Calls = qlc:e(qlc:q([#ctl_call{client=Client, state=State, caller_id=CallerId, queue=Queue, line=Dnis, state_changes=StateChanges} ||
 		{_, _, #cpx_gen_media_prop{state=State, call=#call{callerid=CallerId, dnis=Dnis, queue=Queue}, client=#client{label=Client}, state_changes=StateChanges}} <- gproc:table({l, p})])),
 	?PRINT("~-15s ~-20s ~-20s ~-20s ~-10s ~s~n", ["Client", "Caller ID", "State", "Queue", "Line", "Start Time"]),
 	lists:foreach(fun(C) ->
@@ -103,7 +103,7 @@ process(["show-queue", Queue]) ->
 		Calls when length(Calls) > 0 ->
 			?PRINT("Calls in queue: ~b~n~n", [length(Calls)]),
 			?PRINT("~-40s", ["Call ID"]),
-			?PRINT("PID~n"),	
+			?PRINT("PID~n"),
 			lists:foreach(fun({_, Call}) ->
 				?PRINT("~-40s", [Call#queued_call.id]),
 				?PRINT("~p~n", [Call#queued_call.media])
@@ -145,7 +145,7 @@ print_agent(A) ->
 	?PRINT("~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B      ", [Y,M,D,H,Mi,S]),
 	case A#ctl_agent.state of
 		available -> ?PRINT("Available~n");
-		{released, {Reason,_,_}} -> ?PRINT("Released: ~s~n", [Reason])
+		{released, {_,Reason,_}} -> ?PRINT("Released: ~s~n", [Reason])
 	end.
 
 print_call(C) ->
