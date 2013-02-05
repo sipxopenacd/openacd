@@ -63,14 +63,9 @@ enc_state_changes(Changes) ->
 			{[{State, util:now_ms(Timestamp)}]}
 		end, Changes)).
 
--spec enc_agent_state(available | {released, tuple()}) -> json().
-enc_agent_state({released, {_, Label, _}}) ->
-	LabelEnc = case Label of
-		L when is_list(L) -> l2b(L);
-		L when is_atom(L) -> L;
-		_ -> undefined
-	end,
-	{[{released, LabelEnc}]};
+-spec enc_agent_state(available | {released, release_code()}) -> json().
+enc_agent_state({released, ReleaseCode}) ->
+	{[{released, relcode_entry(ReleaseCode)}]};
 enc_agent_state(State) when is_atom(State) ->
 	State.
 
@@ -97,6 +92,21 @@ nol(undefined) ->
 	null;
 nol(L) when is_binary(L) ->
 	binary_to_list(L).
+
+% Internal functions
+
+-spec relcode_entry(release_code()) -> json().
+relcode_entry({Id, L, B}) ->
+	Bias = case B of
+		N when N < 0 -> negative;
+		N when N > 0 -> positive;
+		_ -> neutral
+	end,
+	Label = case L of
+		T when is_list(L) -> l2b(T);
+		T -> T
+	end,
+	{[{id, l2b(Id)}, {name, Label}, {bias, Bias}]}.
 
 -ifdef(TEST).
 
@@ -134,8 +144,10 @@ enc_state_changes_test() ->
 			{init, {1352,161996,526276}}])).
 
 enc_agent_state_test_() ->
-	[?_assertEqual({[{released, <<"label">>}]}, enc_agent_state({released, {rel, "label", -1}})),
-	?_assertEqual({[{released, label}]}, enc_agent_state({released, {rel1, label, 0}})),
+	[?_assertEqual({[{released, {[{id, <<"RelID1">>}, {name, <<"Release 1">>}, {bias, negative}]}}]},
+		enc_agent_state({released, {"RelID1", "Release 1", -1}})),
+	?_assertEqual({[{released, {[{id, <<"default">>}, {name, default}, {bias, positive}]}}]},
+		enc_agent_state({released, {"default", default, 1}})),
 	?_assertEqual(available, enc_agent_state(available))].
 
 -endif.
