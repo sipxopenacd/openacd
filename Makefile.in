@@ -3,6 +3,8 @@ version = @PACKAGE_VERSION@
 tarname = $(package)
 distdir = $(tarname)-$(version)
 
+buildno = $(shell git describe --long --always | cut -d- -f2-3 | sed 's/-/./g')
+
 #realname = openacd
 realname = $(package)
 
@@ -137,7 +139,7 @@ $(confs) $(bin) $(specs) src/$(realname).app.src: % : %.in Makefile
 
 rpms: specs/openacd.spec $(distdir).tar.gz | $(rpmbuilddir)
 	cp $(distdir).tar.gz $(rpmbuilddir)/SOURCES
-	rpmbuild --define "_topdir $(CURDIR)/rpmbuild" -ba specs/openacd.spec
+	rpmbuild --define "_topdir $(CURDIR)/rpmbuild" --define "buildno $(buildno)" -ba specs/openacd.spec
 	mkdir -p rpms
 	cp $(rpmbuilddir)/RPMS/**/*.rpm rpms
 	rm -rf $(rpmbuilddir)
