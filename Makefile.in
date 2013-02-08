@@ -69,6 +69,7 @@ clean:
 	-rm -rf $(distdir)
 	-rm -rf $(distdir).tar.gz
 	-rm -rf $(rpmbuilddir)
+	-rm -rf rpms
 
 check:
 	REBAR_SHARED_DEPS=1 @REBAR@ eunit skip_deps=true
@@ -138,6 +139,7 @@ $(confs) $(bin) $(specs) src/$(realname).app.src: % : %.in Makefile
 	$(edit) $(srcdir)/$@.in > $@
 
 rpms: specs/openacd.spec $(distdir).tar.gz | $(rpmbuilddir)
+	-rm -rf rpms/*.rpm
 	cp $(distdir).tar.gz $(rpmbuilddir)/SOURCES
 	rpmbuild --define "_topdir $(CURDIR)/rpmbuild" --define "buildno $(buildno)" -ba specs/openacd.spec
 	mkdir -p rpms
