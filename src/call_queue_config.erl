@@ -198,7 +198,7 @@ start() ->
 			application:set_env(openacd, call_queue_config_storage, St),
 			St
 	end,
-	St:start().
+	Store:start().
 
 %% =====
 %% Call queue
