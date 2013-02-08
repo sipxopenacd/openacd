@@ -7,7 +7,7 @@ RUNNER_USER=@runuser@
 
 # Make sure this script is running as the appropriate user
 if [ ! -z "$RUNNER_USER" ] && [ `whoami` != "$RUNNER_USER" ]; then
-    SHELL=/bin/sh exec sudo -u $RUNNER_USER -i "$RUNNER_SCRIPT" $@
+    exec sudo -u $RUNNER_USER -s "$RUNNER_SCRIPT" $@
 fi
 
 # erlang binaries
@@ -21,6 +21,9 @@ ERL_SMP=auto
 ERL_NODE=openacd
 ERL_HOST=$(hostname -f)
 ERL_COOKIE=
+
+# ssh-keygen
+SSH_KEYGEN=@SSH_KEYGEN@
 
 # other vm args
 # ERL_ARGS=
@@ -37,6 +40,7 @@ OA_ENV_CONFIG_PATH=$OA_ETC_DIR/env.config
 OA_LOG_DIR=$VAR_DIR/log/openacd
 OA_DB_DIR=$VAR_DIR/openacd/db
 OA_RUN_DIR=$VAR_DIR/openacd/run
+OA_KEY_DIR=$VAR_DIR/openacd/key # TODO - should get path from sys.config
 
 OA_PIPE_PATH=$VAR_DIR/openacd/pipe/run
 OA_PIPE_LOG_DIR=$OA_LOG_DIR/pipe
@@ -97,7 +101,7 @@ ERL_CRASH_DUMP=$OA_LOG_DIR/erl_crash_$DATETIME.dump
 [ -d "$OA_DB_DIR" ] || mkdir -p "$OA_DB_DIR"
 
 # home
-HOME=$VAR_DIR/openacd
+HOME=$OA_RUN_DIR
 [ -d "$HOME" ] || mkdir -p "$HOME"
 
 # path
@@ -114,6 +118,7 @@ export OA_RUN_DIR
 
 start()
 {
+    checkkey
     checkdupname
 
     OA_PIPE_DIR=$( dirname "$OA_PIPE_PATH" )
@@ -128,13 +133,14 @@ start()
         $ERL_COOKIE_ARG \
         -s openacd \
         -config $OA_CONFIG_PATH \
-        -mnesia dir \\\"$OA_DB_DIR\\\"\
+        -mnesia dir \\\"$OA_DB_DIR\\\" \
         $ERL_OPTS"
     exec $RUN_ERL -daemon "$OA_PIPE_PATH" "$OA_PIPE_LOG_DIR" "$ERL_CMD"
 }
 
 live()
 {
+    checkkey
     checkdupname
 
     ERL_CMD="$ERL \
@@ -142,7 +148,7 @@ live()
         $ERL_COOKIE_ARG \
         -s openacd \
         -config $OA_CONFIG_PATH \
-        -mnesia dir \"$OA_DB_DIR\"\
+        -mnesia dir \\\"$OA_DB_DIR\\\" \
         $ERL_OPTS"
     exec $ERL_CMD
 }
@@ -223,6 +229,19 @@ checkdupname()
     if [ "$?" -eq 0 ]; then
         echo "ERROR: Duplicate node name '$ERL_NAME' already running."
         exit 1
+    fi
+}
+
+checkkey()
+{
+    KEY_FILE=$oakeydir/key
+    if [ -f "$KEY_FILE" ]; then
+        echo "Creating key at $KEY_FILE"
+        mkdir -p "$oakeydir"
+        $SSH_KEYGEN -t rsa -f "$oakeydir/key" -N "" -q
+        if [ "$?" -neq 0 ]; then
+            err_exit "ERROR: Unable to create key at $KEY_FILE"
+        fi
     fi
 }
 

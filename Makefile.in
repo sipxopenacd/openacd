@@ -42,7 +42,8 @@ edit = sed \
   -e 's|@ERL[@]|$(ERL)|g' \
   -e 's|@RUN_ERL[@]|$(RUN_ERL)|g' \
   -e 's|@TO_ERL[@]|$(TO_ERL)|g' \
-  -e 's|@ERLANG_INSTALL_LIB_DIR[@]|$(ERLANG_INSTALL_LIB_DIR)|g'
+  -e 's|@ERLANG_INSTALL_LIB_DIR[@]|$(ERLANG_INSTALL_LIB_DIR)|g' \
+  -e 's|@SSH_KEYGEN[@]|$(SSH_KEYGEN)|g'
 
 confs = rel/files/conf/env.config rel/files/conf/sys.config
 bin = rel/files/bin/openacd
