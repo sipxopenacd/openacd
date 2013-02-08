@@ -1,6 +1,6 @@
-{application, openacd, [
+{application, @PACKAGE_NAME@, [
 	{description, "Call queuing and routing system"},
-	{vsn, "2.0.0"},
+	{vsn, "@PACKAGE_VERSION@"},
 	{modules, []},
 	{registered, [
 		agent_connection_sup,

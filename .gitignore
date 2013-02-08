@@ -66,6 +66,8 @@ missing
 # generated files
 rel/files/conf/*.config
 rel/files/bin/openacd
+specs/openacd.spec
+rpms/*
 
 #editor swap files
 *~

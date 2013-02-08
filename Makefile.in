@@ -27,6 +27,7 @@ oavardir = $(localstatedir)/$(package)
 oakeydir = $(oavardir)/key
 oadbdir = $(oavardir)/db
 oarundir = $(oavardir)/run
+oapipedir = $(oavardir)/pipe
 
 oakey = $(oakeydir)/openacd.key
 
@@ -35,7 +36,11 @@ VPATH = @srcdir@
 
 runuser = @runuser@
 
+rpmbuilddir = rpmbuild
+
 edit = sed \
+  -e 's|@PACKAGE_NAME[@]|$(package)|g' \
+  -e 's|@PACKAGE_VERSION[@]|$(version)|g' \
   -e 's|@localstatedir[@]|$(localstatedir)|g' \
   -e 's|@sysconfdir[@]|$(sysconfdir)|g' \
   -e 's|@runuser[@]|$(runuser)|g' \
@@ -47,18 +52,21 @@ edit = sed \
 
 confs = rel/files/conf/env.config rel/files/conf/sys.config
 bin = rel/files/bin/openacd
+specs = specs/openacd.spec
 
 all: compile $(confs) $(bin)
 
-compile:
-	REBAR_SHARED_DEPS=1 @REBAR@ compile skip_deps=true
+compile: src/$(realname).app.src
+	REBAR_SHARED_DEPS=1 OA_VSN=$(version) @REBAR@ compile skip_deps=true
 
 clean:
 	rebar clean skip_deps=true
 	-rm -rf $(confs)
 	-rm -rf $(bin)
+	-rm -rf $(specs)
 	-rm -rf $(distdir)
 	-rm -rf $(distdir).tar.gz
+	-rm -rf $(rpmbuilddir)
 
 check:
 	REBAR_SHARED_DEPS=1 @REBAR@ eunit skip_deps=true
@@ -75,14 +83,15 @@ $(distdir): FORCE
 	mkdir -p $(distdir)/contrib/src
 	mkdir -p $(distdir)/rel/files/bin
 	mkdir -p $(distdir)/rel/files/conf
+	mkdir -p $(distdir)/specs
 	mkdir -p $(distdir)/test # for test
 	cp Makefile.in $(distdir)
 	cp configure.ac $(distdir)
 	cp aclocal.m4 $(distdir)
-	cp openacd.spec $(distdir)/openacd.spec
+	cp specs/openacd.spec $(distdir)/specs/openacd.spec
 	cp rebar.config $(distdir)/rebar.config
 	cp rebar.config.script $(distdir)/rebar.config.script
-	cp $(wildcard src/$(realname).app.src) $(distdir)/src
+	cp $(wildcard src/$(realname).app.src.in) $(distdir)/src
 	cp $(wildcard src/*.erl) $(distdir)/src
 	cp $(wildcard include/*.hrl) $(distdir)/include
 	cp $(wildcard contrib/src/*.erl) $(distdir)/contrib/src
@@ -103,12 +112,12 @@ FORCE:
 	-rm $(distdir).tar.gz >/dev/null 2>&1
 	-rm -rf $(distdir) >/dev/null 2>&1
 
-install: install-lib install-bin install-key
+install: install-lib install-bin
 
 install-lib:
 	install -d $(DESTDIR)$(oaerllibdir)/ebin
 	install -d $(DESTDIR)$(oaerllibdir)/include
-	install -m 644 ebin/$(package).app $(DESTDIR)$(oaerllibdir)/ebin
+	install -m 644 ebin/$(realname).app $(DESTDIR)$(oaerllibdir)/ebin
 	install -m 644 ebin/*.beam $(DESTDIR)$(oaerllibdir)/ebin
 	install -m 644 include/*.hrl $(DESTDIR)$(oaerllibdir)/include
 
@@ -120,17 +129,26 @@ install-bin: $(confs) $(bin)
 	install -d $(DESTDIR)$(oalogdir)
 	install -d $(DESTDIR)$(oadbdir)
 	install -d $(DESTDIR)$(oarundir)
-
-install-key:
 	install -d $(DESTDIR)$(oakeydir)
-ifeq "$(wildcard $(DESTDIR)$(oakey))" ""
-	$(SSH_KEYGEN) -t rsa -f $(DESTDIR)$(oakey) -N "" -q
-else
-	@echo "key already exists in $(DESTDIR)$(oakey)"
-endif
+	install -d $(DESTDIR)$(oapipedir)
 
-$(confs) $(bin): % : %.in Makefile
+$(confs) $(bin) $(specs) src/$(realname).app.src: % : %.in Makefile
 	$(edit) $(srcdir)/$@.in > $@
+
+rpms: specs/openacd.spec $(distdir).tar.gz | $(rpmbuilddir)
+	cp $(distdir).tar.gz $(rpmbuilddir)/SOURCES
+	rpmbuild --define "_topdir $(CURDIR)/rpmbuild" -ba specs/openacd.spec
+	mkdir -p rpms
+	cp $(rpmbuilddir)/RPMS/**/*.rpm rpms
+	rm -rf $(rpmbuilddir)
+
+$(rpmbuilddir):
+	rm -rf $(rpmbuilddir)
+	mkdir -p $(rpmbuilddir)/BUILD
+	mkdir -p $(rpmbuilddir)/RPMS
+	mkdir -p $(rpmbuilddir)/SOURCES
+	mkdir -p $(rpmbuilddir)/SPECS
+	mkdir -p $(rpmbuilddir)/SRPMS
 
 # START Local dependency management
 deps: getdeps updatedeps

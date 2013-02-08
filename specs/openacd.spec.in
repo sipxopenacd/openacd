@@ -1,5 +1,5 @@
-Name: openacd
-Version: 2.0.0
+Name: @PACKAGE_NAME@
+Version: @PACKAGE_VERSION@
 Summary: OpenACD Call Center
 Release: %{?buildno:%buildno}%{!?buildno:1}
 Group: Applications/Communications
@@ -12,47 +12,38 @@ Source: %{name}-%{version}.tar.gz
 
 # AFAIK: >= 15, but need to force centos 6 to ignore 14B that comes w/centos
 BuildRequires: erlang = R15B
-BuildRequires: rebar
-BuildRequires: erlang-ej
+BuildRequires: erlang-rebar
 BuildRequires: erlang-ejrpc2
 BuildRequires: erlang-gen_leader
 BuildRequires: erlang-gen_server_mock
 BuildRequires: erlang-lager
-BuildRequires: erlang-cowboy
-BuildRequires: erlang-mimetypes
 BuildRequires: erlang-gproc
 BuildRequires: erlang-meck
-BuildRequires: erlmongo
 BuildRequires: openssh
 
 Requires: erlang = R15B
-Requires: erlang-ej
-Requires: erlang-ejrpc2
-Requires: erlang-gen_leader
-Requires: erlang-gen_server_mock
-Requires: erlang-lager
-Requires: erlang-cowboy
-Requires: erlang-mimetypes
-Requires: erlang-gproc
-Requires: erlang-meck
-Requires: erlmongo
+Requires: erlang-openacd >= %version
+Requires: openssh
 
 BuildRoot: %{_builddir}/%{name}-root
+
+%package -n erlang-openacd
+Group: Development/Libraries
+Vendor: OpenACD
+Summary: Erlang library for OpenACD
+Requires: erlang-ejrpc2
+Requires: erlang-gen_leader
+Requires: erlang-lager
+Requires: erlang-gproc
 
 %description
 OpenACD is a skills-based, Call Center software based on FreeSWITCH and built in erlang.
 
-%package devel
-Group: Applications/Communications
-Vendor: OpenACD
-Summary: Header files for %name
-Requires: %name >= %version
-
-%description devel
-Erlang Header files for %name
+%description -n erlang-openacd
+Erlang library for OpenACD
 
 %prep
-%setup -n %{name}-%{version} 
+%setup -n %{name}-%{version}
 
 %build
 %configure runuser=openacd
@@ -70,27 +61,36 @@ if ! /usr/bin/id -g openacd >/dev/null 2>&1; then
 fi
 
 if ! /usr/bin/id openacd >/dev/null 2>&1; then
-  /usr/sbin/useradd -M -r -g openacd -d %{_sysconfdir}/openacd -s /bin/false -c openacd openacd 2>&1
+  /usr/sbin/useradd -M -r -g openacd -d %{_localstatedir}/openacd/run -s /sbin/nologin -c openacd openacd 2>&1
 fi
 
 %post
+
+%preun
+/usr/bin/openacd stop
 
 %files
 %defattr(-,root,root,-)
 %dir %attr(755,openacd,openacd) %{_localstatedir}/log/openacd
 %dir %attr(755,openacd,openacd) %{_localstatedir}/openacd/db
 %dir %attr(755,openacd,openacd) %{_localstatedir}/openacd/run
-%dir %attr(600,openacd,openacd) %{_localstatedir}/openacd/key
-%attr(400,openacd,openacd) %{_localstatedir}/openacd/key/openacd.key*
-%{_libdir}/erlang/lib/openacd-%{version}/ebin/*
+%dir %attr(700,openacd,openacd) %{_localstatedir}/openacd/key
+%dir %attr(700,openacd,openacd) %{_localstatedir}/openacd/pipe
 %attr(755,root,root) %{_bindir}/openacd
 %{_sysconfdir}/openacd/sys.config
 %{_sysconfdir}/openacd/env.config
 
-%files devel
-%{_libdir}/erlang/lib/openacd-%{version}/include/*
+%files -n erlang-openacd
+%dir %{_libdir}/erlang/lib/%{name}-%{version}
+%dir %{_libdir}/erlang/lib/%{name}-%{version}/ebin
+%dir %{_libdir}/erlang/lib/%{name}-%{version}/include
+%{_libdir}/erlang/lib/%{name}-%{version}/ebin/%{name}.app
+%{_libdir}/erlang/lib/%{name}-%{version}/ebin/*.beam
+%{_libdir}/erlang/lib/%{name}-%{version}/include/*.hrl
 
 %changelog
+* Fri Feb 08 2013 Jan Vincent Liwanag <jvliwanag@ezuce.com>
+- Separate lib files, remove keys, change openacd home
 * Thu Jan 28 2013 Douglas Hubler <dhubler@ezuce.com>
 - Update for 2.0.0
 * Thu Apr 25 2012 Cristi Starasciuc <cristi@ezuce.com>
