@@ -148,7 +148,7 @@ live()
         $ERL_COOKIE_ARG \
         -s openacd \
         -config $OA_CONFIG_PATH \
-        -mnesia dir \\\"$OA_DB_DIR\\\" \
+        -mnesia dir \"$OA_DB_DIR\" \
         $ERL_OPTS"
     exec $ERL_CMD
 }
