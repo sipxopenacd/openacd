@@ -1338,7 +1338,7 @@ state_test_() ->
 						])},
 					Call = #call{id = "media", type = voice, source = self(),
 						source_module = dummy_media},
-					meck:expect(agent_channel, start_link, fun(InAgent, InCall, _End, precall) ->
+					meck:expect(agent_channel, start_link, fun(InAgent, InCall, _End, precall, _EventMgr) ->
 						?assertEqual(Agent, InAgent),
 						?assertEqual(Call, InCall),
 						{ok, Zombie}
@@ -1365,7 +1365,7 @@ state_test_() ->
 						])},
 					Call = #call{id = "media", type = voice, source = self(),
 						source_module = dummy_media},
-					meck:expect(agent_channel, start_link, fun(InAgent, InCall, self_ring, prering) ->
+					meck:expect(agent_channel, start_link, fun(InAgent, InCall, self_ring, prering, _EventMgr) ->
 						?assertEqual(Agent, InAgent),
 						?assertEqual(Call, InCall),
 						{ok, Zombie}
@@ -1392,7 +1392,7 @@ state_test_() ->
 						])},
 					Call = #call{id = "media", type = voice, source = self(),
 						source_module = dummy_media},
-					meck:expect(agent_channel, start_link, fun(InAgent, InCall, self_ring, ringing) ->
+					meck:expect(agent_channel, start_link, fun(InAgent, InCall, self_ring, ringing, _EventMgr) ->
 						?assertEqual(Agent, InAgent),
 						?assertEqual(Call, InCall),
 						{ok, Zombie}

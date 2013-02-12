@@ -808,6 +808,7 @@ call_update_test_() ->
 		skills=[foo, bar, '_node'], client=#client{label="myclient"}} end,
 
 	{setup, fun() ->
+		application:start(gproc),
 		meck:new(gen_media),
 		meck:expect(gen_media, get_call, fun(MPid) ->
 			Call(util:list_index(MPid, MediaPids))
