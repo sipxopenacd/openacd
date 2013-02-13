@@ -7,7 +7,7 @@ RUNNER_USER=@runuser@
 
 # Make sure this script is running as the appropriate user
 if [ ! -z "$RUNNER_USER" ] && [ `whoami` != "$RUNNER_USER" ]; then
-    exec sudo -u $RUNNER_USER -s "$RUNNER_SCRIPT" $@
+    exec su - "$RUNNER_USER" -s /bin/sh "$RUNNER_SCRIPT" $@
 fi
 
 # erlang binaries
