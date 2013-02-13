@@ -1620,9 +1620,11 @@ handle_event({{'$gen_media', set_url_getvars}, Vars}, StateName, State) ->
 handle_event({{'$gen_media', add_skills}, Skills}, StateName, State) ->
 	{BaseState, Internal} = State,
 	Call = BaseState#base_state.callrec,
-	Newskills = lists:umerge(Call#call.skills, Skills),
-	Newcall = Call#call{skills = Newskills},
-	{next_state, StateName, {BaseState#base_state{callrec = Newcall}, Internal}};
+	NewSkills = util:merge_skill_lists(Call#call.skills, Skills),
+	NewCall = Call#call{skills = NewSkills},
+	NewBase = BaseState#base_state{callrec = NewCall},
+	set_gproc_prop(StateName, StateName, NewBase),
+	{next_state, StateName, {NewBase, Internal}};
 
 handle_event({{'$gen_media', Command}, _}, StateName, State) ->
 	lager:debug("Invalid generic event command ~p while in state ~p", [Command, StateName]),
