@@ -67,7 +67,7 @@ fi
 %post
 
 %preun
-/usr/bin/openacd stop
+: /usr/bin/openacd stop
 
 %files
 %defattr(-,root,root,-)
