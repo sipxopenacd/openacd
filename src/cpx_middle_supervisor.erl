@@ -132,17 +132,16 @@ startup_test_() ->
 	{"start as a neamed supervisor.",
 	fun() ->
 		Out = start_named(3, 5, testsup),
-		?debugFmt("~p", [Out]),
+		?debugVal(Out),
 		?assertMatch({ok, _P}, Out),
 		{ok, Pid} = Out,
 		unlink(Pid),
-		exit(whereis(testsup), kill),
-		?debugFmt("~p", [whereis(testsup)])
+		?debugVal(exit(whereis(testsup), kill))
 	end},
 	{"Start a middle man",
 	fun() ->
 		Out = start_named(3, 5, testsup),
-		?debugFmt("~p", [Out]),
+		?debugVal(Out),
 		?assertMatch({ok, _P}, Out),
 		{ok, Pid} = Out,
 		Dummyspec = #cpx_conf{
@@ -158,8 +157,7 @@ startup_test_() ->
 		Dpid = whereis(dummy_media_manager),
 		?assertNot(Pid2 =:= Dpid),
 		unlink(Pid),
-		exit(whereis(testsup), kill),
-		?debugFmt("~p", [whereis(testsup)])
+		?debugVal(exit(whereis(testsup), kill))
 	end},
 	{"Stop a child that has a middleman.",
 	fun() ->
@@ -169,12 +167,16 @@ startup_test_() ->
 			start_function = named,
 			start_args = [{local, dummy_media_manager}]
 		},
-		{ok, _Top} = start_named(3, 5, testsup),
-		{ok, Middle} = add_with_middleman(testsup, 3, 5, Dummyspec),
+		Out = start_named(3, 5, testsup),
+		?debugVal(Out),
+		?assertMatch({ok, _P}, Out),
+		{ok, Pid} = Out,{ok, Middle} = add_with_middleman(testsup, 3, 5, Dummyspec),
 		?assert(is_pid(whereis(dummy_media_manager))),
 		drop_child(testsup, gen_server_mock),
 		?assertEqual(undefined, whereis(dummy_media_manager)),
-		?assertNot(is_process_alive(Middle))
+		?assertNot(is_process_alive(Middle)),
+		unlink(Pid),
+		?debugVal(exit(whereis(testsup), kill))
 	end}].
 
 
