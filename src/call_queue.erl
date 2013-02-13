@@ -475,7 +475,7 @@ handle_call({add_skills, Callid, Skills}, _From, State) ->
 	case find_key(Callid, State#state.queue) of
 		none ->
 			{reply, none, State};
-		{Key, #queued_call{skills=OldSkills} = Value} ->
+		{Key, #queued_call{media=MediaPid, skills=OldSkills} = Value} ->
 			Skills2 = expand_magic_skills(State, Value, Skills),
 			NewSkills = util:merge_skill_lists(OldSkills, Skills2),
 			State2 = State#state{queue=gb_trees:update(Key, Value#queued_call{skills=NewSkills}, State#state.queue)},
@@ -483,6 +483,7 @@ handle_call({add_skills, Callid, Skills}, _From, State) ->
 				gen_server:cast(Pid, {update_skills, NewSkills})
 			end,
 			lists:foreach(Telldp, Value#queued_call.dispatchers),
+			gen_media:add_skills(MediaPid, Skills2),
 			{reply, ok, State2}
 	end;
 handle_call({remove_skills, Callid, Skills}, _From, State) ->
@@ -813,6 +814,7 @@ call_update_test_() ->
 		meck:expect(gen_media, get_call, fun(MPid) ->
 			Call(util:list_index(MPid, MediaPids))
 		end),
+		meck:expect(gen_media, add_skills, 2, ok),
 
 		meck:new(cook),
 		meck:expect(cook, start_at, fun(_Node, MPid, _Recipe, _Queue, _Qpid, _K) ->
@@ -1283,9 +1285,9 @@ queue_manager_and_cook_test_() ->
 
 		Home = self(),
 		P = spawn(fun() ->
-			{ok, CQPid} = call_queue:start("testqueue", []),
+			{ok, CQPid} = call_queue:start("test_queue", []),
 			link(CQPid),
-			Home ! CQPid,
+			Home ! {test_queue, CQPid},
 			receive
 				headshot -> exit(headshot)
 			end
@@ -1293,7 +1295,7 @@ queue_manager_and_cook_test_() ->
 		erlang:register(queue_manager, P),
 
 		receive
-			Pid -> Pid
+			{test_queue, CQPid} -> CQPid
 		end
 	end,
 	fun(Pid) ->
