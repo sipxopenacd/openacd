@@ -14,6 +14,8 @@
 -define(PRINT(Fmt), io:format(Fmt, [])).
 -define(PRINT(Fmt, Data), io:format(Fmt, Data)).
 
+-define(TRY(K, Else), try (K) catch _:_ -> Else end).
+
 -record(ctl_agent, {agent, profile, state, login_time}).
 -record(ctl_call, {client, state, caller_id, queue, line, state_changes}).
 
@@ -32,18 +34,13 @@ process(["pid"]) ->
 	?RET_SUCCESS;
 
 process(["status"]) ->
-	{ok, UpTimestamp} = application:get_env(openacd, uptime),
-	Upsince = calendar:gregorian_seconds_to_datetime(UpTimestamp + ?UNIX_EPOCH_GSEC),
-	UtcDatetime = calendar:universal_time(),
-	Uptime = calendar:time_difference(Upsince, UtcDatetime),
-	{UpD, {UpH, UpM, UpS}} = Uptime,
-	{{UpsinceYr, UpsinceM, UpsinceD}, {UpsinceH, UpsinceMi, UpsinceS}} = calendar:universal_time_to_local_time(Upsince),
-	AgentCount = length(agent_manager:list()),
-	{ok, Queues} = call_queue_config:get_queues(),
-	QueueCount = length(Queues),
-	Plugins = cpx:plugins_running(),
-	?PRINT("Uptime: ~b days, ~b hours, ~b minutes, ~b seconds~n", [UpD, UpH, UpM, UpS]),
-	?PRINT("Started: ~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B~n", [UpsinceYr, UpsinceM, UpsinceD, UpsinceH, UpsinceMi, UpsinceS]),
+	Uptime = ?TRY(get_uptime(), unknown),
+	AgentCount = ?TRY(length(agent_manager:list()), unknown),
+	QueueCount = ?TRY(get_queue_count(), unknown),
+	Plugins = ?TRY(cpx:plugins_running(), []),
+
+
+	print_uptime(Uptime),
 	?PRINT("Number of queues: ~p~n", [QueueCount]),
 	?PRINT("Number of agents logged in: ~p~n", [AgentCount]),
 	?PRINT("~nPlugins running:~n"),
@@ -130,6 +127,14 @@ process(_) ->
 	print_commands(),
 	?RET_INVALID_COMMAND.
 
+get_uptime() ->
+	{ok, UpTimestamp} = application:get_env(openacd, uptime),
+	UpTimestamp.
+
+get_queue_count() ->
+	{ok, Queues} = call_queue_config:get_queues(),
+	length(Queues).
+
 get_calls_in_queue(Name) ->
 	case queue_manager:get_queue(Name) of
 		undefined ->
@@ -137,6 +142,18 @@ get_calls_in_queue(Name) ->
 		Pid ->
 			call_queue:get_calls(Pid)
 	end.
+
+print_uptime(UpTimestamp) when is_integer(UpTimestamp) ->
+	Upsince = calendar:gregorian_seconds_to_datetime(UpTimestamp + ?UNIX_EPOCH_GSEC),
+	UtcDatetime = calendar:universal_time(),
+	Uptime = calendar:time_difference(Upsince, UtcDatetime),
+	{UpD, {UpH, UpM, UpS}} = Uptime,
+	{{UpsinceYr, UpsinceM, UpsinceD}, {UpsinceH, UpsinceMi, UpsinceS}} = calendar:universal_time_to_local_time(Upsince),
+
+	?PRINT("Uptime: ~b days, ~b hours, ~b minutes, ~b seconds~n", [UpD, UpH, UpM, UpS]),
+	?PRINT("Started: ~4..0B/~2..0B/~2..0B ~2..0B:~2..0B:~2..0B~n", [UpsinceYr, UpsinceM, UpsinceD, UpsinceH, UpsinceMi, UpsinceS]);
+print_uptime(_) ->
+	ok.
 
 print_agent(A) ->
 	?PRINT("~-10s ", [A#ctl_agent.agent]),
