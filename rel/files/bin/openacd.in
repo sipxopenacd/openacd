@@ -234,12 +234,12 @@ checkdupname()
 
 checkkey()
 {
-    KEY_FILE=$oakeydir/key
-    if [ -f "$KEY_FILE" ]; then
+    KEY_FILE="$OA_KEY_DIR"/openacd.key
+    if [ ! -f "$KEY_FILE" ]; then
         echo "Creating key at $KEY_FILE"
-        mkdir -p "$oakeydir"
-        $SSH_KEYGEN -t rsa -f "$oakeydir/key" -N "" -q
-        if [ "$?" -neq 0 ]; then
+        mkdir -p "$OA_KEY_DIR"
+        $SSH_KEYGEN -t rsa -f "$KEY_FILE" -N "" -q
+        if [ "$?" -ne 0 ]; then
             err_exit "ERROR: Unable to create key at $KEY_FILE"
         fi
     fi
