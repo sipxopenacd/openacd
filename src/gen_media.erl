@@ -30,7 +30,7 @@
 %% @doc Behaviour module for media types.  Gen_media uses gen_fsm as the
 %% underlying framework for what it does.  It exposes a gen_server-esque
 %% behavior for it's callback modules, however.  Any time gen_media
-%% recieves an event it cannot handle wholly intnerally, it will call a
+%% recieves an event it cannot handle wholly internally, it will call a
 %% specific funciton of the callback module.
 %%
 %% Replies from handle_call, handle_cast, and handle_info are extended to
@@ -38,7 +38,7 @@
 %%
 %%	Callback functions:
 %%
-%%	The callback functions follow a general pattern for thier arguments
+%%	The callback functions follow a general pattern for their arguments
 %%	(aside from init).  It is:
 %%		[Arg1, Arg2, Arg3, ..., ArgN, StateName, Call, InternalState, State]
 %%
@@ -57,17 +57,29 @@
 %%	State is the state the callback module last returned from a callback
 %%	function.  It is used for implementation specific data for medias.
 %%
-%%	<b>init(Args) -> {ok, {State, Route_hint}}</b>
+%%	<b>init(Args) -> {ok, {State, InitPs}}</b>
 %%		types:  Args = any()
 %%				State = any()
-%%				Route_hint = {Queue, #call{}} | undefined | #call{}
-%%					Queue = string()
+%%              InitPs = init_p()
+%%              init_p() = {id, string()}
+%%                  | {type, call_type()}
+%%                  | {client, client()}
+%%                  | {skills, skills()}
+%%                  | {caller_id, {string(), string()}},
+%%                  | {dnis, string()},
+%%                  | {ring_path, inband | outband},
+%%                  | {media_path, inband | outband},
+%%                  | {direction, inbound | outbound}
+%%                  | {priority, pos_integer()},
+%%                  | {arbitrary, [{any(), any()}]}
+%%                  | {queue, string()}
 %%
 %%		When gen_media starts, this function is called.  It should
 %%		initialize all required data.
 %%
 %%		Some media may not be able to provide a call record on start-up,
 %%		thus allowing the media to finish prepping and then queue later.
+%%		If a `queue' is provided then the media goes into inqueue directly.
 %%
 %%	<b>urlpop_getvars(State) -> UrlOptions</b>
 %%		types:	State = any()
@@ -458,6 +470,13 @@
 %% warm_transfer_3rd_party -> warm_transfer_merged, warm_transfer_hold
 %% warm_transfer_merged -> oncall, wrapup
 
+-define(GM(E, V), {{'$gen_media', E}, V}).
+-define(GM0(E), ?GM(E, undefined)).
+
+-define(get(K, Vs), proplists:get_value(K, Vs)).
+-define(get(K, Vs, D), proplists:get_value(K, Vs, D)).
+
+
 -record(base_state, {
 	callback :: atom(),
 	substate :: any(),
@@ -501,7 +520,7 @@ behaviour_info(_Other) ->
 -spec(ring/4 :: (Genmedia :: pid(), Agent :: pid() | string() | {string(), pid()}, Qcall :: #queued_call{}, Timeout :: pos_integer())  -> 'ok' | 'invalid' | 'deferred').
 ring(Genmedia, {_Agent, Apid} = A, Qcall, Timeout) when is_pid(Apid) ->
 	lager:info("Ring invoked to: ~p from ~p", [_Agent, self()]),
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', ring}, {A, Qcall, Timeout}}, infinity);
+	gen_fsm:sync_send_event(Genmedia, ?GM(ring, {A, Qcall, Timeout}), infinity);
 
 ring(Genmedia, Apid, Qcall, Timeout) when is_pid(Apid) ->
 	case agent_manager:find_by_pid(Apid) of
@@ -524,7 +543,7 @@ ring(Genmedia, Agent, Qcall, Timeout) ->
 	Agent :: pid() | string() | {string(), pid()},
 	Qcall :: #queued_call{}) -> 'ok' | 'invalid' | 'deferred'.
 ring(Genmedia, {_Agent, _Apid}=A, Qcall) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', ring}, {A, Qcall, undefined}}, infinity);
+	gen_fsm:sync_send_event(Genmedia, ?GM(ring, {A, Qcall, undefined}), infinity);
 
 ring(Genmedia, Apid, Qcall) when is_pid(Apid) ->
 	case agent_manager:find_by_pid(Apid) of
@@ -546,7 +565,7 @@ ring(Genmedia, Agent, Qcall) ->
 -spec(takeover_ring/2 :: (Genmedia :: pid(), Agent :: pid() | string() | {string(), pid()}) -> 'ok' | 'invalid').
 takeover_ring(Genmedia, {_, Apid} = Agent) when is_pid(Apid) ->
 	Self = self(),
-	gen_fsm:send_event(Genmedia, {{'$gen_media', takeover_ring}, {Agent, Self}});
+	gen_fsm:send_event(Genmedia, ?GM(takeover_ring, {Agent, Self}));
 
 takeover_ring(Genmedia, Apid) when is_pid(Apid) ->
 	case agent_manager:find_by_pid(Apid) of
@@ -563,17 +582,17 @@ takeover_ring(Genmedia, Agent) ->
 %% @doc Get the call record associated with `pid() Genmedia'.
 -spec(get_call/1 :: (Genmedia :: pid()) -> #call{}).
 get_call(Genmedia) ->
-	gen_fsm:sync_send_all_state_event(Genmedia, {{'$gen_media', get_call}, undefined}, infinity).
+	gen_fsm:sync_send_all_state_event(Genmedia, ?GM0(get_call), infinity).
 
 %% @doc Send the passed `pid() Genmedia' to voicemail.
 -spec(voicemail/1 :: (Genmedia :: pid()) -> 'ok' | 'invalid').
 voicemail(Genmedia) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', voicemail}, undefined}).
+	gen_fsm:sync_send_event(Genmedia, ?GM0(voicemail)).
 
 %% @doc Pass `any() Annouce' message to `pid() Genmedia'.
 -spec(announce/2 :: (Genmedia :: pid(), Annouce :: any()) -> 'ok').
 announce(Genmedia, Annouce) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', announce}, Annouce}).
+	gen_fsm:sync_send_event(Genmedia, ?GM(announce, Annouce)).
 
 %% TODO added for testing only (implemented with focus on real Calls - no other media)
 %% @doc End the Call for `pid() Genmedia'.
@@ -586,7 +605,7 @@ end_call(Genmedia) ->
 %% handle it.
 -spec(wrapup/1 :: (Genmedia :: pid()) -> 'ok' | 'invalid').
 wrapup(Genmedia) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', wrapup}, undefined}).
+	gen_fsm:sync_send_event(Genmedia, ?GM0(wrapup)).
 
 %% @doc Send a stop ringing message to `pid() Genmedia'.
 -spec(stop_ringing/1 :: (Genmedia :: pid()) -> 'ok').
@@ -596,17 +615,17 @@ stop_ringing(Genmedia) ->
 %% @doc Send a stop ringing message to `pid() Genmedia' with reason.
 -spec(stop_ringing/2 :: (Genmedia :: pid(), Reason :: atom()) -> 'ok').
 stop_ringing(Genmedia, Reason) ->
-	gen_fsm:send_event(Genmedia, {{'$gen_media', stop_ringing}, Reason}).
+	gen_fsm:send_event(Genmedia, ?GM(stop_ringing, Reason)).
 
 %% @doc Set the agent associated with `pid() Genmedia' to oncall.
 -spec(oncall/1 :: (Genmedia :: pid()) -> 'ok' | 'invalid').
 oncall(Genmedia) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', agent_oncall}, undefined}, infinity).
+	gen_fsm:sync_send_event(Genmedia, ?GM0(agent_oncall), infinity).
 
 %% @doc Transfer the call from the agent it is associated with to a new agent.
 -spec(agent_transfer/3 :: (Genmedia :: pid(), Apid :: pid() | string() | {string(), pid()}, Timeout :: pos_integer()) -> 'ok' | 'invalid').
 agent_transfer(Genmedia, {_Login, Apid} = Agent, Timeout) when is_pid(Apid) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', agent_transfer}, {Agent, Timeout}});
+	gen_fsm:sync_send_event(Genmedia, ?GM(agent_transfer, {Agent, Timeout}));
 agent_transfer(Genmedia, Apid, Timeout) when is_pid(Apid) ->
 	case agent_manager:find_by_pid(Apid) of
 		notfound ->
@@ -632,11 +651,11 @@ queue(Genmedia, Queue) ->
 %% `#agent{}' used to hold the end point data.
 -spec(spy/3 :: (Genmedia :: pid(), Spy :: pid(), AgentRec :: #agent{}) -> 'ok' | 'invalid' | {'error', any()}).
 spy(Genmedia, Spy, AgentRec) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', spy}, {Spy, AgentRec}}).
+	gen_fsm:sync_send_event(Genmedia, ?GM(spy, {Spy, AgentRec})).
 
 -spec(set_cook/2 :: (Genmedia :: pid(), CookPid :: pid()) -> 'ok').
 set_cook(Genmedia, CookPid) ->
-	gen_fsm:send_event(Genmedia, {{'$gen_media', set_cook}, CookPid}).
+	gen_fsm:send_event(Genmedia, ?GM(set_cook, CookPid)).
 
 -spec(set_queue/2 :: (Genmedia :: pid(), Queue :: pid() | {string(), pid()}) -> 'ok').
 set_queue(Genmedia, Queue) ->
@@ -644,20 +663,20 @@ set_queue(Genmedia, Queue) ->
 
 -spec(set_queue/3 :: (Genmedia :: pid(), Queue :: pid() | {string(), pid()}, Reset :: boolean()) -> 'ok').
 set_queue(Genmedia, Queue, Reset) ->
-	gen_fsm:sync_send_event(Genmedia, {{'$gen_media', set_queue}, Queue, Reset}).
+	gen_fsm:sync_send_event(Genmedia, ?GM(set_queue, {Queue, Reset})).
 
 
 -spec(set_url_getvars/2 :: (Genmedia :: pid(), Vars :: [{string(), string()}]) -> 'ok').
 set_url_getvars(Genmedia, Vars) ->
-	gen_fsm:sync_send_all_state_event(Genmedia, {{'$gen_media', set_url_getvars}, Vars}).
+	gen_fsm:sync_send_all_state_event(Genmedia, ?GM(set_url_getvars, Vars)).
 
 -spec(get_url_getvars/1 :: (Genmedia :: pid()) -> {'ok', [{string(), string()}]}).
 get_url_getvars(Genmedia) ->
-	gen_fsm:sync_send_all_state_event(Genmedia, {{'$gen_media', get_url_vars}, undefined}).
+	gen_fsm:sync_send_all_state_event(Genmedia, ?GM0(get_url_vars)).
 
 -spec(add_skills/2 :: (Genmedia :: pid(), Skills :: [atom() | {atom(), any()}]) -> 'ok').
 add_skills(Genmedia, Skills) ->
-	gen_fsm:send_all_state_event(Genmedia, {{'$gen_media', add_skills}, Skills}).
+	gen_fsm:send_all_state_event(Genmedia, ?GM(add_skills, Skills)).
 
 %% @doc Do the equivalent of a `gen_server:call/2'.
 -spec(call/2 :: (Genmedia :: pid(), Request :: any()) -> any()).
@@ -695,105 +714,68 @@ start(Callback, Args) ->
 init([Callback, Args]) ->
 	InitTime = os:timestamp(),
 	StateChanges = [{init, InitTime}],
-	Res = case Callback:init(Args) of
-		{ok, {Substate, undefined}} ->
-				BaseState = #base_state{
-					callback = Callback,
-					substate = Substate,
-					callrec = undefined,
-					state_changes = [{inivr, os:timestamp()} | StateChanges]
-				},
-				{ok, inivr, {BaseState, #inivr_state{}}};
-		{ok, {Substate, {Queue, PCallrec}}} when is_record(PCallrec, call) ->
-			Callrec = correct_client(PCallrec),
-			cdr:cdrinit(Callrec),
-			cpx_monitor:set({media, Callrec#call.id}, [], self()),
-			BaseState = #base_state{
+
+	case Callback:init(Args) of
+		{ok, SubState, Ps} ->
+			QueueN = ?get(queue, Ps),
+
+			Call = ps_to_call(Ps, undefined, Callback, StateChanges),
+
+			BaseSt = #base_state{
 				callback = Callback,
-				substate = Substate,
-				callrec = Callrec,
-				init_callrec = Callrec,
-				state_changes = [{inqueue, os:timestamp()} | StateChanges]
+				substate = SubState,
+				init_callrec = Call,
+				callrec = Call,
+				state_changes = StateChanges
 			},
-			{_Qnom, Qpid} = case priv_queue(Queue, Callrec, true) of
-				{default, Pid} ->
-					set_cpx_mon({#base_state{callrec = Callrec}, #inqueue_state{queue_pid = {"default_queue", Pid}}}, [{queue, "default_queue"}]),
-					cdr:inqueue(Callrec, "default_queue"),
-					{"default_queue", Pid};
-				Else when is_pid(Else) ->
-					cdr:inqueue(Callrec, Queue),
-					Qmon = erlang:monitor(process, Else),
-					set_cpx_mon({#base_state{callrec = Callrec}, #inqueue_state{queue_mon = Qmon, queue_pid = {Queue, Else}}}, [{queue, Queue}]),
-					{Queue, Else}
+
+			cdr:inivr(Call, Call#call.dnis),
+
+			{NSt,NBaseSt, NIntSt} = case QueueN of
+				undefined ->
+					{inivr, BaseSt, #inivr_state{}};
+				_ ->
+					case enqueue(QueueN, Ps, BaseSt) of
+						{ok, {BaseSt1, IntSt}} ->
+							{inqueue, BaseSt1, IntSt};
+						_ ->
+							lager:warning("Unable to queue to :~p", [QueueN]),
+							{inivr, BaseSt, #inivr_state{}}
+					end
 			end,
-			InqState = #inqueue_state{
-				queue_pid = {Queue, Qpid},
-				queue_mon = erlang:monitor(process, Qpid)
-			},
-			{ok, inqueue, {BaseState, InqState}};
-		{ok, {Substate, PCallrec, {CDRState, CDRArgs}}} when is_record(PCallrec, call) ->
-			Callrec = correct_client(PCallrec),
-			cdr:cdrinit(Callrec),
-			apply(cdr, CDRState, [Callrec | CDRArgs]),
-			BaseState = #base_state{
-				callback = Callback,
-				substate = Substate,
-				callrec = Callrec,
-				init_callrec = Callrec,
-				state_changes = [{inivr, os:timestamp()} | StateChanges]
-			},
-			set_cpx_mon({BaseState, #inivr_state{}}, [], self()),
-			{ok, inivr, {BaseState, #inivr_state{}}};
-		{ok, {Substate, PCallrec}} when is_record(PCallrec, call) ->
-			Callrec = correct_client(PCallrec),
-			cdr:cdrinit(Callrec),
-			set_cpx_mon({#base_state{callrec = Callrec}, #inivr_state{}}, [], self()),
-			BaseState = #base_state{
-				callback = Callback,
-				substate = Substate,
-				callrec = Callrec,
-				init_callrec = Callrec,
-				state_changes = [{inivr, os:timestamp()} | StateChanges]
-			},
-			{ok, inivr, {BaseState, #inivr_state{}}};
+
+			init_gproc_prop(NSt, NBaseSt),
+			{ok, NSt, {NBaseSt, NIntSt}};
 		{stop, Reason} = O ->
 			lager:warning("init aborted due to ~p", [Reason]),
 			O;
 		ignore ->
 			lager:warning("init told to ignore", []),
 			ignore
-	end,
-	case Res of
-		{ok, NextSt, {BaseSt, _}} ->
-			init_gproc_prop(NextSt, BaseSt),
-			Res;
-		_ ->
-			Res
 	end.
 
 %%--------------------------------------------------------------------
 %% inivr -> inqueue
 %%--------------------------------------------------------------------
 
-inivr({{'$gen_media', Command}, _Args}, _From, State) ->
-	lager:debug("Invalid sync event ~s while inivr", [Command]),
-	{reply, invalid, inivr, State};
+%% sync
 
-inivr(Msg, From, {#base_state{callback = Callback} = BaseState, _} = State) ->
-	Return = Callback:handle_call(Msg, From, inivr, BaseState#base_state.callrec, #inivr_state{}, BaseState#base_state.substate),
-	handle_custom_return(Return, inivr, reply, State).
+inivr(Msg, From, State) ->
+	fallback_sync(inivr, Msg, From, State).
 
-inivr(Msg, {#base_state{ callback = Callback, callrec = Call} = BaseState,
-		_} = State) ->
-	Return = Callback:handle_cast(Msg, inivr, Call, #inivr_state{}, BaseState#base_state.substate),
-	handle_custom_return(Return, inivr, noreply, State).
+%% async
+
+inivr(Msg, State) ->
+	fallback_async(inivr, Msg, State).
 
 %%--------------------------------------------------------------------
 %% inqueue -> inqueue_ringing
 %%--------------------------------------------------------------------
 
-inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
-		cook = Requester, skills = ESkills}, _Timeout} = _QCall}, {Requester, _Tag}, {
+%% sync
+
+inqueue(?GM(ring, {{Agent, Apid}, #queued_call{
+		cook = Requester, skills = ESkills} = _QCall, _Timeout}), {Requester, _Tag}, {
 		#base_state{callrec = Call} = BaseState,
 		Internal}) ->
 	lager:debug("Queued call: ~p", [_QCall]),
@@ -808,7 +790,7 @@ inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
 	try agent:prering(Apid, Call1) of
 		{ok, RPid} ->
 			Rmon = erlang:monitor(process, RPid),
-			Tref = gen_fsm:send_event_after(Timeout, {{'$gen_media', ringout}, undefined}),
+			Tref = gen_fsm:send_event_after(Timeout, ?GM0(ringout)),
 			#inqueue_state{ queue_pid = Qpid, queue_mon = Qmon,
 				cook_mon = CookMon} = Internal,
 			NewInternal = #inqueue_ringing_state{
@@ -823,19 +805,19 @@ inqueue({{'$gen_media', ring}, {{Agent, Apid}, #queued_call{
 			lager:info("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call1#call.id]),
 			{reply, invalid, inqueue, {BaseState1, Internal}}
 	catch
-		exit:{noproc, {gen_fsm, sync_send_event, _TheArgs}} ->
+		exit:{noproc, _} ->
 			lager:warning("Agent ~p is a dead pid", [Apid]),
 			{reply, invalid, inqueue, {BaseState1, Internal}};
-		exit:{max_ringouts, {gen_fsm, sync_send_event, _TheArgs}} ->
+		exit:{max_ringouts, _} ->
 			lager:debug("Max ringouts reached for agent ~p", [Apid]),
 			{reply, invalid, inqueue, {BaseState1, Internal}}
 	end;
 
-inqueue({{'$gen_media', ring}, {{_Agent, Apid}, QCall, _Timeout}}, _From, State) ->
+inqueue(?GM(ring, {{_Agent, Apid}, QCall, _Timeout}), _From, State) ->
 	gen_server:cast(QCall#queued_call.cook, {ring_to, Apid, QCall}),
 	{reply, deferred, inqueue, State};
 
-inqueue({{'$gen_media', announce}, Announce}, _From, {#base_state{
+inqueue(?GM(announce, Announce), _From, {#base_state{
 		callback = Callback, substate = InSubstate, callrec = Call} =
 		BaseState, Internal}) ->
 	lager:info("Doing announce for ~p", [Call#call.id]),
@@ -848,7 +830,7 @@ inqueue({{'$gen_media', announce}, Announce}, _From, {#base_state{
 	end,
 	{reply, ok, inqueue, {BaseState#base_state{substate = Substate}, Internal}};
 
-inqueue({{'$gen_media', voicemail}, undefined}, _From, {BaseState, Internal}) ->
+inqueue(?GM0(voicemail), _From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	lager:info("trying to send media ~p to voicemail", [Call#call.id]),
 	case erlang:function_exported(Callback, handle_voicemail, 4) of
@@ -864,7 +846,7 @@ inqueue({{'$gen_media', voicemail}, undefined}, _From, {BaseState, Internal}) ->
 			end
 	end;
 
-inqueue({{'$gen_media', end_call}, _}, {Cook, _}, {#base_state{
+inqueue(?GM0(end_call), {Cook, _}, {#base_state{
 		callrec = #call{cook = Cook}} = BaseState, InqueueState}) ->
 	#base_state{callback = Callback, substate = InSubstate,
 		callrec = Call} = BaseState,
@@ -890,10 +872,10 @@ inqueue({{'$gen_media', end_call}, _}, {Cook, _}, {#base_state{
 		false ->
 			{reply, invalid, {BaseState, InqueueState}}
 	end;
-inqueue({{'$gen_media', set_queue}, QPid, Reset}, From, St) when is_pid(QPid) ->
+inqueue(?GM(set_queue, {QPid, Reset}), From, St) when is_pid(QPid) ->
 	QName = call_queue:get_name(QPid),
-	inqueue({{'$gen_media', set_queue}, {QName, QPid}, Reset}, From, St);
-inqueue({{'$gen_media', set_queue}, {QName, QPid}, Reset}, _From, {BaseState, Internal}) ->
+	inqueue(?GM(set_queue, {{QName, QPid}, Reset}), From, St);
+inqueue(?GM(set_queue, {{QName, QPid}, Reset}), _From, {BaseState, Internal}) ->
 	BaseState1 = update_basestate_queue(BaseState, QName, Reset),
 	Call = BaseState1#base_state.callrec,
 
@@ -911,7 +893,7 @@ inqueue({{'$gen_media', set_queue}, {QName, QPid}, Reset}, _From, {BaseState, In
 	},
 	{reply, ok, inqueue, {BaseState1, NewInternal}};
 
-inqueue({{'$gen_media', get_url_vars}, undefined}, _From, {BaseState, Internal}) ->
+inqueue(?GM0(get_url_vars), _From, {BaseState, Internal}) ->
 	#base_state{url_pop_get_vars = GenPopopts, substate = Substate,
 		callback = Callback} = BaseState,
 	Cbopts = case erlang:function_exported(Callback, urlpop_getvars, 1) of
@@ -923,19 +905,16 @@ inqueue({{'$gen_media', get_url_vars}, undefined}, _From, {BaseState, Internal})
 	Out = lists:ukeymerge(1, lists:ukeysort(1, GenPopopts), lists:ukeysort(1, Cbopts)),
 	{reply, {ok, Out}, inqueue, {BaseState, Internal}};
 
-inqueue({{'$gen_media', Command}, _Args}, _From, State) ->
-	lager:debug("Invalid sync event ~s while inqueue", [Command]),
-	{reply, invalid, inqueue, State};
+inqueue(Msg, From, State) ->
+	fallback_sync(inqueue, Msg, From, State).
 
-inqueue(Msg, From, {#base_state{callback = Callback, callrec = Call} = BaseState, InQueueState} = State) ->
-	Return = Callback:handle_call(Msg, From, inqueue, Call, InQueueState, BaseState#base_state.substate),
-	handle_custom_return(Return, inqueue, reply, State).
+%% async
 
-inqueue({{'$gen_media', set_outband_ring_pid}, Pid}, {BaseState, Internal}) ->
+inqueue(?GM(set_outband_ring_pid, Pid), {BaseState, Internal}) ->
 	NewInternal = Internal#inqueue_state{outband_ring_pid = Pid},
 	{next_state, inqueue, {BaseState, NewInternal}};
 
-inqueue({{'$gen_media', set_cook}, CookPid}, {BaseState, Internal}) ->
+inqueue(?GM(set_cook, CookPid), {BaseState, Internal}) ->
 	#base_state{callrec = Call} = BaseState,
 	lager:notice("Updating cook pid for ~p to ~p", [Call#call.id, CookPid]),
 	case Internal#inqueue_state.cook_mon of
@@ -950,20 +929,16 @@ inqueue({{'$gen_media', set_cook}, CookPid}, {BaseState, Internal}) ->
 	NewBase = BaseState#base_state{callrec = NewCall},
 	{next_state, inqueue, {NewBase, NewInternal}};
 
-inqueue({{'$gen_media', Command}, _}, State) ->
-	lager:debug("Invalid event ~s while inqueue", [Command]),
-	{next_state, inqueue, State};
-
-inqueue(Msg, {#base_state{callback = Callback, callrec = Call} = BaseState,
-		InQueueState} = State) ->
-	Return = Callback:handle_cast(Msg, inqueue, Call, InQueueState, BaseState#base_state.substate),
-	handle_custom_return(Return, inqueue, noreply, State).
+inqueue(Msg, State) ->
+	fallback_async(inqueue, Msg, State).
 
 %%--------------------------------------------------------------------
 %% inqueue_ringing -> inqueue, oncall
 %%--------------------------------------------------------------------
 
-inqueue_ringing({{'$gen_media', announce}, Announce}, _From, {BaseState, Internal}) ->
+%% sync
+
+inqueue_ringing(?GM(announce, Announce), _From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, substate = InSubstate,
 		callrec = Call} = BaseState,
 	lager:info("Doing announce for ~p", [Call#call.id]),
@@ -976,7 +951,7 @@ inqueue_ringing({{'$gen_media', announce}, Announce}, _From, {BaseState, Interna
 	end,
 	{reply, ok, inqueue_ringing, {BaseState#base_state{substate = Substate}, Internal}};
 
-inqueue_ringing({{'$gen_media', voicemail}, undefined}, _From, {BaseState, Internal}) ->
+inqueue_ringing(?GM0(voicemail), _From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	lager:info("trying to send media ~p to voicemail", [Call#call.id]),
 	case erlang:function_exported(Callback, handle_voicemail, 4) of
@@ -1001,13 +976,13 @@ inqueue_ringing({{'$gen_media', voicemail}, undefined}, _From, {BaseState, Inter
 			end
 	end;
 
-inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, {Apid, _Tag},
+inqueue_ringing(?GM0(agent_oncall), {Apid, _Tag},
 		{#base_state{callrec = #call{ring_path = outband} = Call} = BaseState,
 		#inqueue_ringing_state{ring_pid = {_, Apid}} = Internal}) ->
 	lager:info("Cannot accept on call requests from agent (~p) unless ring_path is inband for ~p", [Apid, Call#call.id]),
 	{reply, invalid, inqueue_ringing, {BaseState, Internal}};
 
-inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, {Apid, _Tag},
+inqueue_ringing(?GM0(agent_oncall), {Apid, _Tag},
 		{#base_state{callrec = #call{ring_path = inband} = Call} = BaseState,
 		#inqueue_ringing_state{ring_pid = {Agent, Apid}} = Internal}) ->
 	#base_state{callback = Callback} = BaseState,
@@ -1038,7 +1013,7 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, {Apid, _Tag},
 			{reply, invalid, inqueue_ringing, {NewBase, Internal}}
 	end;
 
-inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, From, {BaseState, Internal}) ->
+inqueue_ringing(?GM0(agent_oncall), From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	#inqueue_ringing_state{ring_pid = {Agent, Apid}, ring_mon = Mon} = Internal,
 	lager:info("oncall request from ~p; agent to set on call is ~p for ~p", [From, Apid, Call#call.id]),
@@ -1091,10 +1066,10 @@ inqueue_ringing({{'$gen_media', agent_oncall}, undefined}, From, {BaseState, Int
 			gen_server:cast(Cook, stop_ringing),
 			{reply, invalid, inqueue, {NewBase, NewInternal}}
 	end;
-inqueue_ringing({{'$gen_media', set_queue}, QPid, Reset}, From, St) when is_pid(QPid) ->
+inqueue_ringing(?GM(set_queue, {QPid, Reset}), From, St) when is_pid(QPid) ->
 	QName = call_queue:get_name(QPid),
-	inqueue_ringing({{'$gen_media', set_queue}, {QName, QPid}, Reset}, From, St);
-inqueue_ringing({{'$gen_media', set_queue}, {QName, QPid}, Reset}, _From, {BaseState, Internal}) ->
+	inqueue_ringing(?GM(set_queue, {{QName, QPid}, Reset}), From, St);
+inqueue_ringing(?GM(set_queue, {{QName, QPid}, Reset}), _From, {BaseState, Internal}) ->
 	BaseState1 = update_basestate_queue(BaseState, QName, Reset),
 	Call = BaseState1#base_state.callrec,
 
@@ -1113,7 +1088,7 @@ inqueue_ringing({{'$gen_media', set_queue}, {QName, QPid}, Reset}, _From, {BaseS
 	},
 	{reply, ok, inqueue_ringing, {BaseState1, NewInternal}};
 
-inqueue_ringing({{'$gen_media', ring}, {{Agent, Apid}, _ChanType, takeover}},
+inqueue_ringing(?GM(ring, {{Agent, Apid}, _ChanType, takeover}),
 		From, {_, #inqueue_ringing_state{ring_pid = {Agent, Apid}}} = State) ->
 	lager:debug("~p said it's taking over ring", [From]),
 	{BaseState, Internal} = State,
@@ -1122,7 +1097,7 @@ inqueue_ringing({{'$gen_media', ring}, {{Agent, Apid}, _ChanType, takeover}},
 	NewInternal = Internal#inqueue_ringing_state{ringout = undefined},
 	{reply, ok, inqueue_ringing, {BaseState, NewInternal}};
 
-inqueue_ringing({{'$gen_media', ring}, {{_Agent, Apid}, QCall, _Timeout}},
+inqueue_ringing(?GM(ring, {{_Agent, Apid}, QCall, _Timeout}),
 		_From, {BaseState, Internal}) ->
 	#inqueue_ringing_state{ringout = Ringout,
 		ring_pid = RingAgent, ring_mon = RMon} = Internal,
@@ -1153,7 +1128,7 @@ inqueue_ringing({{'$gen_media', ring}, {{_Agent, Apid}, QCall, _Timeout}},
 	set_gproc_prop(inqueue_ringing, inqueue, NewBase),
 	{reply, deferred, inqueue, {NewBase, NewInternal}};
 
-inqueue_ringing({{'$gen_media', end_call}, _}, {Cook, _}, {#base_state{
+inqueue_ringing(?GM0(end_call), {Cook, _}, {#base_state{
 		callrec = #call{cook = Cook}} = BaseState, InternalState}) ->
 	#base_state{callback = Callback, substate = InSubstate,
 		callrec = Call} = BaseState,
@@ -1180,20 +1155,20 @@ inqueue_ringing({{'$gen_media', end_call}, _}, {Cook, _}, {#base_state{
 			{reply, invalid, {BaseState, InternalState}}
 	end;
 
-inqueue_ringing({{'$gen_media', Command}, _}, _From, State) ->
+inqueue_ringing(?GM0(Command), _From, State) ->
 	lager:debug("Invalid command ~s while inqueue_ringing", [Command]),
 	{reply, invalid, inqueue_ringing, State};
 
-inqueue_ringing(Msg, From, {#base_state{callback = Callback,
-		callrec = Call} = BaseState, Extra} = State) ->
-	Return = Callback:handle_call(Msg, From, inqueue_ringing, Call, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, inqueue_ringing, reply, State).
+inqueue_ringing(Msg, From, State) ->
+	fallback_sync(inqueue_ringing, Msg, From, State).
 
-inqueue_ringing({{'$gen_media', set_outband_ring_pid}, Pid}, {BaseState, Internal}) ->
+%% async
+
+inqueue_ringing(?GM(set_outband_ring_pid, Pid), {BaseState, Internal}) ->
 	NewInternal = Internal#inqueue_ringing_state{outband_ring_pid = Pid},
 	{next_state, inqueue_ringing, {BaseState, NewInternal}};
 
-inqueue_ringing({{'$gen_media', set_cook}, CookPid}, {BaseState, Internal}) ->
+inqueue_ringing(?GM(set_cook, CookPid), {BaseState, Internal}) ->
 	Call = BaseState#base_state.callrec,
 	Mon = Internal#inqueue_ringing_state.cook_mon,
 	lager:notice("Updating cook pid for ~p to ~p", [Call#call.id, CookPid]),
@@ -1211,31 +1186,31 @@ inqueue_ringing({{'$gen_media', set_cook}, CookPid}, {BaseState, Internal}) ->
 	NewBase = BaseState#base_state{callrec = NewCall},
 	{next_state, inqueue_ringing, {NewBase, NewInternal}};
 
-inqueue_ringing({{'$gen_media', takeover_ring}, {{Agent, Apid}, OutbandRinger}}, {BaseState,
+inqueue_ringing(?GM(takeover_ring, {{Agent, Apid}, OutbandRinger}), {BaseState,
 		#inqueue_ringing_state{ring_pid = {Agent, Apid}} = Internal}) ->
 	gen_fsm:cancel_timer(Internal#inqueue_ringing_state.ringout),
 	agent_channel:set_state(Apid, ringing, BaseState#base_state.callrec),
 	NewInternal = Internal#inqueue_ringing_state{ringout = undefined, outband_ring_pid = OutbandRinger},
 	{next_state, inqueue_ringing, {BaseState, NewInternal}};
 
-inqueue_ringing({{'$gen_media', stop_ring}, Reason}, State) ->
+inqueue_ringing(?GM(stop_ring, Reason), State) ->
 	NewState = requeue_ringing(Reason, State),
 	{next_state, inqueue, NewState};
 
-inqueue_ringing({{'$gen_media', Command}, _}, State) ->
+inqueue_ringing(?GM0(Command), State) ->
 	lager:debug("Invalid command event ~s while inqueue_ringing", [Command]),
 	{next_state, inqueue_ringing, State};
 
-inqueue_ringing(Msg, {#base_state{callback = Callback, callrec = Call} =
-		BaseState, Extra} = State) ->
-	Return = Callback:handle_cast(Msg, inqueue_ringing, Call, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, inqueue_ringing, noreply, State).
+inqueue_ringing(Msg, State) ->
+	fallback_async(inqueue_ringing, Msg, State).
 
 %%--------------------------------------------------------------------
 %% oncall -> oncall_ringing, wrapup, warm_transfer_hold, inqueue
 %%--------------------------------------------------------------------
 
-oncall({{'$gen_media', queue}, Queue}, From, {BaseState, Internal}) ->
+%% sync
+
+oncall(?GM(queue, Queue), From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	#oncall_state{oncall_pid = {Ocagent, Apid}, oncall_mon = Mon} = Internal,
 	lager:info("Request to queue ~p from ~p", [Call#call.id, From]),
@@ -1276,12 +1251,12 @@ oncall({{'$gen_media', queue}, Queue}, From, {BaseState, Internal}) ->
 			{reply, ok, inqueue, {NewBase, NewInternal}}
 	end;
 
-oncall({{'$gen_media', agent_transfer}, {{_Agent, Apid}, _Timeout}}, _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
+oncall(?GM(agent_transfer, {{_Agent, Apid}, _Timeout}), _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
 	Call = BaseState#base_state.callrec,
 	lager:notice("Can't transfer to yourself, silly ~p! ~p", [Apid, Call#call.id]),
 	{reply, invalid, oncall, State};
 
-oncall({{'$gen_media', agent_transfer}, {{Agent, Apid}, Timeout}}, _From, {BaseState, Internal}) ->
+oncall(?GM(agent_transfer, {{Agent, Apid}, Timeout}), _From, {BaseState, Internal}) ->
 	#base_state{callrec = Call, callback = Callback, url_pop_get_vars = GenPopopts} = BaseState,
 	#oncall_state{oncall_pid = {OcAgent, Ocpid}, oncall_mon = Mon} = Internal,
 	case set_agent_state(Apid, [ringing, Call]) of
@@ -1295,11 +1270,11 @@ oncall({{'$gen_media', agent_transfer}, {{Agent, Apid}, Timeout}}, _From, {BaseS
 							lists:ukeymerge(1, lists:ukeysort(1, GenPopopts), lists:ukeysort(1, Opts))
 					end,
 					% dummy is there because the structure of internally handled
-					% messages is {{'$gen_media', command}, CommandData}.
+					% messages is ?GM(command}, CommandData}.
 					% Even if the command doesn't take any arguments, something
 					% needs to be there to make it a 2 element tuple, thus dummy
 					% here.
-					Tref = gen_fsm:send_event_after(Timeout, {{'$gen_media', stop_ring}, dummy}),
+					Tref = gen_fsm:send_event_after(Timeout, ?GM(stop_ring, dummy)),
 					cdr:agent_transfer(Call, {OcAgent, Agent}),
 					cdr:ringing(Call, Agent),
 					url_pop(Call, Apid, Popopts),
@@ -1326,7 +1301,7 @@ oncall({{'$gen_media', agent_transfer}, {{Agent, Apid}, Timeout}}, _From, {BaseS
 			{reply, invalid, oncall, {BaseState, Internal}}
 	end;
 
-oncall({{'$gen_media', warm_transfer_hold}, undefined}, _From, {BaseState, Internal}) ->
+oncall(?GM0(warm_transfer_hold), _From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call, substate = Substate} = BaseState,
 	#oncall_state{oncall_pid = {_, Apid}} = Internal,
 	case erlang:function_exported(Callback, handle_warm_transfer_hold, 4) of
@@ -1353,11 +1328,11 @@ oncall({{'$gen_media', warm_transfer_hold}, undefined}, _From, {BaseState, Inter
 			{reply, invalid, oncall, {BaseState, Internal}}
 	end;
 
-oncall({{'$gen_media', spy}, {Spy, _}}, _From, {_, #oncall_state{oncall_pid = {_Nom, Spy}}} = State) ->
+oncall(?GM(spy, {Spy, _}), _From, {_, #oncall_state{oncall_pid = {_Nom, Spy}}} = State) ->
 	lager:debug("Can't spy on yourself", []),
 	{reply, invalid, oncall, State};
 
-oncall({{'$gen_media', spy}, {Spy, AgentRec}}, _From, {BaseState, Oncall} = State) ->
+oncall(?GM(spy, {Spy, AgentRec}), _From, {BaseState, Oncall} = State) ->
 	Callback = BaseState#base_state.callback,
 	Call = BaseState#base_state.callrec,
 	case erlang:function_exported(Callback, handle_spy, 4) of
@@ -1376,7 +1351,7 @@ oncall({{'$gen_media', spy}, {Spy, AgentRec}}, _From, {BaseState, Oncall} = Stat
 			end
 	end;
 
-oncall({{'$gen_media', wrapup}, undefined}, {Ocpid, _Tag} = From,
+oncall(?GM0(wrapup), {Ocpid, _Tag} = From,
 		{#base_state{callrec = Call} = BaseState,
 		#oncall_state{oncall_pid = {Ocagent, Ocpid}} = Oncall})
 		when Call#call.media_path =:= inband ->
@@ -1396,11 +1371,11 @@ oncall({{'$gen_media', wrapup}, undefined}, {Ocpid, _Tag} = From,
 			{stop, normal, ok, {BaseState#base_state{substate = NewState}, Oncall#oncall_state{oncall_mon = undefined}}}
 	end;
 
-oncall({{'$gen_media', wrapup}, undefined}, {Ocpid, _Tag}, {#base_state{callrec = Call}, #oncall_state{oncall_pid = {_Agent, Ocpid}}} = State) ->
+oncall(?GM0(wrapup), {Ocpid, _Tag}, {#base_state{callrec = Call}, #oncall_state{oncall_pid = {_Agent, Ocpid}}} = State) ->
 	lager:error("Cannot do a wrapup directly unless mediapath is inband, and request is from agent oncall. ~p", [Call#call.id]),
 	{reply, invalid, oncall, State};
 
-oncall({{'$gen_media', queue}, Queue}, {Ocpid, _},
+oncall(?GM(queue, Queue), {Ocpid, _},
 		{#base_state{callback = Callback, callrec = Call} = BaseState,
 		#oncall_state{oncall_pid = {Ocagent, Ocpid}} = Oncall} = State) ->
 	Internal = Oncall,
@@ -1434,38 +1409,27 @@ oncall({{'$gen_media', queue}, Queue}, {Ocpid, _},
 			{reply, ok, inqueue, {NewBase, NewInternal}}
 	end;
 
-oncall({{'$gen_media', Command}, _}, _, State) ->
-	lager:debug("Invalid command sync event ~s while oncall", [Command]),
-	{reply, invalid, oncall, State};
+oncall(Msg, From, State) ->
+	fallback_sync(oncall, Msg, From, State).
 
-oncall(Request, _From,
-		{#base_state{callback = Callback, callrec = Call},
-		#oncall_state{oncall_pid = OcPid}} = State) ->
-	lager:debug("Forwarding request to callback", []),
-	Out = Callback:handle_call(Request, Call, oncall, OcPid),
-	handle_custom_return(Out, oncall, reply, State).
+%% async
 
-
-oncall({{'$gen_media', Command}, _}, State) ->
-	lager:debug("Invalid command event ~s while oncall", [Command]),
-	{next_state, oncall, State};
-
-oncall(Msg, {#base_state{callback = Callback, callrec = Call} = BaseState,
-		Extra} = State) ->
-	Return = Callback:handle_cast(Msg, oncall, Call, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, oncall, noreply, State).
+oncall(Msg, State) ->
+	fallback_async(oncall, Msg, State).
 
 %%--------------------------------------------------------------------
 %% oncall_ringing -> oncall (same agent), oncall (new agent)
 %%--------------------------------------------------------------------
 
-oncall_ringing({{'$gen_media', agent_oncall}, undefined}, {Apid, _},
+%% sync
+
+oncall_ringing(?GM0(agent_oncall), {Apid, _},
 		{#base_state{callrec = #call{ring_path = outband} = Call},
 		#oncall_ringing_state{ring_pid = {_, Apid}}} = State) ->
 	lager:info("Cannot accept on call requests from agent (~p) unless ring_path is inband for ~p", [Apid, Call#call.id]),
 	{reply, invalid, oncall_ringing, State};
 
-oncall_ringing({{'$gen_media', agent_oncall}, undefined}, {Rpid, _},
+oncall_ringing(?GM0(agent_oncall), {Rpid, _},
 		{#base_state{callrec = #call{ring_path = inband} = Call} = BaseState,
 		#oncall_ringing_state{ring_pid = {Ragent, Rpid}} = Internal}) ->
 	#base_state{callback = Callback} = BaseState,
@@ -1496,7 +1460,7 @@ oncall_ringing({{'$gen_media', agent_oncall}, undefined}, {Rpid, _},
 			{reply, invalid, oncall_ringing, {NewBase, Internal}}
 	end;
 
-oncall_ringing({{'$gen_media', agent_oncall}, undefined}, _, State) ->
+oncall_ringing(?GM0(agent_oncall), _, State) ->
 	{BaseState, Internal} = State,
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	#oncall_ringing_state{ring_pid = {Ragent, Rpid},
@@ -1531,51 +1495,33 @@ oncall_ringing({{'$gen_media', agent_oncall}, undefined}, _, State) ->
 			end
 	end;
 
-oncall_ringing({{'$gen_media', Command}, _}, _From, State) ->
-	lager:debug("Invalid sync event command ~s while oncall_ringing", [Command]),
-	{reply, invalid, oncall_ringing, State};
+oncall_ringing(Msg, From, State) ->
+	fallback_sync(oncall_ringing, Msg, From, State).
 
-oncall_ringing(Msg, From, {#base_state{callback = Callback}
-		= BaseState, Extra} = State) ->
-	Return = Callback:handle_call(Msg, From, oncall_ringing, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, oncall_ringing, reply, State).
+%% async
 
-oncall_ringing({{'$gen_media', Command}, _}, State) ->
-	lager:debug("invalid event command ~s while oncall_ringing", [Command]),
-	{next_state, oncall_ringing, State};
-
-oncall_ringing(Msg, {#base_state{callback = Callback, callrec = Call} =
-		BaseState, Extra} = State) ->
-	Return = Callback:handle_cast(Msg, oncall_ringing, Call, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, oncall_ringing, noreply, State).
+oncall_ringing(Msg, State) ->
+	fallback_async(oncall_ringing, Msg, State).
 
 %%--------------------------------------------------------------------
 %% wrapup
 %%--------------------------------------------------------------------
 
-wrapup({{'$gen_media', Command}, _}, _From, State) ->
-	lager:debug("Invalid sync command ~p Command whiel in wrapup", [Command]),
-	{reply, invalid, wrapup, State};
+%% sync
 
-wrapup(Msg, From, {#base_state{callback = Callback, callrec = Call} =
-		BaseState, Extra} = State) ->
-	Return = Callback:handle_call(Msg, From, wrapup, Call, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, wrapup, reply, State).
+wrapup(Msg, From, State) ->
+	fallback_sync(wrapup, Msg, From, State).
 
-wrapup({{'$gen_media', Command}, _}, State) ->
-	lager:debug("Invalid command ~p while wrapup", [Command]),
-	{next_state, wrapup, State};
+%% async
 
-wrapup(Msg, {#base_state{callback = Callback, callrec = Call} =
-		BaseState, Extra} = State) ->
-	Return = Callback:handle_cast(Msg, wrapup, Call, Extra, BaseState#base_state.substate),
-	handle_custom_return(Return, wrapup, noreply, State).
+wrapup(Msg, State) ->
+	fallback_async(wrapup, Msg, State).
 
 %%--------------------------------------------------------------------
 %% handle_sync_event
 %%--------------------------------------------------------------------
 
-handle_sync_event({{'$gen_media', get_url_vars}, _}, _From, StateName, State) ->
+handle_sync_event(?GM0(get_url_vars), _From, StateName, State) ->
 	{BaseState, _Internal} = State,
 	#base_state{
 		substate = Substate,
@@ -1591,12 +1537,12 @@ handle_sync_event({{'$gen_media', get_url_vars}, _}, _From, StateName, State) ->
 	Out = lists:ukeymerge(1, lists:ukeysort(1, GenPopopts), lists:ukeysort(1, Cbopts)),
 	{reply, {ok, Out}, StateName, State};
 
-handle_sync_event({{'$gen_media', get_call}, undefined}, _From, StateName, State) ->
+handle_sync_event(?GM0(get_call), _From, StateName, State) ->
 	{BaseState, _} = State,
 	#base_state{callrec = Reply} = BaseState,
 	{reply, Reply, StateName, State};
 
-handle_sync_event({{'$gen_media', Command}, _}, _From, StateName, State) ->
+handle_sync_event(?GM0(Command), _From, StateName, State) ->
 	lager:debug("Invalid generic sync command ~p while in ~s", [Command, StateName]),
 	{reply, invalid, StateName, State};
 
@@ -1609,7 +1555,7 @@ handle_sync_event(Msg, From, StateName, {#base_state{callback = Callback,
 %% handle_event
 %%--------------------------------------------------------------------
 
-handle_event({{'$gen_media', set_url_getvars}, Vars}, StateName, State) ->
+handle_event(?GM(set_url_getvars, Vars), StateName, State) ->
 	{BaseState, Internal} = State,
 	#base_state{url_pop_get_vars = Oldvars} = BaseState,
 	Newvars = lists:ukeymerge(1, lists:ukeysort(1, Vars), lists:ukeysort(1, Oldvars)),
@@ -1617,7 +1563,7 @@ handle_event({{'$gen_media', set_url_getvars}, Vars}, StateName, State) ->
 	NewBase = BaseState#base_state{url_pop_get_vars = Newvars},
 	{next_state, StateName, {NewBase, Internal}};
 
-handle_event({{'$gen_media', add_skills}, Skills}, StateName, State) ->
+handle_event(?GM(add_skills, Skills), StateName, State) ->
 	{BaseState, Internal} = State,
 	Call = BaseState#base_state.callrec,
 	NewSkills = util:merge_skill_lists(Call#call.skills, Skills),
@@ -1626,7 +1572,7 @@ handle_event({{'$gen_media', add_skills}, Skills}, StateName, State) ->
 	set_gproc_prop(StateName, StateName, NewBase),
 	{next_state, StateName, {NewBase, Internal}};
 
-handle_event({{'$gen_media', Command}, _}, StateName, State) ->
+handle_event(?GM0(Command), StateName, State) ->
 	lager:debug("Invalid generic event command ~p while in state ~p", [Command, StateName]),
 	{next_state, StateName, State};
 
@@ -1794,6 +1740,21 @@ code_change(OldVsn, StateName, State, Extra) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+fallback_sync(S, ?GM(Command, _Args), _From, State) ->
+	lager:debug("Invalid sync event ~s while ~s", [Command, S]),
+	{reply, invalid, S, State};
+fallback_sync(S, Msg, From, {#base_state{callback = Callback} = BaseState, Internal} = State) ->
+	Return = Callback:handle_call(Msg, From, S, BaseState#base_state.callrec, Internal, BaseState#base_state.substate),
+	handle_custom_return(Return, S, reply, State).
+
+fallback_async(S, ?GM(Command, _Args), State) ->
+	lager:debug("Invalid async event ~s while ~s", [Command, S]),
+	{reply, invalid, S, State};
+fallback_async(S, Msg, {#base_state{ callback = Callback, callrec = Call} = BaseState, Internal} = State) ->
+	Return = Callback:handle_cast(Msg, S, Call, Internal, BaseState#base_state.substate),
+	handle_custom_return(Return, S, noreply, State).
+
 update_basestate_queue(BaseState, QName, Reset) ->
 	C = case Reset of
 		true -> BaseState#base_state.init_callrec;
@@ -1806,50 +1767,44 @@ update_basestate_queue(BaseState, QName, Reset) ->
 %% handle_custom_return
 %%--------------------------------------------------------------------
 
-handle_custom_return({queue, Queue, PCallrec, NewState}, inivr, Reply, {BaseState, CurState}) ->
-	Callrec = correct_client(PCallrec),
-	QData = case priv_queue(Queue, Callrec, BaseState#base_state.queue_failover) of
-		{default, Qpid} ->
-			cdr:cdrinit(Callrec),
-			cdr:inqueue(Callrec, "default_queue"),
-			set_cpx_mon({BaseState#base_state{callrec = Callrec, substate = NewState}, undefined}, [{queue, "default_queue"}]),
-			{ok, {"default_queue", Qpid}};
-			%{noreply, State#state{callrec = Callrec, substate = NewState, queue_pid = {"default_queue", Qpid}, monitors = Newmons}};
-		invalid ->
-			lager:warning("Could not queue ~p into ~p (failover ~p)", [Callrec#call.id, Queue, BaseState#base_state.queue_failover]),
-			{error, {noqueue, Queue}};
-			%{noreply, State#state{callrec = Callrec, substate = NewState}};
-		Qpid ->
-			cdr:cdrinit(Callrec),
-			cdr:inqueue(Callrec, Queue),
-			set_cpx_mon({BaseState#base_state{callrec = Callrec, substate = NewState}, undefined}, [{queue, Queue}]),
-			{ok, {Queue, Qpid}}
-			%{noreply, State#state{callrec = Callrec, substate = NewState, queue_pid = {Queue, Qpid}, monitors = Newmons}}
+handle_custom_return({queue, QueueN, Ps, SubState}, inivr, Reply, {BaseSt, _IntSt}=JSt) ->
+	Call0 = BaseSt#base_state.callrec,
+	Callback = BaseSt#base_state.callback,
+	StateChanges = BaseSt#base_state.state_changes,
+
+	Call = ps_to_call(Ps, Call0, Callback, StateChanges),
+
+	BaseSt0 = BaseSt#base_state{substate=SubState},
+	{Ans, JSt1} = case enqueue(QueueN, Call, BaseSt0) of
+		{ok, {BaseSt1, _IntSt1}=JSt2} ->
+			set_gproc_prop(inivr, inqueue, BaseSt1),
+			{ok, JSt2};
+		_ ->
+			{error, {noqueue, QueueN}, JSt}
 	end,
-	case {Reply, QData} of
-		{noreply, {error, _}} ->
-			{next_state, inivr, {BaseState#base_state{substate = NewState}, CurState}};
-		{reply, {error, _}} ->
-			{reply, QData, inivr, {BaseState#base_state{substate = NewState}, CurState}};
-		{_, {ok, {QueueName, QPid}}} ->
-			#queued_call{skills = Skills} = call_queue:get_qcall(QPid, self()),
-			Mon = erlang:monitor(process, QPid),
-			InternalState = #inqueue_state{
-				queue_mon = Mon,
-				queue_pid = {QueueName, QPid}
-			},
-			NewBase = BaseState#base_state{
-				callrec = Callrec#call{queue = QueueName, skills = Skills},
-				substate = NewState
-			},
-			set_gproc_prop(inivr, inqueue, NewBase),
-			case Reply of
-				reply ->
-					{reply, ok, inqueue, {NewBase, InternalState}};
-				noreply ->
-					{next_state, inqueue, {NewBase, InternalState}}
-			end
+
+	case Reply of
+		reply ->
+			{reply, Ans, inqueue, JSt1};
+		_ ->
+			{next_state, inqueue, JSt1}
 	end;
+
+	% case {Reply, QData} of
+	% 	{noreply, {error, _}} ->
+	% 		{next_state, inivr, {BaseState#base_state{substate = NewState}, CurState}};
+	% 	{reply, {error, _}} ->
+	% 		{reply, QData, inivr, {BaseState#base_state{substate = NewState}, CurState}};
+	% 	{_, {ok, {QueueName, QPid}}} ->
+
+	% 		set_gproc_prop(inivr, inqueue, NewBase),
+	% 		case Reply of
+	% 			reply ->
+	% 				{reply, ok, inqueue, {NewBase, InternalState}};
+	% 			noreply ->
+	% 				{next_state, inqueue, {NewBase, InternalState}}
+	% 		end
+	% end;
 
 handle_custom_return({voicemail, NewState}, StateName, Reply,
 		{BaseState, InternalState}) when StateName =:= inqueue;
@@ -2031,10 +1986,10 @@ set_agent_state(Apid, Args) ->
 			lager:error("Agent (~p) set state: ~p wasn't okay:  ~p", [Apid, Args, Res]),
 			Res
 	catch
-		exit:{noproc, {gen_fsm, sync_send_event, _TheArgs}} ->
+		exit:{noproc, _} ->
 			lager:warning("Agent ~p is a dead pid", [Apid]),
 			badagent;
-		exit:{max_ringouts, {gen_fsm, sync_send_event, _TheArgs}} ->
+		exit:{max_ringouts, _} ->
 			lager:debug("Max ringouts reached for agent ~p", [Apid]),
 			badagent
 	end.
@@ -2043,7 +1998,7 @@ stop_agent_channel(Apid) ->
 	try agent_channel:stop(Apid) of
 		_ -> ok
 	catch
-		exit:{noproc, {gen_fsm, sync_send_event, _TheArgs}} ->
+		exit:{noproc, _} ->
 			lager:warning("Agent ~p is a dead pid", [Apid]),
 			badagent
 	end.
@@ -2085,6 +2040,96 @@ handle_stop(Reason, StateName, BaseState, Internal) ->
 	end,
 	agent_interact({hangup, Who}, StateName, {BaseState, Internal}),
 	Reason.
+
+enqueue(QueueN, Call, BaseSt) ->
+	%% TODO if invalid
+	QNPid = case priv_queue(QueueN, Call, true) of
+		{default, Pid} ->
+			{"default_queue", Pid};
+		Else when is_pid(Else) ->
+			{QueueN, Else};
+		_ ->
+			error
+	end,
+
+	case QNPid of
+		{QN, QPid} ->
+			#queued_call{skills = QSkills} =
+				call_queue:get_qcall(QPid, self()),
+
+			QMon = erlang:monitor(process, QPid),
+
+			StateChanges1 = [{inqueue, os:timestamp()}|
+				BaseSt#base_state.state_changes],
+
+			Call1 = Call#call{
+				skills = lists:usort(Call#call.skills ++ QSkills),
+				state_changes=StateChanges1
+			},
+
+			BaseSt1 = BaseSt#base_state{
+				callrec = Call1,
+				state_changes = StateChanges1
+			},
+
+			IntSt = #inqueue_state{
+				queue_pid = {QN, QPid},
+				queue_mon = QMon
+			},
+
+			set_cpx_mon({BaseSt1, IntSt}, [{queue, QN}]),
+			cdr:inqueue(Call1, QN),
+
+			{ok, {BaseSt1, IntSt}};
+		_ ->
+			{error, queue_failed}
+	end.
+
+ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
+	QueueN = ?get(queue, Ps, Base#call.queue),
+
+	CallId = ?get(id, Ps, Base#call.id),
+	Type = ?get(type, Ps, Base#call.type),
+	ClientId = ?get(client, Ps),
+	ClientOpts = ?get(client_opts, Ps, []),
+	Skills = ?get(skills, Ps, Base#call.skills),
+	CallerId = ?get(caller_id, Ps, Base#call.callerid),
+	Dnis = ?get(dnis, Ps, Base#call.dnis),
+	RingPath = ?get(ring_path, Ps, Base#call.ring_path),
+	MediaPath = ?get(media_path, Ps, Base#call.media_path),
+	Direction = ?get(direction, Ps, Base#call.direction),
+	Priority = ?get(priority, Ps, Base#call.priority),
+	Arbitrary = ?get(arbitrary, Ps, Base#call.arbitrary),
+
+	Client = case (ClientId =:= undefined) andalso
+		is_record(Base#call.client, client) of
+			true ->
+				Base#call.client;
+			_ ->
+				%% @todo does not use default val
+				Z = get_client_by_id(ClientId),
+				Z#client{options = ClientOpts}
+		end,
+
+	#call{
+		id =  CallId,
+		type = Type,
+		callerid = CallerId,
+		dnis = Dnis,
+		source = self(),
+		source_module = Callback,
+		client = Client,
+		skills = Skills,
+		queue = QueueN,
+		ring_path = RingPath,
+		media_path = MediaPath,
+		direction = Direction,
+		priority = Priority,
+		arbitrary = Arbitrary,
+		state_changes = StateChanges
+	};
+ps_to_call(Ps, _, Callback, StateChanges) ->
+	ps_to_call(Ps, #call{id="",source=Callback}, Callback, StateChanges).
 
 url_pop(#call{client = Client} = Call, Agent, Addedopts) ->
 	#client{options = DefaultOptions} = correct_client_sub(undefined),
@@ -2129,23 +2174,16 @@ url_pop(#call{client = Client} = Call, Agent, Addedopts) ->
 			agent_channel:url_pop(Agent, Url, "ring")
 	end.
 
-%% @doc Set the client record to an actual client record.
--spec(correct_client/1 :: (Callid :: #call{}) -> #call{}).
-correct_client(#call{client = Client} = Callrec) ->
-	Newclient = case Client of
-		#client{id = Id} ->
-			correct_client_sub({Id,Client#client.options});
-		undefined ->
-			correct_client_sub(undefined);
-		{Id,Opts} ->
-			correct_client_sub({Id,Opts});
-		String ->
-			% if given the client id; so a media is not burndened with checking
-			% mnesia or the client itself.
-			% basically, see the next function call:
-			correct_client_sub({String,[]})
-	end,
-	Callrec#call{client = Newclient}.
+get_client_by_id(undefined) ->
+	case catch call_queue_config:get_default_client() of
+		{ok, C} -> C;
+		_ -> #client{}
+	end;
+get_client_by_id(L) ->
+	case catch call_queue_config:get_client_by_id(L) of
+		{ok, C} -> C;
+		_ -> get_client_by_id(undefined)
+	end.
 
 correct_client_sub(undefined) ->
 	Client = try call_queue_config:get_default_client() of
