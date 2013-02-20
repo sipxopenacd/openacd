@@ -151,6 +151,7 @@ stop(Pid, Reason) ->
 %% @private
 init([Call, InRecipe, Queue, Qpid, {_Priority, {MSec, Sec, _MsSec}} = Key]) ->
 	process_flag(trap_exit, true),
+	gproc:add_local_property(cpx_cook, none),
 	try gen_media:get_call(Call) of
 		CallRec ->
 			lager:debug("Cook starting for call ~p from queue ~p (~p)", [CallRec#call.id, Queue, Qpid]),
@@ -376,7 +377,7 @@ sort_agent_list(Dispatchers) when is_list(Dispatchers) ->
 			{unknown_call, get_agents} ->
 				[];
 			Ag ->
-				[{K, {Apid, Aid, Askills, node(Dpid)}} || {K, #agent_cache{pid = Apid, id = Aid, skills = Askills}} <- Ag]
+				[{Dpid, K, {Apid, Aid, Askills, node(Dpid)}} || {K, #agent_cache{pid = Apid, id = Aid, skills = Askills}} <- Ag]
 		catch
 			What:Why ->
 				lager:info("Caught:  ~p:~p", [What, Why]),
@@ -393,14 +394,15 @@ sort_agent_list(Dispatchers) when is_list(Dispatchers) ->
 	Skills :: [atom()], Node :: atom()}}], Call :: #queued_call{}) -> 'none' | 'ringing').
 offer_call([], _Call) ->
 	%lager:debug("No valid agents found", []),
-	nocall;
-offer_call([{_Key, {Apid, Aid, _Skills, _Node}} | Tail], Call) ->
+	none;
+offer_call([{Dpid, _Key, {Apid, Aid, _Skills, _Node}} | Tail], Call) ->
 	case gen_media:ring(Call#queued_call.media, Apid, Call, ?getRingout) of
 		ok ->
 			%Callrec = gen_media:get_call(Call#queued_call.media),
 			lager:info("cook offering call:  ~p to ~p", [Call#queued_call.id, Aid]),
 			ringing;
 		invalid ->
+			dispatcher:regrab(Dpid),
 			offer_call(Tail, Call)
 	end.
 
