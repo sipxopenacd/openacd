@@ -2028,7 +2028,7 @@ set_agent_state(Apid, Args) ->
 		ok ->
 			ok;
 		Res ->
-			lager:error("Agent set state wasn't okay:  ~p", [Res]),
+			lager:error("Agent (~p) set state: ~p wasn't okay:  ~p", [Apid, Args, Res]),
 			Res
 	catch
 		exit:{noproc, {gen_fsm, sync_send_event, _TheArgs}} ->
