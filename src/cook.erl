@@ -393,7 +393,7 @@ sort_agent_list(Dispatchers) when is_list(Dispatchers) ->
 	Skills :: [atom()], Node :: atom()}}], Call :: #queued_call{}) -> 'none' | 'ringing').
 offer_call([], _Call) ->
 	%lager:debug("No valid agents found", []),
-	none;
+	nocall;
 offer_call([{_Key, {Apid, Aid, _Skills, _Node}} | Tail], Call) ->
 	case gen_media:ring(Call#queued_call.media, Apid, Call, ?getRingout) of
 		ok ->
