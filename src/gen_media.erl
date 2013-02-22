@@ -429,6 +429,7 @@
 	takeover_ring/2,
 	get_call/1,
 	voicemail/1,
+	transfer_outband/2,
 	announce/2,
 	%% TODO added for testing only (implemented with focus on real Calls - no other media)
 	end_call/1,
@@ -678,6 +679,9 @@ get_url_getvars(Genmedia) ->
 add_skills(Genmedia, Skills) ->
 	gen_fsm:send_all_state_event(Genmedia, ?GM(add_skills, Skills)).
 
+transfer_outband(Genmedia, Addr) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(transfer_outband, Addr)).
+
 %% @doc Do the equivalent of a `gen_server:call/2'.
 -spec(call/2 :: (Genmedia :: pid(), Request :: any()) -> any()).
 call(Genmedia, Request) ->
@@ -845,6 +849,23 @@ inqueue(?GM0(voicemail), _From, {BaseState, Internal}) ->
 					{reply, invalid, inqueue, {BaseState#base_state{substate = Substate}, Internal}}
 			end
 	end;
+inqueue(?GM(transfer_outband, Addr), _From, {BaseState, Internal}) ->
+	#base_state{callback = Callback, callrec = Call} = BaseState,
+	lager:info("trying to transfer ~p to ~p", [Call#call.id, Addr]),
+	case erlang:function_exported(Callback, handle_transfer_outband, 5) of
+		false ->
+			{reply, invalid, inqueue, {BaseState, Internal}};
+		true ->
+			case Callback:handle_transfer_outband(Addr, inqueue, Call, Internal, BaseState#base_state.substate) of
+				{ok, Substate} ->
+					lager:info("transferred ~p to ~p", [Call#call.id, Addr]),
+					% almost same except for cdr part
+					% priv_voicemail({BaseState, Internal}),
+					{stop, normal, ok, {BaseState#base_state{substate = Substate}, Internal}};
+				{invalid, Substate} ->
+					{reply, invalid, inqueue, {BaseState#base_state{substate = Substate}, Internal}}
+			end
+	end;
 
 inqueue(?GM0(end_call), {Cook, _}, {#base_state{
 		callrec = #call{cook = Cook}} = BaseState, InqueueState}) ->
@@ -975,7 +996,23 @@ inqueue_ringing(?GM0(voicemail), _From, {BaseState, Internal}) ->
 					{reply, invalid, inqueue_ringing, {BaseState#base_state{substate = Substate}, Internal}}
 			end
 	end;
-
+inqueue_ringing(?GM(transfer_outband, Addr), _From, {BaseState, Internal}) ->
+	#base_state{callback = Callback, callrec = Call} = BaseState,
+	lager:info("trying to transfer ~p to ~p", [Call#call.id, Addr]),
+	case erlang:function_exported(Callback, handle_transfer_outband, 5) of
+		false ->
+			{reply, invalid, inqueue_ringing, {BaseState, Internal}};
+		true ->
+			case Callback:handle_transfer_outband(Addr, inqueue_ringing, Call, Internal, BaseState#base_state.substate) of
+				{ok, Substate} ->
+					lager:info("transferred ~p to ~p", [Call#call.id, Addr]),
+					% almost same except for cdr part
+					priv_voicemail({BaseState, Internal}),
+					{stop, normal, ok, {BaseState#base_state{substate = Substate}, Internal}};
+				{invalid, Substate} ->
+					{reply, invalid, inqueue_ringing, {BaseState#base_state{substate = Substate}, Internal}}
+			end
+	end;
 inqueue_ringing(?GM0(agent_oncall), {Apid, _Tag},
 		{#base_state{callrec = #call{ring_path = outband} = Call} = BaseState,
 		#inqueue_ringing_state{ring_pid = {_, Apid}} = Internal}) ->
