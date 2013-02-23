@@ -489,6 +489,16 @@
 	agent :: #agent{}
 }).
 
+%% callback response
+-record(cbkr, {
+	zt, %% fsm_state
+	cbk_res,
+	reply,
+	action :: reply | {stop, any()},
+	base_state,
+	internal_state
+}).
+
 -spec(behaviour_info/1 ::
 	(Info :: 'callbacks' | any()) -> [{atom(), non_neg_integer()}] | 'undefined').
 behaviour_info(callbacks) ->
@@ -821,51 +831,26 @@ inqueue(?GM(ring, {{_Agent, Apid}, QCall, _Timeout}), _From, State) ->
 	gen_server:cast(QCall#queued_call.cook, {ring_to, Apid, QCall}),
 	{reply, deferred, inqueue, State};
 
-inqueue(?GM(announce, Announce), _From, {#base_state{
-		callback = Callback, substate = InSubstate, callrec = Call} =
-		BaseState, Internal}) ->
-	lager:info("Doing announce for ~p", [Call#call.id]),
-	Substate = case erlang:function_exported(Callback, handle_announce, 5) of
-		true ->
-			{ok, N} = Callback:handle_announce(Announce, inqueue, Call, Internal, InSubstate),
-			N;
-		false ->
-			InSubstate
-	end,
-	{reply, ok, inqueue, {BaseState#base_state{substate = Substate}, Internal}};
+inqueue(?GM(announce, Announce), _From, St) ->
+	% lager:info("Doing announce for ~p", [Call#call.id]),
+	sync_call_cbk(inqueue, St, announce, [Announce]);
 
-inqueue(?GM0(voicemail), _From, {BaseState, Internal}) ->
-	#base_state{callback = Callback, callrec = Call} = BaseState,
-	lager:info("trying to send media ~p to voicemail", [Call#call.id]),
-	case erlang:function_exported(Callback, handle_voicemail, 4) of
-		false ->
-			{reply, invalid, inqueue, {BaseState, Internal}};
-		true ->
-			case Callback:handle_voicemail(inqueue, Call, Internal, BaseState#base_state.substate) of
-				{ok, Substate} ->
-					priv_voicemail({BaseState, Internal}),
-					{reply, ok, inqueue, {BaseState#base_state{substate = Substate}, Internal}};
-				{invalid, Substate} ->
-					{reply, invalid, inqueue, {BaseState#base_state{substate = Substate}, Internal}}
-			end
-	end;
-inqueue(?GM(transfer_outband, Addr), _From, {BaseState, Internal}) ->
-	#base_state{callback = Callback, callrec = Call} = BaseState,
-	lager:info("trying to transfer ~p to ~p", [Call#call.id, Addr]),
-	case erlang:function_exported(Callback, handle_transfer_outband, 5) of
-		false ->
-			{reply, invalid, inqueue, {BaseState, Internal}};
-		true ->
-			case Callback:handle_transfer_outband(Addr, inqueue, Call, Internal, BaseState#base_state.substate) of
-				{ok, Substate} ->
-					lager:info("transferred ~p to ~p", [Call#call.id, Addr]),
-					% almost same except for cdr part
-					% priv_voicemail({BaseState, Internal}),
-					{stop, normal, ok, {BaseState#base_state{substate = Substate}, Internal}};
-				{invalid, Substate} ->
-					{reply, invalid, inqueue, {BaseState#base_state{substate = Substate}, Internal}}
-			end
-	end;
+inqueue(?GM0(voicemail), _From, St) ->
+	% lager:info("trying to send media ~p to voicemail", [Call#call.id]),
+	sync_call_cbk(inqueue, St, voicemail, [], fun(#cbkr{cbk_res=ok}=R) ->
+			priv_voicemail(St),
+			R;
+		(R) ->
+			R
+	end);
+
+inqueue(?GM(transfer_outband, Addr), _From, St) ->
+	% lager:info("trying to transfer ~p to ~p", [Call#call.id, Addr]),
+	sync_call_cbk(inqueue, St, handle_transfer_outband, [Addr],
+		fun(#cbkr{cbk_res=ok}=R) ->
+			R#cbkr{action={stop, normal}};
+		(R) -> R end);
+
 
 inqueue(?GM0(end_call), {Cook, _}, {#base_state{
 		callrec = #call{cook = Cook}} = BaseState, InqueueState}) ->
@@ -1050,7 +1035,9 @@ inqueue_ringing(?GM0(agent_oncall), {Apid, _Tag},
 			{reply, invalid, inqueue_ringing, {NewBase, Internal}}
 	end;
 
-inqueue_ringing(?GM0(agent_oncall), From, {BaseState, Internal}) ->
+inqueue_ringing(?GM0(agent_oncall), From, {BaseState, Internal}=St) ->
+	Zt = inqueue_ringing,
+
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	#inqueue_ringing_state{ring_pid = {Agent, Apid}, ring_mon = Mon} = Internal,
 	lager:info("oncall request from ~p; agent to set on call is ~p for ~p", [From, Apid, Call#call.id]),
@@ -1060,8 +1047,7 @@ inqueue_ringing(?GM0(agent_oncall), From, {BaseState, Internal}) ->
 		{error, invalid} ->
 			{reply, invalid, inqueue_ringing, {BaseState, Internal}};
 		ok ->
-			case Callback:handle_answer(Apid, inqueue_ringing, Call, Internal, BaseState#base_state.substate) of
-				{ok, NewState} ->
+			sync_call_cbk(Zt, St, handle_answer, [Apid], fun(#cbkr{cbk_res=ok}=R) ->
 					cdr:oncall(Call, Agent),
 					case Internal#inqueue_ringing_state.ringout of
 						undefined -> ok;
@@ -1071,19 +1057,16 @@ inqueue_ringing(?GM0(agent_oncall), From, {BaseState, Internal}) ->
 					call_queue:remove(Qpid, self()),
 					StateChanges = [{oncall, os:timestamp()} | BaseState#base_state.state_changes],
 					{ok, AgentRec} = agent_channel:get_agent(Apid),
-					NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges, agent = AgentRec},
+					NewBase = (R#cbkr.base_state)#base_state{state_changes = StateChanges, agent = AgentRec},
 					set_gproc_prop(inqueue_ringing, oncall, NewBase),
 					NewInternal = #oncall_state{
 						oncall_pid = {Agent, Apid},
 						oncall_mon = Mon
 					},
 					set_cpx_mon({NewBase, NewInternal}, []),
-					{reply, ok, oncall, {NewBase, NewInternal}};
-				{error, Reason, NewState} ->
-					lager:error("Could not set ~p on call with ~p due to ~p", [Apid, Call#call.id, Reason]),
-					NewBase = BaseState#base_state{substate = NewState},
-					{reply, invalid, oncall, {NewBase, Internal}}
-			end;
+					R#cbkr{zt=oncall, base_state=NewBase, internal_state=NewInternal};
+				(R) -> R
+			end);
 		badagent ->
 			{ok, NewSubstate} = Callback:handle_ring_stop(inqueue_ringing, Call, Internal, BaseState#base_state.substate),
 			kill_outband_ring({BaseState, Internal}),
@@ -1777,6 +1760,46 @@ code_change(OldVsn, StateName, State, Extra) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+sync_call_cbk(Zt, St, F, PreA) ->
+	sync_call_cbk(Zt, St, F, PreA, fun(R) -> R end).
+
+sync_call_cbk(Zt, {BaseSt, IntSt}, F, PreA, H) ->
+	#base_state{callback = M, callrec = Call, substate = SubSt} = BaseSt,
+	A = PreA ++ [Zt, Call, IntSt, SubSt],
+	{Rep, SubSt1} = case erlang:function_exported(M, F, length(A)) of
+		true ->
+			case apply(M, F, A) of
+				{ok, SubSt2} ->
+					{ok, SubSt2};
+				{ok, Rep1, SubSt2} ->
+					{Rep1, SubSt2};
+				{error, Err, SubSt2} ->
+					{{error, Err}, SubSt2};
+				_Resp ->
+					lager:warning("unexpected response from ~p:~p, Args: ~p -> ~p", [M, F, A, _Resp]),
+					{{error, invalid}, SubSt}
+			end;
+		_ ->
+			{{error, invalid}, SubSt}
+	end,
+	BaseSt1 = BaseSt#base_state{substate=SubSt1},
+
+	Cbkr0 = #cbkr{
+		zt = Zt,
+		cbk_res = Rep,
+		reply = Rep, %% by default, cbk resp = reply
+		action = reply,
+		base_state = BaseSt1,
+		internal_state = IntSt
+	},
+
+	case H(Cbkr0) of
+		#cbkr{action={stop, Rsn}, reply=Rep9, base_state=BaseSt9, internal_state=IntSt9} ->
+			{stop, Rsn, Rep9, {BaseSt9, IntSt9}};
+		#cbkr{reply=Rep9, zt=Zt9, base_state=BaseSt9, internal_state=IntSt9} -> %% action=reply / default
+			{reply, Rep9, Zt9, {BaseSt9, IntSt9}}
+	end.
 
 fallback_sync(S, ?GM(Command, _Args), _From, State) ->
 	lager:debug("Invalid sync event ~s while ~s", [Command, S]),
