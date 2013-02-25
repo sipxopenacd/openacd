@@ -700,13 +700,17 @@ do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 			ok;
 		%% TODO added for testing only (implemented with focus on real Calls - no other media)
 		end_call ->
-			lager:info("Recipte end_call for ~p recived~n",[Callpid]),
+			lager:info("Recipe end_call for ~p recived~n",[Callpid]),
 			%% here should be the function call to hangup the qued call
 			gen_media:end_call(Callpid),
 			ok;
 		transfer_queue ->
 			TQName = Args,
 			transfer_queue(Qpid, TQName, Callpid, State#state.key);
+		transfer_outband ->
+			Addr = Args,
+			lager:info("Recipe transfer outband for ~p to ~p:", [Callpid, Addr]),
+			gen_media:transfer_outband(Callpid, Addr);
 		Op ->
 			case cpx_hooks:trigger_hooks(recipe_do_operation, [Op, Qpid, Callpid]) of
 				{ok, Outz} -> Outz;
