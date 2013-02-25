@@ -97,6 +97,9 @@
 	stop/2,
 	stop/3,
 	set_release/2,
+	go_available/1,
+	go_released/1,
+	go_released/2,
 	add_skills/2,
 	remove_skills/2,
 	get_skills/1,
@@ -156,6 +159,21 @@ stop(Pid, Reason) ->
 -spec(stop/3 :: (Pid :: pid(), Reason :: term(), Msg :: term()) -> 'ok').
 stop(Pid, Reason, Msg) ->
 	gen_fsm:send_all_state_event(Pid, {stop, Reason, Msg}).
+
+%% @doc go available
+-spec go_available(pid()) -> ok.
+go_available(Pid) ->
+	set_release(Pid, none).
+
+%% @doc Go released with default release code
+-spec go_released(pid()) -> ok.
+go_released(Pid) ->
+	set_release(Pid, default).
+
+%% @doc Go released with given release code
+-spec go_released(pid(), release_code()) -> ok.
+go_released(Pid, R) ->
+	set_release(Pid, R).
 
 %% @doc Set the agent released or idle.
 -spec(set_release/2 :: (Pid :: pid(), Released :: 'none' | 'default' | release_code()) -> 'ok').
