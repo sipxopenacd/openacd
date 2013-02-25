@@ -82,6 +82,8 @@
 	start/2,
 	stop/0,
 	start_agent/1,
+	start_agent_by_auth/1,
+	start_agent_by_login/1,
 	query_agent/1,
 	update_skill_list/2,
 	find_by_skill/1,
@@ -146,6 +148,29 @@ start_agent(#agent{login = ALogin} = Agent) ->
 		{true, Apid} ->
 			{exists, Apid}
 	end.
+
+start_agent_by_auth(#agent_auth{id=Id, login=Username, skills=Skills,
+		security_level=Security, profile=Profile, endpoints=Endpoints}) ->
+	R = start_agent(#agent{id = Id, login = Username,
+		skills = Skills, profile = Profile,
+		security_level = Security}),
+	case R of
+		{ok, Pid} ->
+			%% @todo -- should be part of agent start-up
+			agent:set_endpoints(Pid, Endpoints);
+		_ ->
+			ok
+	end,
+	R.
+
+start_agent_by_login(Login) ->
+	case agent_auth:get_agent_by_login(Login) of
+		{ok, Auth} ->
+			start_agent_by_auth(Auth);
+		_ ->
+			{error, noagent}
+	end.
+
 
 %% @doc updates the skill-list cached here.  'Tis a case to prevent blockage.
 -spec(update_skill_list/2 :: (Login :: string(), Skills :: skills()) -> 'ok').
