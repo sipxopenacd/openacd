@@ -4169,23 +4169,20 @@ outbound_call_flow_test_() ->
 		application:start(gproc),
 		meck:new(media_callback),
 		meck:new(agent_channel),
-		meck:new(cdr),
 		meck:expect(media_callback, init, fun(_) ->
-			{ok, {undefined, undefined}}
+			{ok, undefined, []}
 		end),
 		{ok, InitState, GmState} = init([media_callback, undefined]),
 		lager:debug("initstate:  ~p, ~p", [InitState, GmState]),
 		Validator = fun() ->
 			meck:validate(media_callback),
-			meck:validate(agent_channel),
-			meck:validate(cdr)
+			meck:validate(agent_channel)
 		end,
 		{GmState, Validator}
 	end,
 	fun(_) ->
 		meck:unload(media_callback),
 		meck:unload(agent_channel),
-		meck:unload(cdr),
 		application:stop(gproc)
 	end,
 	fun({GmState, Validator}) -> [
@@ -4196,7 +4193,6 @@ outbound_call_flow_test_() ->
 				{outgoing, {"agent", dpid()}, Call, undefined}
 			end),
 			meck:expect(agent_channel, set_state, fun(_, _, _) -> ok end),
-			meck:expect(cdr, oncall, fun(_, _) -> ok end),
 			Out = handle_info(doit, inivr, GmState),
 			?assertMatch({next_state, oncall, _Whatever}, Out),
 			Validator()
@@ -4208,7 +4204,6 @@ outbound_call_flow_test_() ->
 				{outgoing, {"agent", dpid()}, Call, undefined}
 			end),
 			meck:expect(agent_channel, set_state, fun(_, _, _) -> ok end),
-			meck:expect(cdr, oncall, fun(_, _) -> ok end),
 			Out = handle_sync_event(doit, {dpid(), "from"}, inivr, GmState),
 			?assertMatch({reply, ok, oncall, _Whatever}, Out),
 			Validator()
