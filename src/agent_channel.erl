@@ -304,7 +304,7 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 		event_manager = EventManager
 	},
 	init_gproc_prop({State, init, StateName}),
-	gen_event:notify(EventManager, {channel_feed, {initiated_channel, os:timestamp(), self()}}),
+	gen_event:notify(EventManager, {channel_feed, {initiated_channel, os:timestamp(), self(), Call}}),
 	case StateName of
 		prering when is_record(Call, call); Call =:= undefined ->
 			case start_endpoint(Endpoint, Agent, Call) of
