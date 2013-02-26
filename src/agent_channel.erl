@@ -655,6 +655,12 @@ handle_info(_Info, StateName, State) ->
 
 terminate(_Reason, StateName, State) ->
 	set_gproc_prop({State, StateName, stop}),
+
+	case StateName of
+		wrapup -> cdr:endwrapup(State#state.state_data, State#state.agent_login);
+		_ -> ok
+	end,
+
 	Agent = agent:dump_state(State#state.agent_fsm),
 	Call = State#state.state_data,
 	gen_event:notify(State#state.event_manager, {channel_feed, {terminated_channel, os:timestamp(), Agent, Call}}),

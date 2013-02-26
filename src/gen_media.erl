@@ -743,6 +743,7 @@ init([Callback, Args]) ->
 				state_changes = StateChanges
 			},
 
+			cdr:cdrinit(Call),
 			cdr:inivr(Call, Call#call.dnis),
 
 			{NSt,NBaseSt, NIntSt} = case QueueN of
