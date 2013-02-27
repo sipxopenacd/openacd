@@ -815,6 +815,7 @@ inqueue(?GM(ring, {{Agent, Apid}, #queued_call{
 			},
 			BaseState2 = BaseState1#base_state{state_changes = [{inqueue_ringing, os:timestamp()} | StateChanges]},
 			set_gproc_prop(inqueue, inqueue_ringing, BaseState2),
+			cdr:ringing(Call1, Agent),
 			{reply, ok, inqueue_ringing, {BaseState2, NewInternal}};
 		RingErr ->
 			lager:info("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call1#call.id]),
