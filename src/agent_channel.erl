@@ -304,7 +304,7 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 		event_manager = EventManager
 	},
 	init_gproc_prop({State, init, StateName}),
-	gen_event:notify(EventManager, {channel_feed, {initiated_channel, os:timestamp(), self()}}),
+	gen_event:notify(EventManager, {channel_feed, {initiated_channel, os:timestamp(), self(), Call}}),
 	case StateName of
 		prering when is_record(Call, call); Call =:= undefined ->
 			case start_endpoint(Endpoint, Agent, Call) of
@@ -474,24 +474,18 @@ oncall(wrapup, From, #state{state_data = Call} = State) ->
 oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
 	case Call#call.source of
 		From ->
+			%% hmm. should be avoided... this means gen_media called wrapup on agent_channel
+			%% ideally, only agent_channel should be the one calling wrapup to gen_media
+
 			lager:debug("Moving from oncall to wrapup", []),
 			conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
 			% cpx_agent_event:change_agent_channel(self(), wrapup, Call),
 			prep_autowrapup(Call),
 			set_gproc_prop({State, oncall, wrapup}),
 			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
-		CallSource ->
-			case gen_media:wrapup(CallSource) of
-				ok ->
-					lager:debug("Moving from oncall to wrapup", []),
-					conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
-					% cpx_agent_event:change_agent_channel(self(), wrapup, Call),
-					prep_autowrapup(Call),
-					set_gproc_prop({State, oncall, wrapup}),
-					{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
-				Else ->
-					{reply, Else, oncall, State}
-			end
+		_CallSource ->
+			{Rep, Next, State1} = try_wrapup(State),
+			{reply, Rep, Next, State1}
 	end;
 
 oncall(_Msg, _From, State) ->
@@ -621,19 +615,9 @@ handle_info({'EXIT', Pid, Why}, wrapup, #state{endpoint = Pid} = State) ->
 
 handle_info({'EXIT', Pid, Why}, oncall, #state{endpoint = Pid} = State) ->
 	lager:info("Exit of endpoint ~p due to ~p while oncall; moving to wrapup.", [Pid, Why]),
-	Callrec = State#state.state_data,
-	conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Callrec}),
-	% cpx_agent_event:change_agent_channel(self(), wrapup, Callrec),
-	CallPid = Callrec#call.source,
-	case gen_media:wrapup(CallPid) of
-		ok ->
-			prep_autowrapup(Callrec),
-			set_gproc_prop({State, oncall, wrapup}),
-			{next_state, wrapup, State#state{state_data = update_state(wrapup, Callrec)}};
-		Else ->
-			lager:warning("could not set gen_media to wrapup:  ~p", [Else]),
-			{next_state, oncall, State}
-	end;
+
+	{_Rep, Next, State1} = try_wrapup(State),
+	{next_state, Next, State1};
 
 handle_info({'EXIT', Pid, Why}, StateName, #state{endpoint = Pid} = State) ->
 	lager:info("Exit of endpoint ~p due to ~p in state ~s", [Pid, Why, StateName]),
@@ -655,6 +639,12 @@ handle_info(_Info, StateName, State) ->
 
 terminate(_Reason, StateName, State) ->
 	set_gproc_prop({State, StateName, stop}),
+
+	case StateName of
+		wrapup -> cdr:endwrapup(State#state.state_data, State#state.agent_login);
+		_ -> ok
+	end,
+
 	Agent = agent:dump_state(State#state.agent_fsm),
 	Call = State#state.state_data,
 	gen_event:notify(State#state.event_manager, {channel_feed, {terminated_channel, os:timestamp(), Agent, Call}}),
@@ -752,6 +742,34 @@ update_state(NewSt, #call{state_changes = Changes} = Call) ->
 	Call#call{state_changes = UpdatedChanges};
 update_state(_, CallData) ->
 	CallData.
+
+try_wrapup(State) ->
+	Call = State#state.state_data,
+	CallPid = Call#call.source,
+	{Rep, Next} = try gen_media:wrapup(CallPid) of
+		ok ->
+			lager:debug("Moving from oncall to wrapup", []),
+			{ok, wrapup};
+		Else ->
+			{Else, oncall}
+	catch
+		error:{noproc, _} ->
+			lager:info("gen_media: ~p is gone, proceeding anyway", [CallPid]),
+			{ok, wrapup}
+	end,
+
+	State1 = case Next of
+		wrapup ->
+			conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
+			% cpx_agent_event:change_agent_channel(self(), wrapup, Call),
+			prep_autowrapup(Call),
+			set_gproc_prop({State, oncall, wrapup}),
+			State#state{state_data = update_state(wrapup, Call)};
+		_ ->
+			State
+	end,
+
+	{Rep, Next, State1}.
 
 % ======================================================================
 % TESTS
