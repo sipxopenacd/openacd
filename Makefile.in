@@ -54,7 +54,6 @@ edit = sed \
 
 confs = rel/files/conf/env.config rel/files/conf/sys.config
 bin = rel/files/bin/openacd
-specs = specs/openacd.spec
 
 all: compile $(confs) $(bin)
 
@@ -65,7 +64,6 @@ clean:
 	rebar clean skip_deps=true
 	-rm -rf $(confs)
 	-rm -rf $(bin)
-	-rm -rf $(specs)
 	-rm -rf $(distdir)
 	-rm -rf $(distdir).tar.gz
 	-rm -rf $(rpmbuilddir)
@@ -86,12 +84,11 @@ $(distdir): FORCE
 	mkdir -p $(distdir)/contrib/src
 	mkdir -p $(distdir)/rel/files/bin
 	mkdir -p $(distdir)/rel/files/conf
-	mkdir -p $(distdir)/specs
 	mkdir -p $(distdir)/test # for test
 	cp Makefile.in $(distdir)
 	cp configure.ac $(distdir)
 	cp aclocal.m4 $(distdir)
-	cp specs/openacd.spec $(distdir)/specs/openacd.spec
+	$(edit) specs/openacd.spec.in > $(distdir)/openacd.spec
 	cp rebar.config $(distdir)/rebar.config
 	cp rebar.config.script $(distdir)/rebar.config.script
 	cp $(wildcard src/$(realname).app.src.in) $(distdir)/src
@@ -135,13 +132,12 @@ install-bin: $(confs) $(bin)
 	install -d $(DESTDIR)$(oakeydir)
 	install -d $(DESTDIR)$(oapipedir)
 
-$(confs) $(bin) $(specs) src/$(realname).app.src: % : %.in Makefile
+$(confs) $(bin) src/$(realname).app.src: % : %.in Makefile
 	$(edit) $(srcdir)/$@.in > $@
 
-rpms: specs/openacd.spec $(distdir).tar.gz | $(rpmbuilddir)
+rpms: $(distdir).tar.gz | $(rpmbuilddir)
 	-rm -rf rpms/*.rpm
-	cp $(distdir).tar.gz $(rpmbuilddir)/SOURCES
-	rpmbuild --define "_topdir $(CURDIR)/rpmbuild" --define "buildno $(buildno)" -ba specs/openacd.spec
+	rpmbuild --define "_topdir $(CURDIR)/rpmbuild" --define "buildno $(buildno)" -ta $(distdir).tar.gz
 	mkdir -p rpms
 	cp $(rpmbuilddir)/RPMS/**/*.rpm rpms
 	rm -rf $(rpmbuilddir)
