@@ -387,7 +387,7 @@ terminate({stop, Reason}, #agent{id = AgentId, source = Pid} = Agent) ->
 	Transfun = fun() ->
 		Oldstate = get_last_state(terminate_states(AgentId, Now)),
 		Newrec = #agent_state{id = AgentId, agent = Agent#agent.login,
-			oldstate = Oldstate, state = logout,
+			profile = Agent#agent.profile, oldstate = Oldstate, state = logout,
 			statedata = Reason, start = Now, ended = Now, timestamp = Now,
 			nodes = [node(Pid)]},
 		mnesia:write(Newrec),
