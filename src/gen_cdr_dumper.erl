@@ -280,7 +280,8 @@ dump_table(cdr_rec, #state{module = Callback} = State) ->
 	F = fun() ->
 			mnesia:lock({table, cdr_rec}, write),
 			QH = qlc:q([CDR || CDR <- mnesia:table(cdr_rec),
-					lists:member(node(), CDR#cdr_rec.nodes),
+					is_list(CDR#cdr_rec.nodes) andalso
+						lists:member(node(), CDR#cdr_rec.nodes),
 					CDR#cdr_rec.transactions =/= inprogress
 				]),
 			QC = qlc:cursor(QH),
@@ -294,7 +295,8 @@ dump_table(agent_state, #state{module = Callback} = State) ->
 	F = fun() ->
 			mnesia:lock({table, agent_state}, write),
 			QH = qlc:q([AgentState || AgentState <- mnesia:table(agent_state),
-					lists:member(node(), AgentState#agent_state.nodes),
+					is_list(AgentState#agent_state.nodes)
+						andalso lists:member(node(), AgentState#agent_state.nodes),
 					AgentState#agent_state.ended =/= undefined
 				]),
 			QC = qlc:cursor(QH),

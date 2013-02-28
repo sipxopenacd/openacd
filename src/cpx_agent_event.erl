@@ -188,7 +188,7 @@ init([Agent, ChannelId, Statename, Statedata]) when is_pid(ChannelId) ->
 	end;
 
 init(Agent) when is_record(Agent, agent) ->
-	#agent{login = Agentname, skills = Skills, release_data = Statedata,
+	#agent{login = Agentname, source = Pid, skills = Skills, release_data = Statedata,
 		profile = Profile, id = Id} = Agent,
 	State = case Statedata of
 		{_, _, _} -> released;
@@ -199,20 +199,22 @@ init(Agent) when is_record(Agent, agent) ->
 		Login = #agent_state{
 			id = Id,
 			agent = Agentname,
-			oldstate = login,
-			state = State,
+			state = login,
 			statedata = Skills,
 			start = Now,
 			ended = Now,
-			profile= Profile
+			profile = Profile,
+			nodes = [node(Pid)]
 		},
 		StateRow = #agent_state{
 			id = Id,
 			agent = Agentname,
-			oldstate = State,
+			oldstate = login,
+			state = State,
 			statedata = Statedata,
 			start = Now,
-			profile = Profile
+			profile = Profile,
+			nodes = [node(Pid)]
 		},
 		mnesia:dirty_write(Login),
 		mnesia:dirty_write(StateRow),
@@ -253,7 +255,7 @@ handle_event({change_profile, #agent{id = Id} = OldAgent, NewAgent},
 
 handle_event({change_state, #agent{id = Id}, NewAgent},
 #agent{id = Id}) ->
-	#agent{login = Agentname, release_data = Statedata,
+	#agent{login = Agentname, source = Pid, release_data = Statedata,
 		profile = Profile} = NewAgent,
 	State = case Statedata of
 		{_, _, _} -> released;
@@ -261,7 +263,7 @@ handle_event({change_state, #agent{id = Id}, NewAgent},
 	end,
 	Now = util:now(),
 	TransactFun = fun() ->
-		terminate_states(Id, Now),
+		Oldstate = get_last_state(terminate_states(Id, Now)),
 %		QH = qlc:q([Rec ||
 %			Rec <- mnesia:table(agent_state),
 %			Rec#agent_state.id =:= Id,
@@ -274,8 +276,8 @@ handle_event({change_state, #agent{id = Id}, NewAgent},
 %			cpx_monitor:info({agent_state, Termed}),
 %			mnesia:write(Termed)
 %		end || Untermed <- Recs],
-		Newrec = #agent_state{id = Id, agent = Agentname, oldstate = State,
-			statedata = Statedata, profile = Profile, start = Now},
+		Newrec = #agent_state{id = Id, agent = Agentname, oldstate = Oldstate, state = State,
+			statedata = Statedata, profile = Profile, start = Now, nodes = [node(Pid)]},
 		cpx_monitor:info({agent_state, Newrec}),
 		mnesia:write(Newrec),
 		ok
@@ -301,7 +303,10 @@ handle_event({change_agent_channel, ChanId, Statename, Statedata},
 {_, ChanId} = State) ->
 	Now = util:now(),
 	TransactFun = fun() ->
-		BaseRec = terminate_states(ChanId, Now),
+		BaseRec = case terminate_states(ChanId, Now) of
+			[] -> #agent_channel_state{};
+			R -> R
+		end,
 %		QH = qlc:q([X ||
 %			X <- mnesia:table(agent_channel_state),
 %			X#agent_channel_state.id =:= ChanId,
@@ -314,7 +319,7 @@ handle_event({change_agent_channel, ChanId, Statename, Statedata},
 %			cpx_monitor:info({agent_channel_state, Termed}),
 %			mnesia:write(Termed)
 %		end || Untermed <- Recs],
-		#agent_channel_state{state = Oldstate} = BaseRec,
+		Oldstate = BaseRec#agent_channel_state.state,
 		Newrec = BaseRec#agent_channel_state{oldstate = Oldstate,
 			state = Statename, statedata = Statedata, start = Now,
 			ended = undefined, timestamp = Now
@@ -362,8 +367,11 @@ terminate({stop, Reason}, {_AgentId, ChanPid}) ->
 	lager:debug("Seems the channel ~p stopped:  ~p", [ChanPid, Reason]),
 	Now = util:now(),
 	Transfun = fun() ->
-		BaseRec = terminate_states(ChanPid, Now),
-		#agent_channel_state{state = Oldstate} = BaseRec,
+		BaseRec = case terminate_states(ChanPid, Now) of
+			[] -> #agent_channel_state{};
+			[E|_] -> E
+		end,
+		Oldstate = BaseRec#agent_channel_state.state,
 		Newrec = BaseRec#agent_channel_state{oldstate = Oldstate,
 			state = exit, start = Now, ended = Now, timestamp = Now,
 			statedata = Reason},
@@ -373,18 +381,20 @@ terminate({stop, Reason}, {_AgentId, ChanPid}) ->
 	end,
 	mnesia:async_dirty(Transfun);
 
-terminate({stop, Reason}, #agent{id = AgentId} = Agent) ->
+terminate({stop, Reason}, #agent{id = AgentId, source = Pid} = Agent) ->
 	lager:debug("Agent ~s stopped:  ~p", [Agent#agent.login, Reason]),
 	Now = util:now(),
 	Transfun = fun() ->
-		Basestate = terminate_states(AgentId, Now),
+		Oldstate = get_last_state(terminate_states(AgentId, Now)),
 		Newrec = #agent_state{id = AgentId, agent = Agent#agent.login,
-			oldstate = Basestate#agent_state.state, state = logout,
-			statedata = Reason, start = Now, ended = Now, timestamp = Now},
+			oldstate = Oldstate, state = logout,
+			statedata = Reason, start = Now, ended = Now, timestamp = Now,
+			nodes = [node(Pid)]},
 		mnesia:write(Newrec),
 		ok
 	end,
-	mnesia:async_dirty(Transfun);
+	mnesia:transaction(Transfun),
+	gen_cdr_dumper:update_notify(agent_state);
 
 terminate(Why, _State) ->
 	lager:info("Some other exit:  %p", [Why]),
@@ -408,14 +418,14 @@ terminate_states(ChanId, Now) when is_pid(ChanId) ->
 		X#agent_channel_state.id =:= ChanId,
 		X#agent_channel_state.ended =:= undefined
 	]),
-	[BaseRec | _] = Recs = qlc:e(QH),
+	Recs = qlc:e(QH),
 	[begin
 		mnesia:delete_object(Untermed),
 		Termed = Untermed#agent_channel_state{ended = Now, timestamp = Now},
 		cpx_monitor:info({agent_channel_state, Termed}),
 		mnesia:write(Termed)
 	end || Untermed <- Recs],
-	BaseRec;
+	Recs;
 
 terminate_states(Id, Now) when is_list(Id) ->
 	QH = qlc:q([Rec ||
@@ -423,14 +433,18 @@ terminate_states(Id, Now) when is_list(Id) ->
 		Rec#agent_state.id =:= Id,
 		Rec#agent_state.ended =:= undefined
 	]),
-	[Base | _] = Recs = qlc:e(QH),
+	Recs = qlc:e(QH),
 	[begin
 		mnesia:delete_object(Untermed),
-		Termed = Untermed#agent_state{ended = Now, timestamp = Now, state = login},
+		Termed = Untermed#agent_state{ended = Now, timestamp = Now},
 		cpx_monitor:info({agent_state, Termed}),
 		mnesia:write(Termed)
 	end || Untermed <- Recs],
-	Base.
+	Recs.
+
+get_last_state([]) -> undefined;
+get_last_state([#agent_state{state=St}|_]) -> St;
+get_last_state([#agent_channel_state{state=St}|_]) -> St.
 
 %% -----
 
@@ -465,7 +479,7 @@ truncate_agents([]) ->
 
 truncate_agents([#agent_state{ended = undefined} = A | Tail]) ->
 	Now = util:now(),
-	NewA = A#agent_state{ended = Now, state = logoout},
+	NewA = A#agent_state{ended = Now, state = logout},
 	cpx_monitor:info({agent_state, NewA}),
 	truncate_agents(Tail);
 

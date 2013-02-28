@@ -210,7 +210,7 @@
 	ended :: 'undefined' | integer(),
 	profile :: string(),
 	timestamp = util:now() :: integer(),
-	nodes :: [atom()]
+	nodes = [] :: [atom()]
 }).
 
 %% A representation of an agent moving from one profile to another.  Sent
