@@ -750,7 +750,7 @@ init([Callback, Args]) ->
 				undefined ->
 					{inivr, BaseSt, #inivr_state{}};
 				_ ->
-					case enqueue(QueueN, Ps, BaseSt) of
+					case enqueue(QueueN, Call, BaseSt) of
 						{ok, {BaseSt1, IntSt}} ->
 							{inqueue, BaseSt1, IntSt};
 						_ ->
