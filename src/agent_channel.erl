@@ -405,9 +405,9 @@ ringing({oncall, #call{id = Id}}, _From, #state{state_data = #call{id = Id} = Ca
 	set_gproc_prop({State, ringing, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
-ringing(stop, _From, #state{endpoint = Pid} = State) ->
+ringing(stop, _From, #state{endpoint = Pid, state_data = Call} = State) ->
 	gen_server:cast(Pid, hangup),
-	{stop, normal, ok, State};
+	{stop, normal, ok, State#state{state_data = update_state(hangup, Call)}};
 
 ringing(_Msg, _From, State) ->
 	{reply, {error, invalid}, ringing, State}.
@@ -646,7 +646,7 @@ terminate(_Reason, StateName, State) ->
 	end,
 
 	Agent = agent:dump_state(State#state.agent_fsm),
-	Call = State#state.state_data,
+	Call = update_state(stop, State#state.state_data),
 	gen_event:notify(State#state.event_manager, {channel_feed, {terminated_channel, os:timestamp(), Agent, Call}}),
 	ok.
 
