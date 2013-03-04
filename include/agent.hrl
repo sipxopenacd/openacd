@@ -166,7 +166,7 @@
 	state,
 	old_state,
 	agent :: #agent{},
-	start_time :: tuple()
+	last_avail :: undefined | tuple()
 }).
 
 -record(cpx_agent_channel_prop, {

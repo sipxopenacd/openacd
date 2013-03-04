@@ -343,7 +343,7 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 
 idle({set_release, none}, _From, State) ->
 	{reply, ok, idle, State};
-idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Agent} = State) when Bias =< 1; Bias >= -1 ->
+idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Agent, time_avail = LastAvail} = State) when Bias =< 1; Bias >= -1 ->
 	dispatch_manager:end_avail(self()),
 	agent_manager:set_avail(Agent#agent.login, []),
 	Now = util:now(),
@@ -353,7 +353,7 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
-		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
+		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, last_avail = LastAvail, agent = NewAgent}}),
 	{reply, ok, released, NewState};
 
 idle({precall, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
@@ -406,13 +406,13 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp()},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
-		#cpx_agent_state_update{pid = self(), state = undefined, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
+		#cpx_agent_state_update{pid = self(), state = undefined, old_state = Agent#agent.release_data, agent = NewAgent}}),
 	{reply, ok, idle, NewState};
 
 released({set_release, default}, From, State) ->
 	released({set_release, ?DEFAULT_RELEASE}, From, State);
 
-released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec = Agent} = State) ->
+released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec = Agent, time_avail = LastAvail} = State) ->
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
@@ -420,7 +420,7 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
-		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, agent = NewAgent, start_time = State#state.start_time}}),
+		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, last_avail = LastAvail, agent = NewAgent}}),
 	{reply, ok, released, NewState};
 
 released(Msg, _From, State) ->
