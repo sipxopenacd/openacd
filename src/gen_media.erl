@@ -2126,7 +2126,8 @@ enqueue(QueueN, Call, BaseSt) ->
 
 			Call1 = Call#call{
 				skills = lists:usort(Call#call.skills ++ QSkills),
-				state_changes=StateChanges1
+				state_changes=StateChanges1,
+				queue = QN
 			},
 
 			BaseSt1 = BaseSt#base_state{
