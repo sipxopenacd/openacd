@@ -134,26 +134,8 @@ start_link(Nodes) ->
 %% @doc Create a handler specifically for `#call{} Call' with default options.
 -spec(cdrinit/1 :: (Call :: #call{}) -> 'ok' | 'error').
 cdrinit(Call) ->
-	try lists:member({?MODULE, Call#call.id}, gen_event:which_handlers(cdr)) of
-		false ->
-			try gen_event:add_handler(cdr, {?MODULE, Call#call.id}, [Call]) of
-				ok ->
-					ok;
-				Else ->
-					lager:error("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),
-					error
-				catch
-					What:Why ->
-						lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
-						error
-			end;
-		true ->
-			lager:warning("CDR already initialized for ~s", [Call#call.id])
-	catch
-		What:Why ->
-			lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
-			error
-	end.
+	{ok, Ms} = cpx_hooks:trigger_hooks(get_cdr_mods, [], all),
+	lists:foreach(fun(M) -> add_cdr_mod(M, Call) end, lists:flatten([?MODULE|Ms])).
 
 %% @doc Notify cdr handler that `#call{} Call' is now in IVR for `string() DNIS'.
 -spec(inivr/2 :: (Call :: #call{}, DNIS :: string()) -> 'ok').
@@ -525,6 +507,28 @@ code_change(_OldVsn, State, _Extra) ->
 %% =====
 %% Internal Functions
 %% =====
+
+add_cdr_mod(Mod, Call) ->
+	try lists:member({Mod, Call#call.id}, gen_event:which_handlers(cdr)) of
+		false ->
+			try gen_event:add_handler(cdr, {Mod, Call#call.id}, [Call]) of
+				ok ->
+					ok;
+				Else ->
+					lager:error("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),
+					error
+				catch
+					What:Why ->
+						lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+						error
+			end;
+		true ->
+			lager:warning("CDR already initialized for ~s", [Call#call.id])
+	catch
+		What:Why ->
+			lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+			error
+	end.
 
 spawn_summarizer(#call{id = Id} = Call) ->
 	{atomic, Transactions} = mnesia:transaction(fun() ->
