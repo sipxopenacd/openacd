@@ -637,9 +637,10 @@ handle_info(Msg, Statename, State) ->
 
 %% @private
 %-spec(terminate/3 :: (Reason :: any(), StateName :: statename(), State :: #state{}) -> 'ok').
-terminate(Reason, StateName, #state{agent_rec = Agent} = _State) ->
+terminate(Reason, StateName, #state{agent_rec = Agent} = State) ->
 	lager:notice("Agent terminating:  ~p, State:  ~p", [Reason, StateName]),
 	cpx_monitor:drop({agent, Agent#agent.id}),
+	send_gproc_logout({Agent#agent.release_data, State}),
 	ok.
 
 % ======================================================================
@@ -868,6 +869,12 @@ set_gproc_prop({PrevReleaseData, State}) ->
 	gproc:set_value({p, l, cpx_agent}, Prop),
 
 	Event = #cpx_agent_state_update{pid = self(), now = now(), state = Prop#cpx_agent_prop.state, old_state = get_agent_state(PrevReleaseData), prop = Prop},
+	gproc:send({p, l, cpx_agent_change}, Event).
+
+send_gproc_logout({_, State}) ->
+	Prop = get_agent_prop(State),
+
+	Event = #cpx_agent_logout{pid = self(), now = now(), prop = Prop},
 	gproc:send({p, l, cpx_agent_change}, Event).
 
 -spec get_agent_prop(#state{}) -> #cpx_agent_prop{}.

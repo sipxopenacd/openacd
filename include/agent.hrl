@@ -159,6 +159,12 @@
 	prop :: #cpx_agent_prop{}
 }).
 
+-record(cpx_agent_logout, {
+	pid :: pid(),
+	now :: tuple(),
+	prop :: #cpx_agent_prop{}
+}).
+
 -record(cpx_agent_state_update, {
 	pid :: pid(),
 	now = os:timestamp(),
