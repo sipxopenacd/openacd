@@ -97,6 +97,7 @@
 	stop/2,
 	stop/3,
 	set_release/2,
+	set_release/3,
 	go_available/1,
 	go_released/1,
 	go_released/2,
@@ -181,6 +182,9 @@ set_release(Pid, default) ->
 	set_release(Pid, ?DEFAULT_RELEASE);
 set_release(Pid, Released) ->
 	gen_fsm:sync_send_event(Pid, {set_release, Released}).
+
+set_release(Pid, Release, ConnMsg) ->
+	gen_fsm:sync_send_event(Pid, {set_release, Release, ConnMsg}).
 
 %% @doc link the given agent  `Pid' to the given connection `Socket'.
 -spec(set_connection/2 :: (Pid :: pid(), Socket :: pid()) -> 'ok' | 'error').
@@ -341,6 +345,10 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 % IDLE
 % ======================================================================
 
+idle({set_release, Release, ConnMsg}, From, #state{agent_rec = Agent} = State) ->
+	inform_connection(Agent, ConnMsg),
+	idle({set_release, Release}, From, State);
+
 idle({set_release, none}, _From, State) ->
 	{reply, ok, idle, State};
 idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Agent, time_avail = LastAvail} = State) when Bias =< 1; Bias >= -1 ->
@@ -365,14 +373,25 @@ idle({precall, Call}, _From, #state{agent_rec = Agent, event_manager = EventMana
 			{reply, Else, idle, State}
 	end;
 
-idle({prering, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+idle({prering, Call}, From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
 	case start_channel(Agent, Call, prering, EventManager) of
 		{ok, Pid, NewAgent} ->
-			lager:debug("Started prering (~s) ~p", [Agent#agent.login, Pid]),
+			lager:debug("Started prering at ~p for agent ~s, caller ~p", [Pid, Agent#agent.login, Call#call.callerid]),
 			%inform_connection(Agent, {set_channel, Pid, prering, Call}),
 			{reply, {ok, Pid}, idle, State#state{agent_rec = NewAgent}};
+		{error, nochannel} ->
+			lager:debug("Error ~p going to prering for agent ~s, caller ~p", [nochannel, Agent#agent.login, Call#call.callerid]),
+			{reply, {error, nochannel}, idle, State};
 		Else ->
-			{reply, Else, idle, State}
+			lager:debug("Unexpected response ~p going to prering for agent ~s, caller ~p. Going to forced release.", [Else, Agent#agent.login, Call#call.callerid]),
+			case idle({set_release, ?DEFAULT_RELEASE, {forced_release, ring_init_failed}}, From, State) of
+				{reply, ok, released, NewState} ->
+					% inform_connection(Agent, {forced_release, ring_init_failed}),
+					{reply, Else, released, NewState};
+				RelErr ->
+					lager:debug("Failed to set agent ~p to released, got ~p", [RelErr]),
+					{reply, Else, idle, State}
+			end
 	end;
 
 idle({ringing, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
@@ -1339,22 +1358,22 @@ state_test_() ->
 					meck:unload(agent_channel)
 				end, [
 
-				fun(_) -> {"channel not found", fun() ->
-					Agent = #agent{login = "testagent", id = "testid",
-						available_channels = []},
-					Call = #call{id = "media", type = voice, source = self()},
-					State = #state{agent_rec = Agent},
-					?assertEqual({reply, {error, nochannel}, idle, State}, idle({prering, Call}, from, State))
-				end} end,
+				% fun(_) -> {"channel not found", fun() ->
+				% 	Agent = #agent{login = "testagent", id = "testid",
+				% 		available_channels = []},
+				% 	Call = #call{id = "media", type = voice, source = self()},
+				% 	State = #state{agent_rec = Agent},
+				% 	?assertEqual({reply, {error, nochannel}, idle, State}, idle({prering, Call}, from, State))
+				% end} end,
 
-				fun(_) -> {"endpoint not found", fun() ->
-					Agent = #agent{login = "testagent", id = "testid",
-						available_channels = [voice]},
-					Call = #call{id = "media", type = voice, source = self(),
-						source_module = dummy_media},
-					State = #state{agent_rec = Agent},
-					?assertEqual({reply, {error, noendpoint}, idle, State}, idle({prering, Call}, from, State))
-				end} end,
+				% fun(_) -> {"endpoint not found", fun() ->
+				% 	Agent = #agent{login = "testagent", id = "testid",
+				% 		available_channels = [voice]},
+				% 	Call = #call{id = "media", type = voice, source = self(),
+				% 		source_module = dummy_media},
+				% 	State = #state{agent_rec = Agent},
+				% 	?assertEqual({reply, {error, noendpoint}, idle, State}, idle({prering, Call}, from, State))
+				% end} end,
 
 				fun(_) -> {"precall success", fun() ->
 					Agent = #agent{login = "testagent", id = "testid",
@@ -1444,6 +1463,36 @@ state_test_() ->
 
 		]}}
 	] end}.
+
+idle_to_prering_error_test_() ->
+	EvtMgr = spawn(fun() -> ok end),
+
+	{setup, fun() ->
+		application:start(gproc),
+		meck:new(cpx_agent_event),
+		meck:expect(cpx_agent_event, change_agent, 2, ok)
+	end, fun(_) ->
+		meck:unload()
+	end, [{"set to released on nochannel error", fun() ->
+		Agent = #agent{login = "test_agent", available_channels = []},
+		State = #state{agent_rec = Agent, event_manager = EvtMgr},
+
+		Call = #call{id = "media", type = voice, source = self()},
+		?assertEqual({reply, {error, nochannel}, idle, State}, idle({prering, Call}, from, State))
+
+	end}, {"set to released on noendpoint error", fun() ->
+		Agent = #agent{login = "test_agent", available_channels = [voice]},
+		RelAgent = Agent#agent{release_data = ?DEFAULT_RELEASE},
+
+		State = #state{agent_rec = Agent, event_manager = EvtMgr},
+		RelState = #state{agent_rec = RelAgent, event_manager = EvtMgr},
+
+		Call = #call{id = "media", type = voice, source = self()},
+
+		init_gproc_prop({init, State}),
+		?assertEqual({reply, {error, noendpoint}, released, RelState}, idle({prering, Call}, from, State))
+
+	end}]}.
 
 handle_event_test_() ->
 	{foreach, fun() ->

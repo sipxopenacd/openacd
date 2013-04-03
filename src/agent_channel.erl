@@ -609,6 +609,12 @@ handle_sync_event(_Event, _From, StateName, State) ->
 % HANDLE_INFO
 % ======================================================================
 
+handle_info({'EXIT', Pid, ring_init_failed}, ringing, #state{endpoint = Pid} = State) ->
+	lager:info("Exit of endpoint ~p due to ~p in state ringing, setting agent to released before stopping", [Pid, ring_init_failed]),
+	ConnMsg = {forced_release, ring_init_failed},
+	agent:set_release(State#state.agent_fsm, ?DEFAULT_RELEASE, ConnMsg),
+	{stop, ring_init_failed, State};
+
 handle_info({'EXIT', Pid, Why}, wrapup, #state{endpoint = Pid} = State) ->
 	lager:info("Exit of endpoint ~p due to ~p while in wrapup; ignorable", [Pid, Why]),
 	{next_state, wrapup, State};
