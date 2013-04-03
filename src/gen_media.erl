@@ -4175,6 +4175,7 @@ outbound_call_flow_test_() ->
 		meck:expect(media_callback, init, fun(_) ->
 			{ok, undefined, []}
 		end),
+		cpx_hooks:start_link(),
 		{ok, InitState, GmState} = init([media_callback, undefined]),
 		lager:debug("initstate:  ~p, ~p", [InitState, GmState]),
 		Validator = fun() ->
@@ -4184,6 +4185,7 @@ outbound_call_flow_test_() ->
 		{GmState, Validator}
 	end,
 	fun(_) ->
+		cpx_hooks:stop(),
 		meck:unload(media_callback),
 		meck:unload(agent_channel),
 		application:stop(gproc)
