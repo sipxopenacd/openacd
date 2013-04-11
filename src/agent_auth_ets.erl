@@ -35,16 +35,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--define(TAB, agent_auth_entry).
-
--type agent_entry() :: {Login::string(), Password::string(), Skills::skills(), [agent_entry_opt()]}.
--type agent_entry_opt() :: {profile, string()} |
-	{security_level, security_level()} |
-	{endpoints, [endpoint()]}.
-
--record(agent_auth_entry, {
+-record(cpx_auth, {
 	login :: string(),
-	pwd_hash :: binary(),
 	profile = "Default" :: string(),
 	skills = [] :: skills(),
 	security_level = agent :: security_level(),
@@ -54,7 +46,7 @@
 
 -export([
 	start/0,
-	load_agents/1
+	setup/1
 ]).
 
 %% Callbacks
@@ -72,8 +64,30 @@
 
 start() ->
 	%% TODO put in a process
-	ets:new(?TAB, [{keypos, #agent_auth_entry.login}, named_table, public]),
+	S = self(),
+	spawn(fun() -> loop0(S) end),
+	receive agent_auth_init -> ok end,
 	ok.
+
+
+setup(Opts) ->
+	application:set_env(openacd, agent_auth_storage, ?MODULE),
+	start(),
+
+	Agents = proplists:get_value(agents, Opts, []),
+	load_agents(Agents, []),
+
+	Profiles = proplists:get_value(profiles, Opts, []),
+	load_profiles(Profiles, []),
+
+	RelOpts = proplists:get_value(rel_opts, Opts, []),
+	load_releases(RelOpts, []),
+
+	ok.
+
+
+get_agent_by_id(Id) ->
+	get_agent_by_login(Id).
 
 get_agent_by_login(Login) ->
 	case lookup_login(Login) of
@@ -84,46 +98,124 @@ get_agent_by_login(Login) ->
 	end.
 
 get_agents_by_profile(Profile) ->
-	Entries = ets:match_object(?TAB, #agent_auth_entry{profile=Profile, _='_'}),
+	Entries = ets:match_object(cpx_auth, #cpx_auth{profile=Profile, _='_'}),
 	Auths = [entry_to_agent_auth(E) || E <- Entries],
 	{ok, Auths}.
 
-get_agent_by_id(Id) ->
-	get_agent_by_login(Id).
 
-auth(Login, Password) ->
-	PwdHash = erlang:md5(Password),
+
+auth(Login, "pwd" ++ Login) ->
 	case lookup_login(Login) of
-		{ok, Auth = #agent_auth_entry{pwd_hash=PwdHash}} ->
-			{ok, entry_to_agent_auth(Auth)};
+		{ok, Entry} ->
+			{ok, entry_to_agent_auth(Entry)};
 		_ ->
 			{error, deny}
+	end;
+auth(_, _) ->
+	{error, deny}.
+
+get_profile(Name) ->
+	case ets:lookup(cpx_profile, Name) of
+		[E] ->
+			{ok, E};
+		_ ->
+			none
 	end.
 
-get_profile("Default") -> get_default_profile();
-get_profile(_) -> none.
+get_default_profile() -> get_profile("Default").
 
-get_default_profile() -> {ok, ?DEFAULT_PROFILE}.
+get_profiles() ->
+	{ok, ets:tab2list(cpx_profile)}.
 
-get_profiles() -> {ok, [?DEFAULT_PROFILE]}.
-
-get_release("Default") -> {ok, #release_opt{id="Default", label="Default"}};
-get_release(_) -> none.
+get_release(Label) ->
+	case ets:lookup(cpx_relopt, Label) of
+		[E] ->
+			{ok, E};
+		_ ->
+			none
+	end.
 
 get_releases() ->
 	{ok, DefaultRel} = get_release("Default"),
 	{ok, [DefaultRel]}.
 
+load_agents([], Acc) ->
+	ets:delete_all_objects(cpx_auth),
+	ets:insert(cpx_auth, Acc);
+load_agents([Login|T], Acc) when is_list(Login) ->
+	load_agents([{Login, []}|T], Acc);
+load_agents([{Login, Opts}|T], Acc) when is_list(Login), is_list(Opts) ->
+	Skills = get_opt(skills, Opts),
+	Profile = get_opt(profile, Opts),
+	SecurityLevel = get_opt(security_level, Opts),
 
--spec load_agents([agent_entry() | any()]) ->
-	{ok, [agent_entry()]}.
-load_agents(Agents) ->
-	ets:delete_all_objects(?TAB),
-	Entries = read_entries(Agents, []),
-	ets:insert(?TAB, Entries).
+	Entry = #cpx_auth{
+		login = Login,
+		profile = Profile,
+		skills = Skills,
+		security_level= SecurityLevel
+	},
+
+	load_agents(T, [Entry|Acc]).
+
+load_releases([], Acc) ->
+	Acc1 = case lists:any(fun(#release_opt{label="Default"}) -> true;
+			(_) -> false end, Acc) of
+		true ->
+			Acc;
+		_ ->
+			[#release_opt{id="Default", label="Default"}|Acc]
+	end,
+
+	ets:delete_all_objects(cpx_relopt),
+	ets:insert(cpx_relopt, Acc1);
+load_releases([Name|T], Acc) ->
+	RelOpt = #release_opt{id=Name, label=Name},
+	load_releases(T, [RelOpt|Acc]).
+
+load_profiles([], Acc) ->
+	%% non-atomic
+
+	Acc1 = case [1 || #agent_profile{name="Default"} <- Acc] of
+		[_] ->
+			Acc;
+		_ ->
+			[?DEFAULT_PROFILE|Acc]
+	end,
+
+	ets:delete_all_objects(cpx_profile),
+	ets:insert(cpx_profile, Acc1);
+load_profiles([Name|T], Acc) when is_list(Name) ->
+	load_profiles([{Name, []}|T], Acc);
+load_profiles([{Name, Opts}|T], Acc) when is_list(Name) ->
+	Skills = proplists:get_value(skills, Opts, []),
+
+	Profile = #agent_profile{id=Name, name=Name, skills=Skills},
+	load_profiles(T, [Profile|Acc]).
+
+
+%% internal
+loop0(P) ->
+	try
+		ets:new(cpx_auth, [{keypos, #cpx_auth.login}, named_table, public]),
+		ets:new(cpx_profile, [{keypos, #agent_profile.name}, named_table, public]),
+		ets:new(cpx_relopt, [{keypos, #release_opt.label}, named_table, public]),
+
+		P ! agent_auth_init,
+		loop()
+	catch _:_ ->
+		P ! agent_auth_init,
+		ok
+end.
+
+loop() ->
+	receive
+		die -> ok;
+		_ -> loop()
+	end.
 
 lookup_login(Login) ->
-	case ets:lookup(?TAB, Login) of
+	case ets:lookup(cpx_auth, Login) of
 		[E] ->
 			{ok, E};
 		_ ->
@@ -131,7 +223,7 @@ lookup_login(Login) ->
 	end.
 
 entry_to_agent_auth(E) ->
-	#agent_auth_entry{
+	#cpx_auth{
 		login = Login,
 		profile = Profile,
 		skills = Skills,
@@ -148,37 +240,136 @@ entry_to_agent_auth(E) ->
 		endpoints = Endpoints
 	}.
 
-read_entries([], Acc) ->
-	Acc;
-read_entries([E|T], Acc) ->
-	case catch read_entry(E) of
-		{ok, R} -> read_entries(T, [R|Acc]);
-		_ -> Acc
-	end.
-
-read_entry({Login, Pwd, Skills, Opts}) ->
-	Profile = get_opt(profile, Opts),
-	Endpoints = get_opt(endpoints, Opts),
-	SecurityLevel = get_opt(security_level, Opts),
-
-	%% TODO salt
-	PwdHash = erlang:md5(Pwd),
-
-	{ok, #agent_auth_entry{
-		login = Login,
-		pwd_hash = PwdHash,
-		profile = Profile,
-		skills = Skills,
-		security_level = SecurityLevel,
-		endpoints = Endpoints
-	}};
-read_entry(_) ->
-	error.
-
 get_opt(K, L) ->
 	Default = get_default(K),
 	proplists:get_value(K, L, Default).
 
-get_default(profile) -> "default";
+get_default(profile) -> "Default";
 get_default(endpoints) -> [];
-get_default(security_level) -> agent.
+get_default(security_level) -> agent;
+get_default(skills) -> [english, '_agent', '_node'].
+
+
+-ifdef(TEST).
+
+setup_reset_test() ->
+	ok = agent_auth_ets:setup([{agents, ["agent1"]}]),
+	?assertMatch({ok, _}, agent_auth:get_agent_by_id("agent1")),
+
+	ok = agent_auth_ets:setup([{agents, ["agent3"]}]),
+	?assertEqual(none, agent_auth:get_agent_by_id("agent1")).
+
+%% agent tests
+agent_defaults_test_() ->
+	ok = agent_auth_ets:setup([{agents, ["agent1", "agent2", "agent3"]}]),
+	[
+		{"ok, by id", ?_assertMatch({ok, #agent_auth{id="agent1", login="agent1"}},
+			agent_auth:get_agent_by_id("agent1"))},
+		{"none, by id", ?_assertEqual(none, agent_auth:get_agent_by_id("agent9"))},
+
+
+		{"ok, by login", ?_assertMatch({ok, #agent_auth{id="agent2", login="agent2"}},
+			agent_auth:get_agent_by_login("agent2"))},
+		{"none, by login", ?_assertEqual(none, agent_auth:get_agent_by_login("agent9"))},
+
+		{"profile is Default",
+			?_assertMatch({ok, #agent_auth{profile="Default"}}, agent_auth:get_agent_by_id("agent1"))
+		},
+
+		{"security level is agent",
+			?_assertMatch({ok, #agent_auth{security_level=agent}}, agent_auth:get_agent_by_id("agent1"))
+		},
+
+		{"default skills",
+			?_assertMatch({ok, #agent_auth{skills=[english, '_agent', '_node']}}, agent_auth:get_agent_by_id("agent1"))
+		},
+
+		{"password is 'pwd' + login",
+			?_assertMatch({ok, #agent_auth{}}, agent_auth:auth("agent1", "pwdagent1"))
+		},
+		{"wrong password",
+			?_assertMatch({error, deny}, agent_auth:auth("agent1", "wrong"))
+		},
+		{"no user auth",
+			?_assertMatch({error, deny}, agent_auth:auth("agent9", "pwdagent9"))
+		}
+
+		%% TODO endpoints
+	].
+
+agent_options_test_() ->
+	ok = agent_auth_ets:setup([{agents, [
+		{"agent1", [{profile, "Profile1"}, {skills, [romanian]}, {security_level, supervisor}]},
+		"agent2", "agent3"]}]),
+	[
+		{"profile",
+			?_assertMatch({ok, #agent_auth{profile="Profile1"}}, agent_auth:get_agent_by_id("agent1"))
+		},
+
+		{"skills",
+			?_assertMatch({ok, #agent_auth{skills=[romanian]}}, agent_auth:get_agent_by_id("agent1"))
+		},
+
+		{"security level",
+			?_assertMatch({ok, #agent_auth{security_level=supervisor}}, agent_auth:get_agent_by_id("agent1"))
+		}
+	].
+
+%% Profiles
+profile_defaults_test_() ->
+	ok = agent_auth_ets:setup([{profiles, ["profile1", "profile2"]}]),
+	[
+		{"profile 'Default' is present",
+			?_assertMatch({ok, #agent_profile{id="Default", name="Default"}}, agent_auth:get_profile("Default"))
+		},
+
+		{"profile by name",
+			?_assertMatch({ok, #agent_profile{id="profile1", name="profile1"}}, agent_auth:get_profile("profile1"))
+		},
+		{"non-existing profile",
+			?_assertEqual(none, agent_auth:get_profile("profile9"))
+		},
+		{"get profiles", fun() ->
+			{ok, Profiles} = agent_auth:get_profiles(),
+			?assertEqual(["Default", "profile1", "profile2"], lists:sort([Name || #agent_profile{name=Name} <- Profiles]))
+		end},
+
+		{"skills is []",
+			?_assertMatch({ok, #agent_profile{skills=[]}}, agent_auth:get_profile("profile2"))
+		}
+	].
+
+profile_options_test_() ->
+	ok = agent_auth_ets:setup([{profiles, [{"profile1", [{skills, [japanese]}]}]}]),
+	[
+		{"skills",
+			?_assertMatch({ok, #agent_profile{skills=[japanese]}}, agent_auth:get_profile("profile1"))
+		}
+	].
+
+default_profile_override_test_() ->
+	ok = agent_auth_ets:setup([{profiles, [{"Default", [{skills, [japanese]}]}]}]),
+	{"skills",
+		?_assertMatch({ok, #agent_profile{skills=[japanese]}}, agent_auth:get_default_profile())
+	}.
+
+%% Release
+release_defaults_test_() ->
+	ok = agent_auth_ets:setup([{rel_opts, ["release1", "release2"]}]),
+	[
+		{"default release",
+			?_assertMatch({ok, #release_opt{id="Default", label="Default"}}, agent_auth:get_release("Default"))
+		},
+		{"get release",
+			?_assertMatch({ok, #release_opt{id="release1", label="release1"}}, agent_auth:get_release("release1"))
+		},
+		{"non-existing release",
+			?_assertEqual(none, agent_auth:get_release("release9"))
+		}
+	].
+
+default_release_override_test() ->
+	ok = agent_auth_ets:setup([{rel_opt, ["Default"]}]),
+	?assertMatch({ok, [#release_opt{label="Default"}]}, agent_auth:get_releases()).
+
+-endif.
