@@ -407,7 +407,8 @@
 -export([
 	behaviour_info/1,
 	start_link/2,
-	start/2
+	start/2,
+	stop/1
 ]).
 
 %% gen_fsm callbacks
@@ -719,6 +720,9 @@ start_link(Callback, Args) ->
 -spec(start/2 :: (Callback :: atom(), Args :: any()) -> {'ok', pid()} | 'ignore' | {'error', any()}).
 start(Callback, Args) ->
 	gen_fsm:start(?MODULE, [Callback, Args], []).
+
+stop(Genmedia) ->
+	gen_fsm:sync_send_all_state_event(Genmedia, ?GM(stop)).
 
 %%====================================================================
 %% init callbacks
@@ -1563,6 +1567,11 @@ handle_sync_event(?GM(get_call), _From, StateName, State) ->
 	{BaseState, _} = State,
 	#base_state{callrec = Reply} = BaseState,
 	{reply, Reply, StateName, State};
+
+handle_sync_event(?GM(stop), _From, StateName, {BaseState, Internal}) ->
+	Reason = normal,
+	{NewStop, {NewBase, NewInternal}} = handle_stop(Reason, StateName, BaseState, Internal),
+	{stop, NewStop, ok, {NewBase, NewInternal}};
 
 handle_sync_event(?GM(Command), _From, StateName, State) ->
 	lager:debug("Invalid generic sync command ~p while in ~s", [Command, StateName]),
