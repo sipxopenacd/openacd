@@ -510,14 +510,14 @@ behaviour_info(callbacks) ->
 		{handle_answer, 5},
 		%{handle_voicemail, 4},
 		%{handle_announce, 5},
-		{handle_agent_transfer, 4},
+		{handle_agent_transfer, 6},
 		{handle_queue_transfer, 5},
 		{handle_wrapup, 5},
 		{handle_call, 6},
 		{handle_cast, 5},
 		{handle_info, 5},
 		{terminate, 5},
-		{code_change, 4}
+		{code_change, 6}
 	];
 behaviour_info(_Other) ->
     undefined.
