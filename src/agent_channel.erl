@@ -362,21 +362,21 @@ prering(_Msg, State) ->
 % RINGING
 % ======================================================================
 
-ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = inband} = State) ->
-	#call{source = Media} = Call = State#state.state_data,
-	case gen_media:oncall(Media) of
-		ok ->
-			conn_cast(Conn, {set_channel, self(), oncall, Call}),
-			% cpx_agent_event:change_agent_channel(self(), oncall, Call),
-			lager:debug("Moving from ringing to oncall state", []),
-			set_gproc_prop({State, ringing, oncall}),
-			{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
-		Else ->
-			lager:warning("Didn't go oncall:  ~p", [Else]),
-			{reply, {error, Else}, ringing, State}
-	end;
+% ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = inband} = State) ->
+% 	#call{source = Media} = Call = State#state.state_data,
+% 	case gen_media:oncall(Media) of
+% 		ok ->
+% 			conn_cast(Conn, {set_channel, self(), oncall, Call}),
+% 			% cpx_agent_event:change_agent_channel(self(), oncall, Call),
+% 			lager:debug("Moving from ringing to oncall state", []),
+% 			set_gproc_prop({State, ringing, oncall}),
+% 			{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
+% 		Else ->
+% 			lager:warning("Didn't go oncall:  ~p", [Else]),
+% 			{reply, {error, Else}, ringing, State}
+% 	end;
 
-ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Pid, state_data = #call{ring_path = inband}} = State) ->
+ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Ep, state_data = #call{ring_path = inband}} = State) ->
 	#call{source = Media} = Call = State#state.state_data,
 	case gen_media:oncall(Media) of
 		ok ->
@@ -384,10 +384,10 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Pid, state
 			% cpx_agent_event:change_agent_channel(self(), oncall, Call),
 			NewEndpoint = case Call#call.media_path of
 				inband ->
-					erlang:exit(Pid, normal),
+					cpx_endpoint:stop(Ep),
 					undefined;
 				_ ->
-					Pid
+					Ep
 			end,
 			NewState = State#state{endpoint = NewEndpoint},
 			lager:debug("Moving from ringing to oncall state", []),
@@ -405,11 +405,12 @@ ringing({oncall, #call{id = Id}}, _From, #state{state_data = #call{id = Id} = Ca
 	set_gproc_prop({State, ringing, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
-ringing(stop, _From, #state{endpoint = Pid, state_data = Call} = State) ->
-	gen_server:cast(Pid, hangup),
+ringing(stop, _From, #state{endpoint = Ep, state_data = Call} = State) ->
+	cpx_endpoint:hangup(Ep),
 	{stop, normal, ok, State#state{state_data = update_state(hangup, Call)}};
 
 ringing(_Msg, _From, State) ->
+	lager:info("Msg ~p not understood", [_Msg]),
 	{reply, {error, invalid}, ringing, State}.
 
 %% -----
@@ -436,6 +437,7 @@ precall({oncall, #call{id = Id} = Call}, _From, #state{state_data = #call{id = I
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 
 precall(_Msg, _From, State) ->
+	lager:info("Msg ~p not understood", [_Msg]),
 	{reply, {error, invalid}, precall, State}.
 
 %% -----
@@ -471,7 +473,7 @@ oncall({warmtransfer_3rd_party, Data}, From, State) ->
 oncall(wrapup, From, #state{state_data = Call} = State) ->
 	oncall({wrapup, Call}, From, State);
 
-oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
+oncall({wrapup, #call{id = Id}=Call}, {From, _Tag}, #state{state_data = #call{id = Id}} = State) ->
 	case Call#call.source of
 		From ->
 			%% hmm. should be avoided... this means gen_media called wrapup on agent_channel
@@ -489,6 +491,7 @@ oncall({wrapup, Call}, {From, _Tag}, #state{state_data = Call} = State) ->
 	end;
 
 oncall(_Msg, _From, State) ->
+	lager:info("Msg ~p not understood", [_Msg]),
 	{reply, {error, invalid}, oncall, State}.
 
 %% -----
@@ -609,23 +612,16 @@ handle_sync_event(_Event, _From, StateName, State) ->
 % HANDLE_INFO
 % ======================================================================
 
-handle_info({'EXIT', Pid, Why}, wrapup, #state{endpoint = Pid} = State) ->
-	lager:info("Exit of endpoint ~p due to ~p while in wrapup; ignorable", [Pid, Why]),
-	{next_state, wrapup, State};
-
-handle_info({'EXIT', Pid, Why}, oncall, #state{endpoint = Pid} = State) ->
-	lager:info("Exit of endpoint ~p due to ~p while oncall; moving to wrapup.", [Pid, Why]),
-
-	{_Rep, Next, State1} = try_wrapup(State),
-	{next_state, Next, State1};
-
-handle_info({'EXIT', Pid, Why}, StateName, #state{endpoint = Pid} = State) ->
-	lager:info("Exit of endpoint ~p due to ~p in state ~s", [Pid, Why, StateName]),
-	{stop, Why, State};
-
 handle_info({'EXIT', Pid, Why}, _StateName, #state{agent_fsm = Pid} = State) ->
 	lager:info("Exit of agent fsm due to ~p", [Why]),
 	{stop, Why, State};
+handle_info({'EXIT', Pid, Why}, StateName, #state{endpoint = Ep} = State) ->
+	case cpx_endpoint:get_pid(Ep) of
+		Pid ->
+			handle_endpoint_exit(StateName, State, Why);
+		_ ->
+			{next_state, StateName, State}
+	end;
 
 handle_info(end_wrapup, wrapup, State) ->
 	{stop, normal, State};
@@ -688,15 +684,23 @@ conn_cast(undefined, _Msg) ->
 conn_cast(Conn, Msg) when is_pid(Conn) ->
 	Conn ! {agent, Msg}.
 
-start_endpoint(Pid, Agent, Call) when is_pid(Pid) ->
-	link(Pid),
-	Pid ! {prering, {Agent, self()}, Call},
-	{ok, Pid};
-start_endpoint({Mod, Func, XtraArgs}, Agent, Call) ->
-	case apply(Mod, Func, [Agent, self(), Call | XtraArgs]) of
-		{ok, Pid} ->
+% start_endpoint(Pid, Agent, Call) when is_pid(Pid) ->
+% 	link(Pid),
+% 	Pid ! {prering, {Agent, self()}, Call},
+% 	{ok, Pid};
+start_endpoint({EndpointCbk, Opts}, Agent, Call) ->
+	% case apply(Mod, Func, [Agent, self(), Call | XtraArgs]) of
+	Opts1 = [
+		{agent, Agent},
+		{agent_channel_pid, self()},
+		{call, Call}
+	| Opts],
+
+	case cpx_endpoint:start(EndpointCbk, Opts1) of
+		{ok, Ep} ->
+			Pid = cpx_endpoint:get_pid(Ep),
 			link(Pid),
-			{ok, Pid};
+			{ok, Ep};
 		Else ->
 			{error, Else}
 	end;
@@ -770,6 +774,22 @@ try_wrapup(State) ->
 	end,
 
 	{Rep, Next, State1}.
+
+handle_endpoint_exit(wrapup, State, Reason) ->
+	State1 = State#state{endpoint = undefined},
+	lager:debug("Exit of endpoint due to ~p while in wrapup; ignorable", [Reason]),
+	{next_state, wrapup, State1};
+handle_endpoint_exit(oncall, State, Reason) ->
+	State1 = State#state{endpoint = undefined},
+	lager:info("Exit of endpoint ~p due to ~p while oncall; moving to wrapup.", [Reason]),
+	{next_state, wrapup, State1};
+handle_endpoint_exit(oncall, State, Reason) ->
+	lager:info("Exit of endpoint due to ~p while oncall. exit", [Reason]),
+	{stop, Reason, State}.
+
+
+
+
 
 % ======================================================================
 % TESTS
