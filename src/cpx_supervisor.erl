@@ -760,6 +760,7 @@ murder_test_() ->
 	end,
 	fun(ok) ->
 		cpx_supervisor:stop(),
+		timer:sleep(100),
 		mnesia:stop(),
 		mnesia:delete_schema([node()]),
 		ok
