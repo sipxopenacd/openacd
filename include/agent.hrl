@@ -181,6 +181,7 @@
 	type,
 	client,
 	callerid,
+	callid,
 	state
 }).
 

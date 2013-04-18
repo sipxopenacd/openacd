@@ -738,7 +738,13 @@ get_agent_channel_prop(FsmState, ChannelState) ->
 	Type = FsmState#state.media_type,
 	Client = FsmState#state.client,
 	CallerId = FsmState#state.callerid,
-	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, callerid=CallerId, state=ChannelState}.
+	CallId = get_call_id(FsmState#state.state_data),
+	#cpx_agent_channel_prop{login=Login, profile=Profile, type=Type, client=Client, callid=CallId, callerid=CallerId, state=ChannelState}.
+
+get_call_id(#call{id = Id}) ->
+	Id;
+get_call_id(_) ->
+	undefined.
 
 -spec update_state(NewSt :: atom(), Call :: #call{} | {#call{}, term()}) -> Call :: #call{} | {#call{}, term()}.
 update_state(NewSt, #call{state_changes = Changes} = Call) ->
