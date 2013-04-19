@@ -781,6 +781,11 @@ try_wrapup(State) ->
 
 	{Rep, Next, State1}.
 
+handle_endpoint_exit(ringing, State, call_expired) ->
+	lager:info("Exit of endpoint ~p due to ~p while ringing, setting agent to released before stopping", [State#state.endpoint, call_expired]),
+	ConnMsg = {forced_release, ring_init_failed},
+	agent:set_release(State#state.agent_fsm, ?DEFAULT_RELEASE, ConnMsg),
+	{stop, ring_init_failed, State};
 handle_endpoint_exit(wrapup, State, Reason) ->
 	State1 = State#state{endpoint = undefined},
 	lager:debug("Exit of endpoint due to ~p while in wrapup; ignorable", [Reason]),
