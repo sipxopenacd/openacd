@@ -786,11 +786,11 @@ handle_endpoint_exit(wrapup, State, Reason) ->
 	lager:debug("Exit of endpoint due to ~p while in wrapup; ignorable", [Reason]),
 	{next_state, wrapup, State1};
 handle_endpoint_exit(oncall, State, Reason) ->
-	State1 = State#state{endpoint = undefined},
-	lager:info("Exit of endpoint ~p due to ~p while oncall; moving to wrapup.", [Reason]),
-	{next_state, wrapup, State1};
-handle_endpoint_exit(oncall, State, Reason) ->
-	lager:info("Exit of endpoint due to ~p while oncall. exit", [Reason]),
+	{_Rep, Next, State1} = try_wrapup(State),
+	lager:info("Exit of endpoint due to ~p while oncall; moving to wrapup.", [Reason]),
+	{next_state, Next, State1#state{endpoint = undefined}};
+handle_endpoint_exit(ChannelState, State, Reason) ->
+	lager:info("Exit of endpoint due to ~p while ~p. Stopping", [Reason, ChannelState]),
 	{stop, Reason, State}.
 
 
