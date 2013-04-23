@@ -74,8 +74,10 @@
 	list_index/2,
 	list_index/3,
 	now/0,
+	now/1,
 	now_ms/0,
 	now_ms/1,
+	to_erl_now/1,
 	reload/1,
 	reload/2,
 	reload_all/0,
@@ -105,6 +107,12 @@
 	timemark_clear/0,
 	timemark_clear/1
 ]).
+
+-ifdef(TEST).
+-export([
+	set_now/1
+]).
+-endif.
 
 %% @doc Take erlang:now() and pipe it through {@link http_datetime/1}
 -spec(http_datetime/0 :: () -> string()).
@@ -453,20 +461,42 @@ list_index_(Fun, Needle, [Head | Tail], Index) ->
 
 %% @doc For those times when {Macro, Sec, Micro} is too much, this smooshes
 %% Macro and Sec together.
--spec(now/0 :: () -> pos_integer()).
+-spec now() -> integer().
 now() ->
-	{Mega, Sec, _} = os:timestamp(),
+	now(ts()).
+
+-spec now(erlang:timestamp()) -> integer().
+now({Mega, Sec, _}) ->
 	Mega * 1000000 + Sec.
 
--spec(now_ms/0 :: () -> pos_integer()).
+-spec now_ms() -> integer().
 now_ms() ->
-	{Mega, Sec, Micro} = os:timestamp(),
+	now_ms(ts()).
+
+-spec now_ms(erlang:timestamp()) -> integer().
+now_ms({Mega, Sec, Micro}) ->
 	(Mega * 1000000000) + (Sec * 1000) + (Micro div 1000).
 
--spec(now_ms/1 :: (tuple()) -> pos_integer()).
-now_ms(Now) ->
-	{Mega, Sec, Micro} = Now,
-	(Mega * 1000000000) + (Sec * 1000) + (Micro div 1000).
+-ifndef(TEST).
+ts() ->
+	os:timestamp().
+-else.
+ts() ->
+	case application:get_env(openacd, openacd_time_now) of
+		{ok, V} -> to_erl_now(V);
+		_ -> os:timestamp()
+	end.
+-endif.
+
+to_erl_now(UnixTs) ->
+	{UnixTs div 1000000, UnixTs rem 1000000, 0}.
+
+-ifdef(TEST).
+set_now(Now) ->
+	application:set_env(openacd, openacd_time_now, Now),
+	Now.
+-endif.
+
 
 %% @doc For those times when you don't need a code reload with release files
 %% and version.  For obvious reasons, this should be used for developement only.
