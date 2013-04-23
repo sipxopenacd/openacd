@@ -272,6 +272,7 @@ drop_value(Key) ->
 %% @private
 init([]) ->
 	lager:debug("starting cpx_supervisor on ~p", [node()]),
+	cpx_global:new(),
 	case build_tables() of
 		ok ->
 			{ok,{{one_for_one,3,5}, []}}
