@@ -689,7 +689,7 @@ do_operation([{Op, Args} | Tail], Qpid, Callpid, State, Acc) ->
 				ok ->
 					lager:debug("voicemail successfully, removing from queue", []),
 					call_queue:bgremove(Qpid, Callpid);
-				invalid ->
+				{error, invalid} ->
 					lager:warning("voicemail failed.", []),
 					ok
 			end;
