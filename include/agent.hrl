@@ -43,11 +43,14 @@
 %% used in connections
 -type(json() :: {struct, [{binary(), json()}]} | binary() | integer() | float() | [json()]).
 
+-type agent_id() :: undefined | string().
+-type ts() :: pos_integer().
+
 %% Used as part of the internal state of the agent fsm, as well as often
 %% passed around as a representation of an agent.
 -record(agent, {
 	login = erlang:error({undefined, login}) :: string(),
-	id :: 'undefined' | string(),
+	id :: agent_id(),
 	skills = [english, '_agent', '_node'] :: [atom(), ...],
 	connection :: pid(),
 	profile = "Default" :: string() | 'error',
@@ -66,7 +69,7 @@
 						%any() |	% state = precall
 						%{release_id(), release_label(), release_bias()} |	% released
 						%{onhold, #call{}, calling, string()},	% warmtransfer
-	last_change = util:now() :: pos_integer(),	% at what time did the last state change occur
+	last_change = util:now() :: ts(),	% at what time did the last state change occur
 	%defaultringpath = inband :: 'inband' | 'outband',
 	%endpointtype = {undefined, transient, sip_registration} :: endpointtype(),
 	% data used either to dial the agent on demand or start a perisistant

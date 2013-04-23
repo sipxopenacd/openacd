@@ -47,7 +47,6 @@
 -include("agent.hrl").
 
 -type(agent_pid() :: pid()).
--type(agent_id() :: string()).
 -type(time_avail() :: integer()).
 -type(channels() :: [channel_category()]).
 -type(endpoints() :: [atom()]). % list of media modules.

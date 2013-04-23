@@ -357,7 +357,7 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	cpx_agent_event:change_agent(Agent, NewAgent),
+	cpx_agent_event:change_release_state(NewAgent#agent.id, {released, Release}, Now),
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
@@ -419,7 +419,7 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	agent_manager:set_avail(Agent#agent.login, Agent#agent.available_channels),
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = undefined, last_change = Now},
-	cpx_agent_event:change_agent(Agent, NewAgent),
+	cpx_agent_event:change_release_state(NewAgent#agent.id, available, Now),
 	inform_connection(Agent, {set_release, none, Now}),
 	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp()},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
@@ -434,7 +434,7 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
-	cpx_agent_event:change_agent(Agent, NewAgent),
+	cpx_agent_event:change_release_state(NewAgent#agent.id, Release, Now),
 	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
@@ -487,6 +487,7 @@ handle_sync_event({set_connection, _Pid}, _From, StateName, #state{agent_rec = A
 	{reply, error, StateName, State};
 
 handle_sync_event({change_profile, Profile}, _From, StateName, #state{agent_rec = Agent} = State) ->
+	Now = util:now(),
 	OldProfile = Agent#agent.profile,
 	%% TODO skills might have changed since first accessed
 	OldSkills = case agent_auth:get_profile(OldProfile) of
@@ -505,7 +506,7 @@ handle_sync_event({change_profile, Profile}, _From, StateName, #state{agent_rec 
 				{login, Newagent#agent.login},
 				{skills, Newagent#agent.skills}
 			],
-			cpx_agent_event:change_agent(Agent, Newagent),
+			cpx_agent_event:change_profile(Newagent#agent.id, Profile, Now),
 			cpx_monitor:set({agent, Agent#agent.id}, Deatils),
 			inform_connection(Agent, {change_profile, Profile}),
 			inform_connection(Agent, {set_release, Agent#agent.release_data, Agent#agent.last_change}),
@@ -641,7 +642,7 @@ handle_info({'EXIT', Pid, Reason}, StateName, #state{agent_rec = Agent} = State)
 					ok
 			end,
 			inform_connection(Agent, {channel_died, Pid, NewAvail}),
-			cpx_agent_event:change_agent_channel(Pid, exit, exit),
+			% cpx_agent_event:change_agent_channel(Pid, exit, exit),
 			{next_state, StateName, State#state{agent_rec = NewAgent}}
 	end;
 
@@ -1468,10 +1469,10 @@ idle_to_prering_error_test_() ->
 
 	{setup, fun() ->
 		application:start(gproc),
-		meck:new(cpx_agent_event),
-		meck:expect(cpx_agent_event, change_agent, 2, ok)
+		cpx_agent_event:start()
 	end, fun(_) ->
-		meck:unload()
+		meck:unload(),
+		cpx_agent_event:stop()
 	end, [{"set to released on nochannel error", fun() ->
 		Agent = #agent{login = "test_agent", available_channels = []},
 		State = #state{agent_rec = Agent, event_manager = EvtMgr},
@@ -1573,23 +1574,6 @@ handle_info_test_() ->
 			State = #state{agent_rec = Agent},
 			?assertEqual({stop, {error, conn_exit, <<"hagurk">>}, State},
 				handle_info({'EXIT', Zombie, <<"hagurk">>}, idle, State))
-		end},
-
-		{"channel exit", fun() ->
-			meck:new(cpx_agent_event),
-			meck:expect(cpx_agent_event, change_agent_channel, fun(InPid, exit, exit) ->
-				?assertEqual(Zombie, InPid),
-				ok
-			end),
-			Agent = ProtoAgent#agent{used_channels = dict:from_list([
-				{Zombie, voice}
-			]), available_channels = [fast_text], all_channels = [voice, fast_text]},
-			Agent0 = Agent#agent{used_channels = dict:new(), available_channels = [voice, fast_text]},
-			?assertEqual({next_state, idle, #state{agent_rec = Agent0}},
-				handle_info({'EXIT', Zombie, <<"hagurk">>}, idle, #state{agent_rec = Agent})),
-			?assert(meck:validate(cpx_agent_event)),
-			?assertEqual(1, length(meck:history(cpx_agent_event))),
-			meck:unload(cpx_agent_event)
 		end},
 
 		{"endpoint exit", fun() ->
