@@ -508,7 +508,8 @@ check_conditions([{hour, Comparision, CHour} | Conditions], Ticked, Qpid, Call) 
 			false
 	end;
 check_conditions([{weekday, Comparision, CDay} | Conditions], Ticked, Qpid, Call) ->
-	Day = calendar:day_of_the_week(element(1, calendar:local_time())),
+	% 1 - Sunday, 2 - Monday, ... 7 - Saturday
+	Day = (calendar:day_of_the_week(element(1, calendar:local_time())) rem 7) + 1,
 	case Comparision of
 		'>' when Day > CDay ->
 			check_conditions(Conditions, Ticked, Qpid, Call);
