@@ -838,8 +838,7 @@ inqueue(?GM(ring, {{_Agent, Apid}, QCall, _Timeout}), _From, State) ->
 	{reply, deferred, inqueue, State};
 
 inqueue(?GM(announce, Announce), _From, St) ->
-	% lager:info("Doing announce for ~p", [Call#call.id]),
-	sync_call_cbk(inqueue, St, announce, [Announce]);
+	sync_call_cbk(inqueue, St, handle_announce, [Announce]);
 
 inqueue(?GM(voicemail), _From, St) ->
 	% lager:info("trying to send media ~p to voicemail", [Call#call.id]),
@@ -2355,7 +2354,7 @@ priv_voicemail({BaseState, #inqueue_ringing_state{ring_mon = Rmon, ring_pid = {_
 	},
 	priv_voicemail({BaseState, NewInternal});
 
-priv_voicemail({BaseState, #inqueue_state{queue_mon = Mon, queue_pid = {QNom, QPid}}}) ->
+priv_voicemail({BaseState, #inqueue_state{queue_mon = Mon, queue_pid = {QNom, _QPid}}}) ->
 	erlang:demonitor(Mon),
 	% call_queue:remove(QPid, self()),
 	cdr:voicemail(BaseState#base_state.callrec, QNom),
