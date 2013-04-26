@@ -177,7 +177,7 @@ update_skill_list(Login, Skills) ->
 	gen_leader:cast(?MODULE, {update_skill_list, Login, Skills}).
 
 %% @doc Locally find all available agents with a particular skillset that contains the subset `Skills'.
--spec(find_avail_agents_by_skill/1 :: (Skills :: [atom()]) -> [{string(), pid(), #agent{}}]).
+-spec(find_avail_agents_by_skill/1 :: (Skills :: [atom()]) -> [{#agent_key{}, #agent_cache{}}]).
 find_avail_agents_by_skill(Skills) ->
 	%lager:debug("skills passed:  ~p.", [Skills]),
 	List = list_avail(),
@@ -218,11 +218,7 @@ filter_avail_agents_by_skill(Agents, Skills) ->
 	[O ||
 		{_K, #agent_cache{skills = AgSkills} = AgCache} = O <- Agents,
 		length(AgCache#agent_cache.channels) > 0,
-		( % check if either the call or the agent has the _all skill
-			lists:member('_all', AgSkills) orelse
-			lists:member('_all', Skills)
-			% if there's no _all skill, make sure the agent has all the required skills
-		) orelse util:list_contains_all(AgSkills, Skills)].
+		matches_agent_skills(AgSkills, Skills)].
 
 %% @doc Sorted by idle time, then the length of the list of skills the agent has;  this means idle time is less important.
 %% No un-idle agents should be in the list, otherwise it is fail.
@@ -248,12 +244,12 @@ sort_agents_by_elegibility(AvailSkilledAgents) ->
 %	end.
 
 %% @doc Gets all the agents have have the given `[atom()] Skills'.
-% TODO This is wrong, should use agent cache
--spec(find_by_skill/1 :: (Skills :: [atom()]) -> [#agent{}]).
+-spec(find_by_skill/1 :: (Skills :: [atom()]) -> [{string(), #agent_cache{}}]).
 find_by_skill(Skills) ->
-	[{K, V, Timeavail, AgSkills} ||
-		{K, {V, _Id, Timeavail, AgSkills, _Chan, _Ends}} <- gen_leader:call(?MODULE, list_agents),
-		lists:member('_all', AgSkills) orelse util:list_contains_all(AgSkills, Skills)].
+	Agents = list(),
+	[O ||
+		{_K, #agent_cache{skills = AgSkills}} = O <- Agents,
+		matches_agent_skills(AgSkills, Skills)].
 
 %% @doc Gets the login associated with the passed pid().
 -spec(find_by_pid/1 :: (Apid :: pid()) -> string() | 'notfound').
@@ -793,6 +789,12 @@ clear_rotates(Tree) ->
 		false ->
 			clear_rotates(gb_trees:take_largest(Tree))
 	end.
+
+matches_agent_skills(AgSkills, Skills) ->
+	% check if either the call or the agent has the _all skill
+	(lists:member('_all', AgSkills) orelse lists:member('_all', Skills))
+		% if there's no _all skill, make sure the agent has all the required skills
+		orelse util:list_contains_all(AgSkills, Skills).
 
 -ifdef(STANDARD_TEST).
 
