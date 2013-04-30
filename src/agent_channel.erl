@@ -393,7 +393,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Ep, state_
 					Ep
 			end,
 			NewState = State#state{endpoint = NewEndpoint},
-			lager:debug("Moving from ringing to oncall state", []),
+			lager:debug([{load, true}], "Moving from ringing to oncall state", [Call#call.id]),
 			set_gproc_prop({State, ringing, oncall}),
 			{reply, ok, oncall, NewState#state{state_data = update_state(oncall, Call)}};
 		Else ->
@@ -403,7 +403,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Ep, state_
 
 ringing({oncall, #call{id = Id}}, _From, #state{state_data = #call{id = Id} = Call} = State) ->
 	Now = ouc_time:now(),
-	lager:debug("Moving from ringing to oncall state", []),
+	lager:debug([{load, true}], "Moving from ringing to oncall state", [Call#call.id]),
 	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call, Now),
 	set_gproc_prop({State, ringing, oncall}),
