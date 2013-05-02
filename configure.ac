@@ -1,5 +1,9 @@
-AC_PREREQ([2.68])
+AC_PREREQ([2.63])
 AC_INIT([openacd], [2.0.0])
+
+AC_ARG_ENABLE(dep-check, 
+  AS_HELP_STRING([--disable-dep-check], 
+  [Do not check for dependencies other then those required for dist target]))
 
 AC_ERLANG_NEED_ERLC
 AC_ERLANG_NEED_ERL
