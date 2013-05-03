@@ -490,7 +490,7 @@ handle_call({remove_skills, Callid, Skills}, _From, State) ->
 	case find_key(Callid, State#state.queue) of
 		none ->
 			{reply, none, State};
-		{Key, #queued_call{skills=OldSkills} = Value} ->
+		{Key, #queued_call{media=MediaPid, skills=OldSkills} = Value} ->
 			Skills2 = expand_magic_skills(State, Value, Skills),
 			NewSkills = lists:subtract(OldSkills, Skills2),
 			State2 = State#state{queue=gb_trees:update(Key, Value#queued_call{skills=NewSkills}, State#state.queue)},
@@ -498,6 +498,7 @@ handle_call({remove_skills, Callid, Skills}, _From, State) ->
 				gen_server:cast(Pid, {update_skills, NewSkills})
 			end,
 			lists:foreach(Telldp, Value#queued_call.dispatchers),
+			gen_media:remove_skills(MediaPid, Skills2),
 			{reply, ok, State2}
 	end;
 
@@ -815,6 +816,7 @@ call_update_test_() ->
 			Call(util:list_index(MPid, MediaPids))
 		end),
 		meck:expect(gen_media, add_skills, 2, ok),
+		meck:expect(gen_media, remove_skills, 2, ok),
 
 		meck:new(cook),
 		meck:expect(cook, start_at, fun(_Node, MPid, _Recipe, _Queue, _Qpid, _K) ->
@@ -912,6 +914,7 @@ call_update_test_() ->
 				?assert(not lists:member(qux, QCall#queued_call.skills)),
 
 				?assertEqual(ok, call_queue:add_skills(Pid, MediaId(1), [baz, qux])),
+				?assert(meck:called(gen_media, add_skills, [MediaPid(1), [baz, qux]])),
 
 				QCall2 = call_queue:get_qcall(Pid, MediaPid(1)),
 				?assert(lists:member(baz, QCall2#queued_call.skills)),
@@ -924,6 +927,7 @@ call_update_test_() ->
 				?assert(not lists:member(qux, QCall#queued_call.skills)),
 
 				?assertEqual(ok, call_queue:add_skills(Pid, MediaPid(1), [baz, qux])),
+				?assert(meck:called(gen_media, add_skills, [MediaPid(1), [baz, qux]])),
 
 				QCall2 = call_queue:get_qcall(Pid, MediaPid(1)),
 				?assert(lists:member(baz, QCall2#queued_call.skills)),
@@ -938,7 +942,9 @@ call_update_test_() ->
 				QCall = call_queue:get_qcall(Pid, MediaPid(1)),
 				?assert(lists:member(foo, QCall#queued_call.skills)),
 				?assert(lists:member(bar, QCall#queued_call.skills)),
+
 				?assertEqual(ok, call_queue:remove_skills(Pid, MediaId(1), [foo, bar])),
+				?assert(meck:called(gen_media, remove_skills, [MediaPid(1), [foo, bar]])),
 
 				QCall2 = call_queue:get_qcall(Pid, MediaId(1)),
 				?assert(not lists:member(foo, QCall2#queued_call.skills)),
@@ -949,7 +955,9 @@ call_update_test_() ->
 				QCall = call_queue:get_qcall(Pid, MediaPid(1)),
 				?assert(lists:member(foo, QCall#queued_call.skills)),
 				?assert(lists:member(bar, QCall#queued_call.skills)),
+
 				?assertEqual(ok, call_queue:remove_skills(Pid, MediaId(1), [foo, bar])),
+				?assert(meck:called(gen_media, remove_skills, [MediaPid(1), [foo, bar]])),
 
 				QCall2 = call_queue:get_qcall(Pid, MediaPid(1)),
 				?assert(not lists:member(foo, QCall2#queued_call.skills)),

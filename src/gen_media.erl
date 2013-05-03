@@ -448,7 +448,8 @@
 	set_queue/3,
 	set_url_getvars/2,
 	get_url_getvars/1,
-	add_skills/2
+	add_skills/2,
+	remove_skills/2
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -689,6 +690,10 @@ get_url_getvars(Genmedia) ->
 -spec(add_skills/2 :: (Genmedia :: pid(), Skills :: [atom() | {atom(), any()}]) -> 'ok').
 add_skills(Genmedia, Skills) ->
 	gen_fsm:send_all_state_event(Genmedia, ?GM(add_skills, Skills)).
+
+-spec(remove_skills/2 :: (Genmedia :: pid(), Skills :: [atom() | {atom(), any()}]) -> 'ok').
+remove_skills(Genmedia, Skills) ->
+	gen_fsm:send_all_state_event(Genmedia, ?GM(remove_skills, Skills)).
 
 transfer_outband(Genmedia, Addr) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(transfer_outband, Addr)).
@@ -1597,6 +1602,15 @@ handle_event(?GM(add_skills, Skills), StateName, State) ->
 	{BaseState, Internal} = State,
 	Call = BaseState#base_state.callrec,
 	NewSkills = util:merge_skill_lists(Call#call.skills, Skills),
+	NewCall = Call#call{skills = NewSkills},
+	NewBase = BaseState#base_state{callrec = NewCall},
+	set_gproc_prop(StateName, StateName, NewBase),
+	{next_state, StateName, {NewBase, Internal}};
+
+handle_event(?GM(remove_skills, Skills), StateName, State) ->
+	{BaseState, Internal} = State,
+	Call = BaseState#base_state.callrec,
+	NewSkills = lists:subtract(Call#call.skills, Skills),
 	NewCall = Call#call{skills = NewSkills},
 	NewBase = BaseState#base_state{callrec = NewCall},
 	set_gproc_prop(StateName, StateName, NewBase),
@@ -4223,5 +4237,27 @@ outbound_call_flow_test_() ->
 		end}
 
 	] end}.
+
+update_skills_test_() ->
+	Source = spawn(fun() -> ok end),
+	Call = #call{id = "call", source = Source, skills = [english, sales]},
+	Call2 = Call#call{skills = [english, german, sales]},
+	Call3 = Call#call{skills = [english, german]},
+	BaseState = #base_state{callrec = Call},
+	InternalState = internal_state,
+	{setup, fun() ->
+		application:start(gproc)
+	end,
+	fun(_) ->
+		application:stop(gproc)
+	end, [{"add skills", fun() ->
+		init_gproc_prop(init, BaseState),
+
+		?assertEqual({next_state, ringing, {BaseState#base_state{callrec = Call2}, InternalState}}, handle_event(?GM(add_skills, [german]), ringing, {BaseState, InternalState})),
+		?assertEqual(#cpx_gen_media_prop{state=ringing, call=Call2}, gproc:get_value({p,l,cpx_media}))
+	end}, {"remove skills", fun() ->
+		?assertEqual({next_state, ringing, {BaseState#base_state{callrec = Call3}, InternalState}}, handle_event(?GM(remove_skills, [sales]), ringing, {BaseState#base_state{callrec = Call2}, InternalState})),
+		?assertEqual(#cpx_gen_media_prop{state=ringing, call=Call3}, gproc:get_value({p,l,cpx_media}))
+	end}]}.
 
 -endif.
