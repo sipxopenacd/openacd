@@ -67,7 +67,7 @@ fi
 %post
 
 %preun
-: /usr/bin/openacd stop
+: %{_sysconfdir}/init.d/openacd stop
 
 %files
 %defattr(-,root,root,-)
@@ -76,7 +76,7 @@ fi
 %dir %attr(755,openacd,openacd) %{_localstatedir}/openacd/run
 %dir %attr(700,openacd,openacd) %{_localstatedir}/openacd/key
 %dir %attr(700,openacd,openacd) %{_localstatedir}/openacd/pipe
-%attr(755,root,root) %{_bindir}/openacd
+%attr(755,root,root) %{_sysconfdir}/init.d/openacd
 %{_sysconfdir}/openacd/sys.config
 %{_sysconfdir}/openacd/env.config
 

@@ -14,6 +14,7 @@ bindir = @bindir@
 libdir = @libdir@
 localstatedir = @localstatedir@
 sysconfdir = @sysconfdir@
+initdir = @sysconfdir@/init.d
 
 ERL=@ERL@
 RUN_ERL=@RUN_ERL@
@@ -53,9 +54,9 @@ edit = sed \
   -e 's|@SSH_KEYGEN[@]|$(SSH_KEYGEN)|g'
 
 confs = rel/files/conf/env.config rel/files/conf/sys.config
-bin = rel/files/bin/openacd
+initd = rel/files/init.d/openacd
 
-all: compile $(confs) $(bin)
+all: compile $(confs) $(initd)
 
 compile: src/$(realname).app.src
 	REBAR_SHARED_DEPS=1 OA_VSN=$(version) @REBAR@ compile skip_deps=true
@@ -63,7 +64,7 @@ compile: src/$(realname).app.src
 clean:
 	rebar clean skip_deps=true
 	-rm -rf $(confs)
-	-rm -rf $(bin)
+	-rm -rf $(initd)
 	-rm -rf $(distdir)
 	-rm -rf $(distdir).tar.gz
 	-rm -rf $(rpmbuilddir)
@@ -82,7 +83,7 @@ $(distdir): FORCE
 	mkdir -p $(distdir)/src
 	mkdir -p $(distdir)/include
 	mkdir -p $(distdir)/contrib/src
-	mkdir -p $(distdir)/rel/files/bin
+	mkdir -p $(distdir)/rel/files/init.d
 	mkdir -p $(distdir)/rel/files/conf
 	mkdir -p $(distdir)/test # for test
 	cp Makefile.in $(distdir)
@@ -96,7 +97,7 @@ $(distdir): FORCE
 	cp $(wildcard include/*.hrl) $(distdir)/include
 	cp $(wildcard contrib/src/*.erl) $(distdir)/contrib/src
 	cp $(wildcard rel/files/conf/*.in) $(distdir)/rel/files/conf
-	cp $(wildcard rel/files/bin/*.in) $(distdir)/rel/files/bin
+	cp $(wildcard rel/files/init.d/*.in) $(distdir)/rel/files/init.d
 	cp $(wildcard test/*.erl) $(distdir)/test
 	cd $(distdir); autoreconf -i
 
@@ -121,9 +122,9 @@ install-lib:
 	install -m 644 ebin/*.beam $(DESTDIR)$(oaerllibdir)/ebin
 	install -m 644 include/*.hrl $(DESTDIR)$(oaerllibdir)/include
 
-install-bin: $(confs) $(bin)
-	install -d $(DESTDIR)$(bindir)
-	install -m 755 $(bin) $(DESTDIR)$(bindir)
+install-bin: $(confs) $(initd)
+	install -d $(DESTDIR)$(initdir)
+	install -m 755 $(initd) $(DESTDIR)$(initdir)
 	install -d $(DESTDIR)$(oaconfdir)
 	install -m 644 $(confs) $(DESTDIR)$(oaconfdir)
 	install -d $(DESTDIR)$(oalogdir)
@@ -132,7 +133,7 @@ install-bin: $(confs) $(bin)
 	install -d $(DESTDIR)$(oakeydir)
 	install -d $(DESTDIR)$(oapipedir)
 
-$(confs) $(bin) src/$(realname).app.src: % : %.in Makefile
+$(confs) $(initd) src/$(realname).app.src: % : %.in Makefile
 	$(edit) $(srcdir)/$@.in > $@
 
 rpms: $(distdir).tar.gz | $(rpmbuilddir)

@@ -1,6 +1,24 @@
 #!/bin/sh
-# -*- tab-width:4;indent-tabs-mode:nil -*-
-# ex: ts=4 sw=4 et
+#
+# openacd       Init script for OpenACD
+#
+# chkconfig: 345 85 15
+# description: OpenACD is a skills-based automated contact distribution \
+#              system built on Erlang and FreeSWITCH
+# processname: openacd
+# config: @sysconfdir@/openacd/sys.config
+# config: @sysconfdir@/openacd/env.config
+
+### BEGIN INIT INFO
+# Provides: openacd
+# Required-Start: $network
+# Required-Stop: $network
+# Default-Start: 3 4 5
+# Default-Stop: 0 1 2 6
+# Short-Description: OpenACD contact center
+# Description: OpenACD is a skills-based automated contact distribution
+#              system built on Erlang and FreeSWITCH
+### END INIT INFO
 
 RUNNER_SCRIPT=$(cd $(dirname "$0") && pwd)/$(basename "$0")
 RUNNER_USER=@runuser@
