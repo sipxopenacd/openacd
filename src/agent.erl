@@ -339,6 +339,7 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 	end, EventHandlers),
 	State = #state{start_time = os:timestamp(), agent_rec = Agent2, original_endpoints = OriginalEnds, event_manager = EventMgr},
 	init_gproc_prop({init, State}),
+	gproc:reg({p,l,{cpx_profile, Profile}}, now()),
 	{ok, StateName, State}.
 
 % ======================================================================

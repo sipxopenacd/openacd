@@ -15,7 +15,7 @@
 	change_profile/3,
 	change_release_state/3,
 	agent_channel_init/5,
-	change_agent_channel/4
+	change_agent_channel/5
 ]).
 
 %% =====
@@ -41,13 +41,9 @@ stop() ->
 %% login, logout, profile changes, release, and idle states.
 -spec(agent_init/1 :: (Agent :: #agent{}) -> 'ok' | {atom(), any()}).
 agent_init(Agent) when is_record(Agent, agent) ->
-	Id = Agent#agent.id,
 	Now = ouc_time:now(),
 
-	Listeners = cpx_global:get(cpx_agent_listeners, []),
-	lists:foreach(fun(L) ->
-		gen_event:add_handler(?MODULE, {L, Id}, [Agent, Now])
-	end, Listeners).
+	gen_event:notify(?MODULE, {agent_init, Agent, Now}).
 
 %% @doc An agent has changed profile
 change_profile(AgentId, Profile, Ts) ->
@@ -66,7 +62,7 @@ agent_channel_init(Agent, ChannelPid, StateName, Call, Ts) ->
 
 %% @doc Alert the appropriate handler that an agent channel has changed
 %% in some way (usually state).
--spec(change_agent_channel/4 :: (Chanid :: pid(), Statename :: atom(),
+-spec(change_agent_channel/5 :: (Agent :: #agent{}, ChannelPid :: pid(), Statename :: atom(),
 Statedata :: any(), ts()) -> 'ok').
-change_agent_channel(Chanid, Statename, Call, Ts) ->
-	gen_event:notify(?MODULE, {channel_change, Chanid, Statename, Call, Ts}).
+change_agent_channel(Agent, ChannelPid, Statename, Call, Ts) ->
+	gen_event:notify(?MODULE, {channel_change, Agent, ChannelPid, Statename, Call, Ts}).
