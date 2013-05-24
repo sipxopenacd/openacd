@@ -311,9 +311,9 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 			case start_endpoint(Endpoint, Agent, Call) of
 				{ok, Pid} ->
 					lager:debug("Starting in prering", []),
-					conn_cast(Agent, {set_channel, self(), prering, Call}),
+					conn_cast(Agent, set_channel_msg(prering, Call)),
 					cpx_agent_event:agent_channel_init(Agent, self(), prering, Call, Now),
-					{ok, prering, State#state{endpoint = Pid, state_data = update_state(precall, Call)}};
+					{ok, prering, State#state{endpoint = Pid, state_data = update_state(prering, Call)}};
 				{error, Error} ->
 					{stop, {error, Error}}
 			end;
@@ -324,13 +324,13 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 		% 	{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		precall when is_record(Call, call) ->
 			lager:debug("Starting in precall with media rather than client", []),
-			conn_cast(Agent, {set_channel, self(), precall, Call}),
+			conn_cast(Agent, set_channel_msg(precall, Call)),
 			cpx_agent_event:agent_channel_init(Agent, self(), precall, Call, Now),
 			{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		ringing when is_record(Call, call) ->
 			% TODO tell media to ring
 			lager:debug("Starting in ringing", []),
-			conn_cast(Agent, {set_channel, self(), ringing, Call}),
+			conn_cast(Agent, set_channel_msg(ringing, Call)),
 			cpx_agent_event:agent_channel_init(Agent,self(),ringing, Call, Now),
 			{ok, ringing, State#state{state_data = update_state(ringing, Call)}};
 		_ ->
@@ -347,7 +347,7 @@ prering({ringing, Call}, From, State) ->
 	% TODO check if valid
 	Now = ouc_time:now(),
 	lager:debug("Moving from prering to ringing state request from ~p", [From]),
-	conn_cast(State#state.agent_connection, {set_channel, self(), ringing, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(ringing, Call)),
 	cpx_agent_event:change_agent_channel(self(), ringing, Call, Now),
 	set_gproc_prop({State, prering, ringing}),
 	{reply, ok, ringing, State#state{state_data = update_state(ringing, Call)}};
@@ -383,7 +383,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Ep, state_
 	Now = ouc_time:now(),
 	case gen_media:oncall(Media) of
 		ok ->
-			conn_cast(Conn, {set_channel, self(), oncall, Call}),
+			conn_cast(Conn, set_channel_msg(oncall, Call)),
 			cpx_agent_event:change_agent_channel(self(), oncall, Call, Now),
 			NewEndpoint = case Call#call.media_path of
 				inband ->
@@ -404,7 +404,7 @@ ringing(oncall, {Conn, _}, #state{agent_connection = Conn, endpoint = Ep, state_
 ringing({oncall, #call{id = Id}}, _From, #state{state_data = #call{id = Id} = Call} = State) ->
 	Now = ouc_time:now(),
 	lager:debug("Moving from ringing to oncall state", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call, Now),
 	set_gproc_prop({State, ringing, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
@@ -429,7 +429,7 @@ ringing(_Msg, State) ->
 precall({oncall, #call{client = Client} = Call}, _From, #state{state_data = Client} = State) ->
 	Now = ouc_time:now(),
 	lager:debug("Moving from precall to oncall state", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call, Now),
 	set_gproc_prop({State, precall, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
@@ -437,7 +437,7 @@ precall({oncall, #call{client = Client} = Call}, _From, #state{state_data = Clie
 precall({oncall, #call{id = Id} = Call}, _From, #state{state_data = #call{id = Id}} = State) ->
 	Now = ouc_time:now(),
 	lager:debug("Moving from precall to oncall", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	cpx_agent_event:change_agent_channel(self(), oncall, Call, Now),
 	set_gproc_prop({State, precall, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
@@ -462,11 +462,11 @@ precall(_Msg, State) ->
 
 % TODO the two clauses below are no longer used as warmtransfer has been
 % moved to a media specific set-up.
-oncall(warmtransfer_hold, _From, State) ->
+oncall(warmtransfer_hold, _From, #state{state_data = Call} = State) ->
 	lager:debug("Moving from oncall to warmtransfer_hold", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), warmtransfer_hold, State#state.state_data}),
+	conn_cast(State#state.agent_connection, set_channel_msg(warmtransfer_hold, Call)),
 	set_gproc_prop({State, oncall, warmtransfer_hold}),
-	{reply, ok, warmtransfer_hold, State};
+	{reply, ok, warmtransfer_hold, State#state{state_data = update_state(warmtransfer_hold, Call)}};
 oncall({warmtransfer_3rd_party, Data}, From, State) ->
 	case oncall(warmtransfer_hold, From, State) of
 		{reply, ok, warmtransfer_hold, NewState} ->
@@ -487,7 +487,7 @@ oncall({wrapup, #call{id = Id}=Call}, {From, _Tag}, #state{state_data = #call{id
 			%% ideally, only agent_channel should be the one calling wrapup to gen_media
 
 			lager:debug("Moving from oncall to wrapup", []),
-			conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
+			conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
 			cpx_agent_event:change_agent_channel(self(), wrapup, Call, Now),
 			prep_autowrapup(Call),
 			set_gproc_prop({State, oncall, wrapup}),
@@ -518,16 +518,16 @@ oncall(_Msg, State) ->
 % TODO depricated state
 warmtransfer_hold(oncall, _From, #state{state_data = Call} = State) ->
 	lager:debug("Moving from warmtransfer_hold to oncall", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	set_gproc_prop({State, warmtransfer_hold, oncall}),
 	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 warmtransfer_hold({warmtransfer_3rd_party, Data}, _From, #state{state_data = Call} = State) ->
 	lager:debug("Moving from warmtransfer_hold to warmtransfer_3rd_party", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), warmtransfer_3rd_party, {Call, Data}}),
+	conn_cast(State#state.agent_connection, set_channel_msg(warmtransfer_3rd_party, Call)),
 	{reply, ok, warmtransfer_3rd_party, State#state{state_data = {update_state(warmtransfer_3rd_party, Call), Data}}};
-warmtransfer_hold(wrapup, _From, State) ->
+warmtransfer_hold(wrapup, _From, #state{state_data = Call} = State) ->
 	lager:debug("Moving from warmtransfer_hold to wrapup", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, State#state.state_data}),
+	conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
 	set_gproc_prop({State, warmtransfer_hold, wrapup}),
 	{reply, ok, wrapup, State#state{state_data = update_state(wrapup, State#state.state_data)}};
 warmtransfer_hold(_Msg, _From, State) ->
@@ -543,19 +543,19 @@ warmtransfer_hold(_Msg, State) ->
 % TODO depricated state
 warmtransfer_3rd_party(warmtransfer_hold, _From, #state{state_data = {Call, _}} = State) ->
 	lager:debug("Moving from warmtransfer_3rd_party to warmtransfer_hold", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), warmtransfer_hold, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(warmtransfer_hold, Call)),
 	set_gproc_prop({State, warmtransfer_3rd_party, warmtransfer_hold}),
-	{reply, ok, warmtransfer_hold, State#state{state_data = Call}};
+	{reply, ok, warmtransfer_hold, State#state{state_data = update_state(warmtransfer_hold, Call)}};
 warmtransfer_3rd_party(oncall, _From, #state{state_data = {Call, _}} = State) ->
 	lager:debug("Moving from warmtransfer_3rd_party to oncall", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), oncall, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	set_gproc_prop({State, warmtransfer_3rd_party, oncall}),
-	{reply, ok, oncall, State#state{state_data = Call}};
+	{reply, ok, oncall, State#state{state_data = update_state(oncall, Call)}};
 warmtransfer_3rd_party(wrapup, _From, #state{state_data = {Call, _}} = State) ->
 	lager:debug("Moving from warmtransfer_3rd_party to wrapup", []),
-	conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
+	conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
 	set_gproc_prop({State, warmtransfer_3rd_party, wrapup}),
-	{reply, ok, wrapup, State#state{state_data = Call}};
+	{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
 warmtransfer_3rd_party(_Msg, _From, State) ->
 	{reply, {error, invalid}, State}.
 
@@ -598,8 +598,8 @@ handle_sync_event(get_agent, _From, StateName, State) ->
 handle_sync_event(query_state, _From, StateName, State) ->
 	{reply, {ok, StateName}, StateName, State};
 
-handle_sync_event({set_connection, Pid}, _From, StateName, #state{agent_connection = _AgentConn} = State) ->
-	conn_cast(Pid, {set_channel, self(), StateName, State#state.state_data}),
+handle_sync_event({set_connection, Pid}, _From, StateName, #state{agent_connection = _AgentConn, state_data = Call} = State) ->
+	conn_cast(Pid, set_channel_msg(StateName, Call)),
 	case cpx_supervisor:get_value(motd) of
 		{ok, Motd} ->
 			conn_cast(Pid, {blab, Motd});
@@ -760,6 +760,11 @@ update_state(NewSt, #call{state_changes = Changes} = Call) ->
 update_state(_, CallData) ->
 	CallData.
 
+-spec set_channel_msg(NewSt::atom(), Call::#call{}) ->
+	{set_channel, pid(), atom(), #call{}}.
+set_channel_msg(NewSt, Call) ->
+	{set_channel, self(), NewSt, update_state(NewSt, Call)}.
+
 try_wrapup(State, Now) ->
 	Call = State#state.state_data,
 	CallPid = Call#call.source,
@@ -777,7 +782,7 @@ try_wrapup(State, Now) ->
 
 	State1 = case Next of
 		wrapup ->
-			conn_cast(State#state.agent_connection, {set_channel, self(), wrapup, Call}),
+			conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
 			cpx_agent_event:change_agent_channel(self(), wrapup, Call, Now),
 			prep_autowrapup(Call),
 			set_gproc_prop({State, oncall, wrapup}),
