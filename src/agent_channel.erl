@@ -796,7 +796,13 @@ try_wrapup(State, Now) ->
 handle_endpoint_exit(ringing, State, call_expired) ->
 	lager:info("Exit of endpoint ~p due to ~p while ringing, setting agent to released before stopping", [State#state.endpoint, call_expired]),
 	ConnMsg = {forced_release, ring_init_failed},
-	agent:set_release(State#state.agent_fsm, ?DEFAULT_RELEASE, ConnMsg),
+	{ok, AutoRelease} = cpx:get_env(release_on_ring_failure, true),
+	case AutoRelease of
+		true ->
+			agent:set_release(State#state.agent_fsm, ?DEFAULT_RELEASE, ConnMsg);
+		_ ->
+			ok
+	end,
 	{stop, ring_init_failed, State};
 handle_endpoint_exit(wrapup, State, Reason) ->
 	State1 = State#state{endpoint = undefined},
@@ -880,5 +886,17 @@ public_api_test_() ->
 	end} end
 
 	]}.
+
+handle_endpoint_exit_test_() ->
+	{setup, fun() ->
+		meck:new(agent),
+		meck:expect(agent, set_release, 3, ok)
+	end, fun(_) ->
+		meck:unload()
+	end, [
+	{"call expired when ringing", fun() ->
+		?assertEqual({stop, ring_init_failed, #state{}},
+			handle_endpoint_exit(ringing, #state{}, call_expired))
+	end}]}.
 
 -endif.

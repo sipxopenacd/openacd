@@ -374,6 +374,7 @@ idle({precall, Call}, _From, #state{agent_rec = Agent, event_manager = EventMana
 	end;
 
 idle({prering, Call}, From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+	{ok, AutoRelease} = cpx:get_env(release_on_ring_failure, true),
 	case start_channel(Agent, Call, prering, EventManager) of
 		{ok, Pid, NewAgent} ->
 			lager:debug("Started prering at ~p for agent ~s, caller ~p", [Pid, Agent#agent.login, Call#call.callerid]),
@@ -384,11 +385,16 @@ idle({prering, Call}, From, #state{agent_rec = Agent, event_manager = EventManag
 			{reply, {error, nochannel}, idle, State};
 		Else ->
 			lager:debug("Unexpected response ~p going to prering for agent ~s, caller ~p. Going to forced release.", [Else, Agent#agent.login, Call#call.callerid]),
-			case idle({set_release, ?DEFAULT_RELEASE, {forced_release, ring_init_failed}}, From, State) of
-				{reply, ok, released, NewState} ->
-					{reply, Else, released, NewState};
-				ReleaseErr ->
-					lager:debug("Failed to set agent ~p to released, got ~p", [ReleaseErr]),
+			case AutoRelease of
+				true ->
+					case idle({set_release, ?DEFAULT_RELEASE, {forced_release, ring_init_failed}}, From, State) of
+						{reply, ok, released, NewState} ->
+							{reply, Else, released, NewState};
+						ReleaseErr ->
+							lager:debug("Failed to set agent ~p to released, got ~p", [ReleaseErr]),
+							{reply, Else, idle, State}
+					end;
+				_ ->
 					{reply, Else, idle, State}
 			end
 	end;
@@ -1467,31 +1473,38 @@ state_test_() ->
 idle_to_prering_error_test_() ->
 	EvtMgr = spawn(fun() -> ok end),
 
+	Agent = #agent{login = "test_agent", available_channels = [voice]},
+	State = #state{agent_rec = Agent, event_manager = EvtMgr},
+
+	RelAgent = Agent#agent{release_data = ?DEFAULT_RELEASE},
+	RelState = State#state{agent_rec = RelAgent},
+
+	Call = #call{id = "media", type = voice, source = self()},
+
 	{setup, fun() ->
 		application:start(gproc),
 		cpx_agent_event:start()
 	end, fun(_) ->
 		meck:unload(),
 		cpx_agent_event:stop()
-	end, [{"set to released on nochannel error", fun() ->
-		Agent = #agent{login = "test_agent", available_channels = []},
-		State = #state{agent_rec = Agent, event_manager = EvtMgr},
-
-		Call = #call{id = "media", type = voice, source = self()},
-		?assertEqual({reply, {error, nochannel}, idle, State}, idle({prering, Call}, from, State))
-
-	end}, {"set to released on noendpoint error", fun() ->
-		Agent = #agent{login = "test_agent", available_channels = [voice]},
-		RelAgent = Agent#agent{release_data = ?DEFAULT_RELEASE},
-
-		State = #state{agent_rec = Agent, event_manager = EvtMgr},
-		RelState = #state{agent_rec = RelAgent, event_manager = EvtMgr},
-
-		Call = #call{id = "media", type = voice, source = self()},
-
+	end, [
+	{"no channel", fun() ->
 		init_gproc_prop({init, State}),
+		NoChannelState = State#state{agent_rec = Agent#agent{available_channels=[]}},
+
+		?assertEqual({reply, {error, nochannel}, idle, NoChannelState}, idle({prering, Call}, from, NoChannelState))
+	end},
+	{"no endpoint, autorelease default", fun() ->
+		?assertEqual({reply, {error, noendpoint}, released, RelState}, idle({prering, Call}, from, State))
+	end},
+	{"no endpoint, autorelease enabled" , fun() ->
+		application:set_env(openacd, release_on_ring_failure, true),
 		?assertEqual({reply, {error, noendpoint}, released, RelState}, idle({prering, Call}, from, State))
 
+	end},
+	{"no endpoint, autorelease disabled" , fun() ->
+		application:set_env(openacd, release_on_ring_failure, false),
+		?assertEqual({reply, {error, noendpoint}, idle, State}, idle({prering, Call}, from, State))
 	end}]}.
 
 handle_event_test_() ->
