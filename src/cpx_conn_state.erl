@@ -54,6 +54,7 @@
 	security_level :: security_level(),
 	channels = [] :: list(),
 	chan_count = 0 :: non_neg_integer(),
+	skills = [] :: skills(),
 	%% arbitrary properties
 	props = dict:new()
 }).
@@ -61,8 +62,9 @@
 -type state() :: #state{}.
 -export_type([state/0]).
 
-new(#agent{source=APid, login=Login, securitylevel=Level}) ->
-	#state{agent_pid = APid, agent_login=Login, security_level=Level}.
+new(#agent{source=APid, login=Login, securitylevel=Level, skills=Skills}) ->
+	#state{agent_pid = APid, agent_login=Login,
+		security_level=Level, skills=Skills}.
 
 get(#state{agent_pid=APid}, agent_pid) ->
 	APid;
@@ -73,7 +75,11 @@ get(#state{agent_pid=APid}, agent) ->
 get(#state{channels=Channels}, channels) ->
 	Channels;
 get(#state{security_level=Level}, security_level) ->
-	Level.
+	Level;
+get(#state{skills=Skills}, skills) ->
+	Skills;
+get(#state{skills=Skills}, clients) ->
+	[Cl || {'_brand', Cl} <- Skills].
 
 set(State, channels, Channels) ->
 	State#state{channels = Channels}.
@@ -141,11 +147,16 @@ new_test() ->
 	APid = spawn(fun() -> ok end),
 	ALogin = "agent",
 	ALevel = supervisor,
-	St = new(#agent{login=ALogin, source=APid, securitylevel=ALevel}),
+	Skills = [english, {'_brand', "client1"}, {'_brand', "client2"}],
+
+	St = new(#agent{login=ALogin, source=APid,
+		securitylevel=ALevel, skills=Skills}),
 
 	?assertEqual(APid, get(St, agent_pid)),
 	?assertEqual(ALogin, get(St, agent_login)),
-	?assertEqual(ALevel, get(St, security_level)).
+	?assertEqual(ALevel, get(St, security_level)),
+	?assertEqual(Skills, get(St, skills)),
+	?assertEqual(["client1", "client2"], get(St, clients)).
 
 get_agent_rec_test_() ->
 	APid = spawn(fun() -> ok end),
