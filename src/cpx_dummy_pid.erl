@@ -66,7 +66,7 @@ handle_call({watch_for, Msg}, From, St) ->
 	case lists:member(Msg, St#state.rcv_log) of
 		true -> {reply, true, St};
 		_ ->
-			timer:send_after(10, {watch_for_req, Msg, From}),
+			timer:send_after(500, {watch_for_req, Msg, From}),
 			{noreply, St}
 	end;
 
