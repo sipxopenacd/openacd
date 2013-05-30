@@ -1072,15 +1072,18 @@ start_plugin_apps({ok, Plugins}) ->
 	start_plugin_apps(Plugins);
 start_plugin_apps([]) ->
 	ok;
-start_plugin_apps([Plugin | Tail]) when is_atom(Plugin) ->
+start_plugin_apps([Plugin | Tail]) when is_atom(Plugin); is_tuple(Plugin) ->
 	start_plugin_app(Plugin),
 	start_plugin_apps(Tail).
 
-start_plugin_app(Plugin) ->
+start_plugin_app(Plugin) when is_atom(Plugin) ->
+	start_plugin_app({Plugin, []});
+start_plugin_app({Plugin, Opts}) ->
 	StartFun = fun() ->
-		case application:start(Plugin) of
+		RestartType = proplists:get_value(restart_type, Opts, temporary),
+		case application:start(Plugin, RestartType) of
 			ok ->
-				lager:info("Started plugin ~p", [Plugin]),
+				lager:info("Started plugin ~p with restart_type ~p", [Plugin, RestartType]),
 				ok;
 			{error, {already_started, Plugin}} ->
 				lager:debug("Plugin ~p already started", [Plugin]),
