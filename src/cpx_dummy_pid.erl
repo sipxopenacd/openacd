@@ -13,6 +13,7 @@
 	stop/2,
 
 	do/2,
+	do_async/2,
 	has_received/2,
 	watch_for/2
 ]).
@@ -44,6 +45,9 @@ stop(Pid, Reason) ->
 do(Pid, F) ->
 	gen_server:call(Pid, {do, F}).
 
+do_async(Pid, F) ->
+	gen_server:cast(Pid, {do, F}).
+
 has_received(Pid, Msg) ->
 	gen_server:call(Pid, {has_received, Msg}).
 
@@ -74,6 +78,9 @@ handle_call(_Request, _From, St) ->
     Reply = ok,
     {reply, Reply, St}.
 
+handle_cast({do, F}, St) ->
+	F(),
+	{noreply, St};
 handle_cast(_Msg, St) ->
     {noreply, St}.
 
@@ -119,6 +126,12 @@ do_test() ->
 	Pid = ?M:start_link(),
 	From = self(),
 	?assertEqual(5, cpx_dummy_pid:do(Pid, fun() -> From ! hello, 5 end)),
+	?assert(receive hello -> true after 0 -> false end).
+
+do_async_test() ->
+	Pid = ?M:start_link(),
+	From = self(),
+	?assertEqual(ok, cpx_dummy_pid:do_async(Pid, fun() -> From ! hello end)),
 	?assert(receive hello -> true after 5 -> false end).
 
 has_received_test() ->
