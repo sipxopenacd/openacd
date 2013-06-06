@@ -2526,7 +2526,7 @@ agent_interact({hangup, Who}, inqueue_ringing, #base_state{
 
 agent_interact({hangup, Who}, oncall, #base_state{callrec = Callrec} =
 		BaseState, _Internal, {Mon, {Agent, _Apid}}) ->
-	lager:error("hangup by ~p for ~p when only oncall is a pid; skipping wrapup call to agent_channel", [Who, Callrec#call.id]),
+	lager:info("hangup by ~p for ~p when only oncall is a pid; skipping wrapup call to agent_channel", [Who, Callrec#call.id]),
 	% set_agent_state(Apid, [wrapup, Callrec]),
 	cdr:wrapup(Callrec, Agent),
 	cdr:hangup(Callrec, Who),
