@@ -776,7 +776,7 @@ try_wrapup(State, Now) ->
 		Else ->
 			{Else, oncall}
 	catch
-		error:{noproc, _} ->
+		exit:{noproc, _} ->
 			lager:info("gen_media: ~p is gone, proceeding anyway", [CallPid]),
 			{ok, wrapup}
 	end,
@@ -811,9 +811,11 @@ handle_endpoint_exit(wrapup, State, Reason) ->
 	{next_state, wrapup, State1};
 handle_endpoint_exit(oncall, State, Reason) ->
 	Now = ouc_time:now(),
+	Call = State#state.state_data,
+	CallPid = Call#call.source,
+	lager:info("Exit of endpoint ~p due to ~p while oncall; moving ~p to wrapup.", [State#state.endpoint, Reason, CallPid]),
 	{_Rep, Next, State1} = try_wrapup(State, Now),
 	State2 = State1#state{endpoint = undefined},
-	lager:info("Exit of endpoint due to ~p while oncall; moving to wrapup.", [Reason]),
 	{next_state, Next, State2};
 handle_endpoint_exit(StName, State, Reason) ->
 	lager:info("Exit of endpoint due to ~p while ~p. exit", [StName, Reason]),

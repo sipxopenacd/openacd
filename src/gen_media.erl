@@ -2525,9 +2525,9 @@ agent_interact({hangup, Who}, inqueue_ringing, #base_state{
 	{wrapup, {BaseState, #wrapup_state{}}};
 
 agent_interact({hangup, Who}, oncall, #base_state{callrec = Callrec} =
-		BaseState, _Internal, {Mon, {Agent, Apid}}) ->
-	lager:info("hangup for ~p when only oncall is a pid", [Callrec#call.id]),
-	set_agent_state(Apid, [wrapup, Callrec]),
+		BaseState, _Internal, {Mon, {Agent, _Apid}}) ->
+	lager:error("hangup by ~p for ~p when only oncall is a pid; skipping wrapup call to agent_channel", [Who, Callrec#call.id]),
+	% set_agent_state(Apid, [wrapup, Callrec]),
 	cdr:wrapup(Callrec, Agent),
 	cdr:hangup(Callrec, Who),
 	erlang:demonitor(Mon),
@@ -4106,6 +4106,22 @@ get_gproc_prop(State, BaseState) ->
 %			gen_event_mock:assert_expectations(cdr)
 %		end}
 %	end]}}.
+
+agent_interact_test_() ->
+	{setup, fun() ->
+		cpx_dummy_pid:start_link()
+	end, fun(Pid) ->
+		cpx_dummy_pid:stop(Pid)
+	end,
+	fun(Pid) -> [
+		fun() ->
+			Mon = erlang:monitor(process, Pid),
+			BaseState = #base_state{callrec = #call{id="call", source=source}},
+			?assertEqual({wrapup, {BaseState, #wrapup_state{}}},
+				agent_interact({hangup, "caller"}, oncall, BaseState, internal,
+					{Mon, {#agent{login="agent"}, Pid}}))
+		end]
+	end}.
 
 dpid() -> spawn(fun() -> ok end).
 
