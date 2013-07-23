@@ -77,7 +77,9 @@
 	%endpointdata = undefined :: 'undefined' | string(),
 	start_opts = [] :: [any()],
 	log_pid :: 'undefined' | pid(),
-	security_level = agent :: 'agent' | 'supervisor' | 'admin'
+	security_level = agent :: 'agent' | 'supervisor' | 'admin',
+	firstname = "" :: string() | 'undefined',
+	lastname = "" :: string() | 'undefined'
 }).
 
 %% statedata's structure is dependant on the state atom.
@@ -246,4 +248,17 @@
 	start :: integer(),
 	ended :: 'undefined' | integer(),
 	timestamp = util:now() :: integer()
+}).
+
+-record(agent_info, {
+	login :: string(),
+	id :: string(),
+	skills = [english, '_agent', '_node'] :: [atom(), ...],
+	inherentskills = [] :: [atom()],
+	connection :: pid(),
+	profile = "Default" :: string() | 'error',
+	profileskills = [] :: [atom()],
+	securitylevel = agent :: 'agent' | 'supervisor' | 'admin',
+	firstname = "" :: string() | 'undefined',
+	lastname = "" :: string() | 'undefined'
 }).
