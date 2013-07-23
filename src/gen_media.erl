@@ -824,7 +824,8 @@ inqueue(?GM(ring, {{Agent, Apid}, #queued_call{
 			},
 			BaseState2 = BaseState1#base_state{state_changes = [{inqueue_ringing, os:timestamp()} | StateChanges]},
 			set_gproc_prop(inqueue, inqueue_ringing, BaseState2),
-			cdr:ringing(Call1, Agent),
+			AgentInfo = [{agent_login, Agent}, {agent_pid, Apid}],
+			cdr:ringing(Call1, AgentInfo),
 			{reply, ok, inqueue_ringing, {BaseState2, NewInternal}};
 		RingErr ->
 			lager:info("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call1#call.id]),
@@ -1306,7 +1307,8 @@ oncall(?GM(agent_transfer, {{Agent, Apid}, Timeout}), _From, {BaseState, Interna
 					% here.
 					Tref = gen_fsm:send_event_after(Timeout, ?GM(stop_ring, dummy)),
 					cdr:agent_transfer(Call, {OcAgent, Agent}),
-					cdr:ringing(Call, Agent),
+					AgentInfo = [{agent_login, Agent}, {agent_pid, Apid}],
+					cdr:ringing(Call, AgentInfo),
 					url_pop(Call, Apid, Popopts),
 					RingMon = erlang:monitor(process, Apid),
 					StateChanges = [{oncall_ringing, os:timestamp()} | BaseState#base_state.state_changes],

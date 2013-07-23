@@ -158,11 +158,9 @@ dialoutgoing(Call, Number) ->
 	event({dialoutgoing, Call, util:now(), Number}).
 
 %% @doc Notify cdr handler that `#call{} Call' is now ringing to `string() Agent'.
--spec(ringing/2 :: (Call :: #call{}, Agent :: string() | pid()) -> 'ok').
-ringing(Call, Agent) when is_pid(Agent) ->
-	ringing(Call, agent_manager:find_by_pid(Agent));
-ringing(Call, Agent) ->
-	event({ringing, Call, util:now(), Agent}).
+-spec(ringing/2 :: (Call :: #call{}, AgentInfo :: [{atom(), string() | pid()}]) -> 'ok').
+ringing(Call, AgentInfo) ->
+	event({ringing, Call, util:now(), AgentInfo}).
 
 %% @doc Notify cdr handler that `#call{} Call' has rungout from `string() Agent'.
 -spec(ringout/2 :: (Call :: #call{}, Args :: {atom(), string() | pid()}) -> 'ok').

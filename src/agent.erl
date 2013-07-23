@@ -318,10 +318,12 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 		error:{case_clause, {aborted, _}} ->
 			#agent_profile{name = error}
 	end,
+	{FirstName, LastName} = get_agent_name(Agent#agent.login),
 	ProfSkills = expand_magic_skills(Agent, Skills),
 	InherentSkills = expand_magic_skills(Agent, Agent#agent.skills),
 	MergedSkills = util:merge_skill_lists(ProfSkills, InherentSkills, ['_queue', '_brand']),
-	Agent2 = Agent#agent{skills = MergedSkills, profile = Profile, source = self()},
+	Agent2 = Agent#agent{skills = MergedSkills, profile = Profile, source = self(),
+						firstname = FirstName, lastname = LastName},
 	agent_manager:update_skill_list(Agent2#agent.login, Agent2#agent.skills),
 	StateName = case Agent#agent.release_data of
 		undefined ->
@@ -923,6 +925,13 @@ get_agent_state(Release) ->
 			available;
 		_ ->
 			{released, Release}
+	end.
+
+get_agent_name(Login) ->
+	case agent_auth:get_agent(Login) of
+		{ok, AgentAuth} -> {AgentAuth#agent_auth.firstname,
+							AgentAuth#agent_auth.lastname};
+		_ -> {undefined, undefined}
 	end.
 
 % set_cpx_monitor_release(#agent{release_data = {Id, Reason, Bias}} = Agent) ->
