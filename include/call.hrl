@@ -47,6 +47,7 @@
 
 -record(call, {
 		id = erlang:error({undefined, id}) :: string(),
+		media_id = undefined :: string(),
 		type = voice :: channel_category(),
 		callerid = {"Unknown", "Unknown"} :: {string(), string()},
 		dnis = "" :: string(),
