@@ -51,7 +51,9 @@
 	go_released/1,
 	go_released/2,
 	hangup/2,
-	end_wrapup/2]).
+	end_wrapup/2,
+	hold_channel/2,
+	unhold_channel/2]).
 
 logout(_St) ->
 	send_exit(),
@@ -139,6 +141,22 @@ hangup(St, ChanId) ->
 		case agent_channel:set_state(ChanPid, wrapup) of
 			ok -> {[{state, wrapup}, {channel, ChanId}]};
 			_ -> err(invalid_state_change)
+		end
+	end).
+
+hold_channel(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:hold(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_hold)
+		end
+	end).
+
+unhold_channel(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:unhold(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_unhold)
 		end
 	end).
 
@@ -355,6 +373,25 @@ end_wrapup_test_() ->
 		?assertEqual(err(invalid_state_change), end_wrapup(t_st(), <<"ch1">>))
 	end}, {"channel not found", fun() ->
 		?assertEqual(err(channel_not_found), end_wrapup(t_st(), <<"ch999">>))
+	end}]}.
+
+hold_channel_test_() ->
+	{setup, fun() ->
+		meck:new(agent_channel),
+		meck:expect(agent_channel, hold, 1, ok),
+		meck:expect(agent_channel, unhold, 1, ok)
+	end, fun(_) ->
+		meck:unload(agent_channel)
+	end, [{"hold channel", fun() ->
+		ChId = <<"ch1">>,
+		St = t_st(),
+		?assertEqual({ok, success}, hold_channel(St, ChId)),
+		?assert(meck:called(agent_channel, hold, [t_cpid()], self()))
+	end}, {"unhold channel", fun() ->
+		ChId = <<"ch1">>,
+		St = t_st(),
+		?assertEqual({ok, success}, unhold_channel(St, ChId)),
+		?assert(meck:called(agent_channel, unhold, [t_cpid()], self()))
 	end}]}.
 
 get_all_skills_test_() ->

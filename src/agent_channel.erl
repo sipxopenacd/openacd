@@ -124,7 +124,9 @@
 	has_failed_ring/1,
 	url_pop/3,
 	subscribe_events/2,
-	subscribe_events/3
+	subscribe_events/3,
+	hold/1,
+	unhold/1
 ]).
 
 % ======================================================================
@@ -256,6 +258,16 @@ subscribe_events(Pid, Handler) ->
 %% @doc Initialize and subscribe `Handler' with initial `Args' to `Pid' events.
 subscribe_events(Pid, Handler, Args) ->
 	gen_fsm:send_all_state_event(Pid, {subscribe_events, Handler, Args}).
+
+%% @doc Puts the channel on hold
+-spec(hold/1 :: (Apid :: pid()) -> ok | error).
+hold(Apid) ->
+	gen_fsm:sync_send_event(Apid, hold).
+
+%% @doc Puts the channel off hold
+-spec(unhold/1 :: (Apid :: pid()) -> ok | error).
+unhold(Apid) ->
+	gen_fsm:sync_send_event(Apid, unhold).
 
 % ======================================================================
 % INIT
@@ -496,6 +508,16 @@ oncall({wrapup, #call{id = Id}=Call}, {From, _Tag}, #state{agent_rec = Agent, st
 			{Rep, Next, State1} = try_wrapup(State, Now),
 			{reply, Rep, Next, State1}
 	end;
+
+oncall(hold, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:hold(MediaPid),
+	{reply, ok, oncall, State};
+
+oncall(unhold, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:unhold(MediaPid),
+	{reply, ok, oncall, State};
 
 oncall(_Msg, _From, State) ->
 	lager:info("Msg ~p not understood", [_Msg]),
@@ -828,6 +850,15 @@ handle_endpoint_exit(StName, State, Reason) ->
 
 -ifdef(TEST).
 
+t_call_pid() ->
+	erlang:list_to_pid("<0.1.2>").
+
+t_call() ->
+	#call{id = "callid", source = t_call_pid()}.
+
+t_st() ->
+	#state{state_data = t_call()}.
+
 public_api_test_() ->
 	{foreach, fun() ->
 		meck:new(gen_fsm, [unstick])
@@ -900,6 +931,23 @@ handle_endpoint_exit_test_() ->
 	{"call expired when ringing", fun() ->
 		?assertEqual({stop, ring_init_failed, #state{}},
 			handle_endpoint_exit(ringing, #state{}, call_expired))
+	end}]}.
+
+hold_test_() ->
+	{setup, fun() ->
+		meck:new(gen_media),
+		meck:expect(gen_media, hold, 1, ok),
+		meck:expect(gen_media, unhold, 1, ok)
+	end, fun(_) ->
+		meck:unload(gen_media)
+	end, [{"hold", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(hold, from, St)),
+		?assert(meck:called(gen_media, hold, [t_call_pid()], self()))
+	end}, {"unhold", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(unhold, from, St)),
+		?assert(meck:called(gen_media, unhold, [t_call_pid()], self()))
 	end}]}.
 
 -endif.

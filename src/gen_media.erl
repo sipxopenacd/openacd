@@ -449,7 +449,9 @@
 	set_url_getvars/2,
 	get_url_getvars/1,
 	add_skills/2,
-	remove_skills/2
+	remove_skills/2,
+	hold/1,
+	unhold/1
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -518,6 +520,8 @@ behaviour_info(callbacks) ->
 		{handle_call, 6},
 		{handle_cast, 5},
 		{handle_info, 5},
+		{handle_hold, 2},
+		{handle_unhold, 2},
 		{terminate, 5},
 		{code_change, 6}
 	];
@@ -698,6 +702,16 @@ remove_skills(Genmedia, Skills) ->
 transfer_outband(Genmedia, Addr) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(transfer_outband, Addr)).
 
+%% @doc Puts the media on hold
+-spec(hold/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
+hold(Genmedia) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(hold)).
+
+%% @doc Puts the media off hold
+-spec(unhold/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
+unhold(Genmedia) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(unhold)).
+
 %% @doc Do the equivalent of a `gen_server:call/2'.
 -spec(call/2 :: (Genmedia :: pid(), Request :: any()) -> any()).
 call(Genmedia, Request) ->
@@ -769,6 +783,7 @@ init([Callback, Args]) ->
 			end,
 
 			init_gproc_prop(NSt, NBaseSt),
+			gproc:reg({n, l, {?MODULE, Call#call.id}}),
 			{ok, NSt, {NBaseSt, NIntSt}};
 		{stop, Reason} = O ->
 			lager:warning("init aborted due to ~p", [Reason]),
@@ -1438,6 +1453,16 @@ oncall(?GM(queue, Queue), {Ocpid, _},
 			set_gproc_prop(oncall, inqueue, NewBase),
 			{reply, ok, inqueue, {NewBase, NewInternal}}
 	end;
+
+oncall(?GM(hold), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	{Reply, NewState} = Callback:handle_hold(Internal, BaseState#base_state.substate),
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM(unhold), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	{Reply, NewState} = Callback:handle_unhold(Internal, BaseState#base_state.substate),
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
 
 oncall(Msg, From, State) ->
 	fallback_sync(oncall, Msg, From, State).
@@ -4274,6 +4299,22 @@ update_skills_test_() ->
 	end}, {"remove skills", fun() ->
 		?assertEqual({next_state, ringing, {BaseState#base_state{callrec = Call3}, InternalState}}, handle_event(?GM(remove_skills, [sales]), ringing, {BaseState#base_state{callrec = Call2}, InternalState})),
 		?assertEqual(#cpx_gen_media_prop{state=ringing, call=Call3}, gproc:get_value({p,l,cpx_media}))
+	end}]}.
+
+t_st() ->
+	{#base_state{callback = cpx_media_dummy}, #oncall_state{}}.
+
+hold_test_() ->
+	{setup, fun() ->
+		ok
+	end, fun(_) ->
+		ok
+	end, [{"hold", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(?GM(hold), from, St))
+	end}, {"unhold", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(?GM(unhold), from, St))
 	end}]}.
 
 -endif.

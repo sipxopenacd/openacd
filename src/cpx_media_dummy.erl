@@ -58,6 +58,9 @@
 	handle_cast/5,
 	handle_info/5,
 
+	handle_hold/2,
+	handle_unhold/2,
+
 	terminate/5,
 	code_change/6
 ]).
@@ -106,6 +109,12 @@ handle_cast(_Msg, _StName, _Call, _Extra, St) ->
 
 handle_info(_Msg, _StName, _Call, _Extra, St) ->
 	{noreply, St}.
+
+handle_hold(_GMInt, St) ->
+	{ok, St}.
+
+handle_unhold(_GMInt, St) ->
+	{ok, St}.
 
 terminate(_Msg, _StName, _Call, _Extra, _St) ->
 	ok.
@@ -166,6 +175,14 @@ handle_cast_test() ->
 handle_info_test() ->
 	?assertEqual({noreply, []},
 		?M:handle_info(msg, inqueue, t_call(), t_internal(), [])).
+
+handle_hold_test() ->
+	?assertEqual({ok, []},
+		?M:handle_hold(t_internal(), [])).
+
+handle_unhold_test() ->
+	?assertEqual({ok, []},
+		?M:handle_unhold(t_internal(), [])).
 
 terminate_test() ->
 	?M:terminate(msg, inqueue, t_call(), t_internal(), []).
