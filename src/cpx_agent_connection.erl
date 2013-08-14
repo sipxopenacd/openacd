@@ -1021,6 +1021,10 @@ handle_cast({mediapush, ChanPid, Call, Data}, State) ->
 		{mediaload, Call, _Data} ->
 			Props = [{<<"media">>, Call#call.source_module}],
 			handle_cast({arbitrary_command, ChanPid, <<"mediaload">>, Props}, State1);
+		% freeswitch uses this
+		{mediastop, Call, _Data} ->
+			Props = [{<<"media">>, Call#call.source_module}],
+			handle_cast({arbitrary_command, ChanPid, <<"mediastop">>, Props}, State1);
 		% not sure what uses this.  It's still pretty messy.
 		{Command, Call, EventData} ->
 			Props = [{<<"event">>, EventData}, {<<"media">>, Call#call.type}],
