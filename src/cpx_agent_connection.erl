@@ -1177,7 +1177,23 @@ encode_call(Call) ->
 		{<<"callid">>, list_to_binary(Call#call.id)},
 		{<<"source_module">>, Call#call.source_module},
 		{<<"type">>, Call#call.type},
+		{<<"info">>, encode_call_info(Call#call.info)},
 		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
+
+
+encode_call_info(CallInfo) ->
+	encode_call_info(CallInfo, []).
+
+encode_call_info([], EncInfo) ->
+	EncInfo;
+encode_call_info([{K, V} | CallInfo], EncInfo) when is_atom(V) ->
+	encode_call_info(CallInfo, [{K, V} | EncInfo]);
+encode_call_info([{K, V} | CallInfo], EncInfo) when is_number(V) ->
+	encode_call_info(CallInfo, [{K, V} | EncInfo]);
+encode_call_info([{K, V} | CallInfo], EncInfo) when is_list(V) ->
+	encode_call_info(CallInfo, [{K, l2b(V)} | EncInfo]);
+encode_call_info([_ | CallInfo], EncInfo) ->
+	encode_call_info(CallInfo, EncInfo).
 
 %% doc Encode the given data into a structure suitable for ejrpc2_json:encode
 % -spec(encode_statedata/1 ::

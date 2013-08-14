@@ -71,7 +71,7 @@
 %%                  | {media_path, inband | outband},
 %%                  | {direction, inbound | outbound}
 %%                  | {priority, pos_integer()},
-%%                  | {arbitrary, [{any(), any()}]}
+%%                  | {info, [{atom(), atom() | number() | string()}]}
 %%                  | {queue, string()}
 %%
 %%		When gen_media starts, this function is called.  It should
@@ -2245,7 +2245,7 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 	MediaPath = ?get(media_path, Ps, Base#call.media_path),
 	Direction = ?get(direction, Ps, Base#call.direction),
 	Priority = ?get(priority, Ps, Base#call.priority),
-	Arbitrary = ?get(arbitrary, Ps, Base#call.arbitrary),
+	Info = ?get(info, Ps, Base#call.info),
 
 	Client = case (ClientId =:= undefined) andalso
 		is_record(Base#call.client, client) of
@@ -2271,7 +2271,7 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 		media_path = MediaPath,
 		direction = Direction,
 		priority = Priority,
-		arbitrary = Arbitrary,
+		info = Info,
 		state_changes = StateChanges
 	};
 ps_to_call(Ps, _, Callback, StateChanges) ->
