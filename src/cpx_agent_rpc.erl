@@ -54,8 +54,9 @@
 	end_wrapup/2,
 	hold_channel/2,
 	unhold_channel/2,
-	transfer_to_queue/3
-]).
+	transfer_to_queue/3,
+	play/2,
+	pause/2]).
 
 logout(_St) ->
 	send_exit(),
@@ -159,6 +160,22 @@ unhold_channel(St, ChanId) ->
 		case agent_channel:unhold(ChanPid) of
 			ok -> {ok, success};
 			_ -> err(cannot_unhold)
+		end
+	end).
+
+play(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:play(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_play)
+		end
+	end).
+
+pause(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:pause(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_pause)
 		end
 	end).
 

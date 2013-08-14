@@ -128,7 +128,9 @@
 	subscribe_events/2,
 	subscribe_events/3,
 	hold/1,
-	unhold/1
+	unhold/1,
+	play/1,
+	pause/1
 ]).
 
 % ======================================================================
@@ -276,6 +278,16 @@ hold(Apid) ->
 -spec(unhold/1 :: (Apid :: pid()) -> ok | error).
 unhold(Apid) ->
 	gen_fsm:sync_send_event(Apid, unhold).
+
+%% @doc Continues the channel playback
+-spec(play/1 :: (Apid :: pid()) -> ok | error).
+play(Apid) ->
+	gen_fsm:sync_send_event(Apid, play).
+
+%% @doc Pauses the channel playback
+-spec(pause/1 :: (Apid :: pid()) -> ok | error).
+pause(Apid) ->
+	gen_fsm:sync_send_event(Apid, pause).
 
 % ======================================================================
 % INIT
@@ -549,6 +561,16 @@ oncall(hold, _From, #state{state_data = Call} = State) ->
 oncall(unhold, _From, #state{state_data = Call} = State) ->
 	MediaPid = Call#call.source,
 	gen_media:unhold(MediaPid),
+	{reply, ok, oncall, State};
+
+oncall(play, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:play(MediaPid),
+	{reply, ok, oncall, State};
+
+oncall(pause, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:pause(MediaPid),
 	{reply, ok, oncall, State};
 
 oncall(_Msg, _From, State) ->

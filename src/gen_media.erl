@@ -451,7 +451,9 @@
 	add_skills/2,
 	remove_skills/2,
 	hold/1,
-	unhold/1
+	unhold/1,
+	play/1,
+	pause/1
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -711,6 +713,16 @@ hold(Genmedia) ->
 -spec(unhold/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
 unhold(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(unhold)).
+
+%% @doc Puts the media on hold
+-spec(play/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
+play(Genmedia) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(play)).
+
+%% @doc Puts the media off hold
+-spec(pause/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
+pause(Genmedia) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(pause)).
 
 %% @doc Do the equivalent of a `gen_server:call/2'.
 -spec(call/2 :: (Genmedia :: pid(), Request :: any()) -> any()).
@@ -1446,6 +1458,28 @@ oncall(?GM(hold), _From, {BaseState, Internal}) ->
 oncall(?GM(unhold), _From, {BaseState, Internal}) ->
 	Callback = BaseState#base_state.callback,
 	{Reply, NewState} = Callback:handle_unhold(Internal, BaseState#base_state.substate),
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM(play), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_play, 2) of
+		true ->
+			Callback:handle_play(Internal, Substate);
+		false ->
+			{{error, not_supported}, Substate}
+	end,
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM(pause), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_pause, 2) of
+		true ->
+			Callback:handle_pause(Internal, Substate);
+		false ->
+			{{error, not_supported}, Substate}
+	end,
 	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
 
 oncall(Msg, From, State) ->
