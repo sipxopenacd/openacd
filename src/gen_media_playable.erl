@@ -5,8 +5,8 @@
 	(Info :: 'callbacks' | any()) -> [{atom(), non_neg_integer()}] | 'undefined').
 behaviour_info(callbacks) ->
 	[
-		{handle_play, 2},
-		{handle_pause, 2}
+		{handle_play, 3},
+		{handle_pause, 3}
 	];
 behaviour_info(_Other) ->
     undefined.

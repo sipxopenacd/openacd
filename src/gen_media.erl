@@ -1463,9 +1463,9 @@ oncall(?GM(unhold), _From, {BaseState, Internal}) ->
 oncall(?GM(play), _From, {BaseState, Internal}) ->
 	Callback = BaseState#base_state.callback,
 	Substate = BaseState#base_state.substate,
-	{Reply, NewState} = case erlang:function_exported(Callback, handle_play, 2) of
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_play, 3) of
 		true ->
-			Callback:handle_play(Internal, Substate);
+			Callback:handle_play(BaseState#base_state.callrec, Internal, Substate);
 		false ->
 			{{error, not_supported}, Substate}
 	end,
@@ -1474,9 +1474,9 @@ oncall(?GM(play), _From, {BaseState, Internal}) ->
 oncall(?GM(pause), _From, {BaseState, Internal}) ->
 	Callback = BaseState#base_state.callback,
 	Substate = BaseState#base_state.substate,
-	{Reply, NewState} = case erlang:function_exported(Callback, handle_pause, 2) of
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_pause, 3) of
 		true ->
-			Callback:handle_pause(Internal, Substate);
+			Callback:handle_pause(BaseState#base_state.callrec, Internal, Substate);
 		false ->
 			{{error, not_supported}, Substate}
 	end,
