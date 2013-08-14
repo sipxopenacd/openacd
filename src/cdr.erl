@@ -44,6 +44,7 @@
 	start/0,
 	start_link/0,
 	cdrinit/1,
+	loginit/1,
 	inivr/2,
 	precall/2,
 	inqueue/2,
@@ -136,6 +137,10 @@ start_link(Nodes) ->
 cdrinit(Call) ->
 	{ok, Ms} = cpx_hooks:trigger_hooks(get_cdr_mods, [], all),
 	lists:foreach(fun(M) -> add_cdr_mod(M, Call) end, lists:flatten([?MODULE|Ms])).
+
+loginit(Call) ->
+	{ok, Ms} = cpx_hooks:trigger_hooks(get_log_mods, [], all),
+	lists:foreach(fun(M) -> add_log_mod(M, Call) end, lists:flatten([?MODULE|Ms])).
 
 %% @doc Notify cdr handler that `#call{} Call' is now in IVR for `string() DNIS'.
 -spec(inivr/2 :: (Call :: #call{}, DNIS :: string()) -> 'ok').
@@ -511,6 +516,32 @@ add_cdr_mod(Mod, Call) ->
 		false ->
 			try gen_event:add_handler(cdr, {Mod, Call#call.id}, [Call]) of
 				ok ->
+					ok;
+				Else ->
+					lager:error("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),
+					error
+				catch
+					What:Why ->
+						lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+						error
+			end;
+		true ->
+			lager:warning("CDR already initialized for ~s", [Call#call.id])
+	catch
+		What:Why ->
+			lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+			error
+	end.
+
+add_log_mod(Mod, Call) ->
+	CallId = Call#call.id,
+	CallSegment = Call#call.call_segment,
+	Id = CallId ++ "-" ++ CallSegment,
+	try lists:member({Mod, Id}, gen_event:which_handlers(cdr)) of
+		false ->
+			try gen_event:add_handler(cdr, {Mod, Id}, [Call]) of
+				ok ->
+					lager:info("Initializing CDR for ~s success", [Call#call.id]),
 					ok;
 				Else ->
 					lager:error("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),

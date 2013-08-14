@@ -111,6 +111,8 @@
 	get_media/1,
 	set_state/2,
 	set_state/3,
+	async_set_state/2,
+	async_set_state/3,
 	end_wrapup/1,
 	list_to_state/1,
 	set_connection/2,
@@ -192,6 +194,12 @@ set_state(Pid, State) ->
                      (Pid :: pid(), State :: 'released', Data :: any()) -> 'ok' | 'invalid' | 'queued').
 set_state(Pid, State, Data) ->
 	gen_fsm:sync_send_event(Pid, {State, Data}, infinity).
+
+async_set_state(Pid, State) ->
+	gen_fsm:send_event(Pid, State).
+
+async_set_state(Pid, State, Data) ->
+	gen_fsm:send_event(Pid, {State, Data}).
 
 %% @doc End the channel while in wrapup.
 -spec(end_wrapup/1 :: (Pid :: pid()) -> 'ok' | 'invalid').
@@ -485,6 +493,30 @@ oncall({warmtransfer_3rd_party, Data}, From, State) ->
 			warmtransfer_hold({warmtransfer_3rd_party, Data}, From, NewState);
 		Else ->
 			Else
+	end;
+
+%% -----
+% oncall({queue_transfer, QueueBin}, From, State) when is_binary(QueueBin) ->
+% 	oncall({queue_transfer, binary_to_list(QueueBin)}, From, State);
+
+
+oncall({queue_transfer, QueueBin}, _From, 
+	#state{agent_rec = Agent, state_data = Call} = State)->
+	#call{source = CallPid} = Call, 
+	Queue = binary_to_list(QueueBin),
+	Now = ouc_time:now(),
+	lager:info("CallPid is ~p", [CallPid]),
+	case gen_media:queue(CallPid, Queue) of
+		ok -> 
+			lager:info("Moving from oncall to wrapup due to queue transfer", []),
+			conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
+			cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
+			prep_autowrapup(Call),
+			set_gproc_prop({State, oncall, wrapup}),
+			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
+		Else -> 
+			lager:warning("Didn't queue transfer:  ~p", [Else]),
+			{reply, {error, Else}, oncall, State}
 	end;
 
 %% -----

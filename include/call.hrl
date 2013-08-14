@@ -69,7 +69,8 @@
 		direction = inbound :: 'inbound' | 'outbound',
 		priority = 40 :: call_priority(),
 		arbitrary = [] :: [{string(), string()}],
-		state_changes = [] :: [{atom(), tuple()}]
+		state_changes = [] :: [{atom(), tuple()}],
+		call_segment = 0 :: pos_integer()
 }).
 
 -type(call_key() :: {non_neg_integer(), {pos_integer(), non_neg_integer(), non_neg_integer()}}).

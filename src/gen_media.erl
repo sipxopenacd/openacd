@@ -661,7 +661,7 @@ agent_transfer(Genmedia, Agent, Timeout) ->
 %% @doc Transfer the passed media into the given queue.
 -spec(queue/2 :: (Genmedia :: pid(), Queue :: string()) -> 'ok' | 'invalid').
 queue(Genmedia, Queue) ->
-	gen_fsm:sync_send_event(Genmedia, {'$gen_media', queue, Queue}).
+	gen_fsm:sync_send_event(Genmedia, ?GM(queue, Queue)).
 
 %% @doc Attempt to spy on the agent oncall with the given media.  `Spy' is
 %% the pid to send media events/load data to, and `AgentRec' is an
@@ -767,8 +767,8 @@ init([Callback, Args]) ->
 			},
 
 			cdr:cdrinit(Call),
-			cdr:inivr(Call, Call#call.dnis),
-
+			cdr:loginit(Call#call{call_segment = 1}),
+			cdr:inivr(Call#call{call_segment = 1}, Call#call.dnis),
 			{NSt,NBaseSt, NIntSt} = case QueueN of
 				undefined ->
 					{inivr, BaseSt, #inivr_state{}};
@@ -840,6 +840,8 @@ inqueue(?GM(ring, {{Agent, Apid}, #queued_call{
 			BaseState2 = BaseState1#base_state{state_changes = [{inqueue_ringing, os:timestamp()} | StateChanges]},
 			set_gproc_prop(inqueue, inqueue_ringing, BaseState2),
 			AgentInfo = [{agent_login, Agent}, {agent_pid, Apid}],
+			lager:info("NewInternal : ~p", [NewInternal]),
+			lager:info("Call1 : ~p", [Call1]),
 			cdr:ringing(Call1, AgentInfo),
 			{reply, ok, inqueue_ringing, {BaseState2, NewInternal}};
 		RingErr ->
@@ -1260,42 +1262,22 @@ oncall(?GM(queue, Queue), From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	#oncall_state{oncall_pid = {Ocagent, Apid}, oncall_mon = Mon} = Internal,
 	lager:info("Request to queue ~p from ~p", [Call#call.id, From]),
-	% Decrement the call's priority by 5 when requeueing
-	StateChanges = [{inqueue, os:timestamp()} | BaseState#base_state.state_changes],
-	case priv_queue(Queue, reprioritize_for_requeue(Call), BaseState#base_state.queue_failover) of
-		invalid ->
-			{reply, invalid, {BaseState, Internal}};
-		{default, Qpid} ->
-			set_agent_state(Apid, [wrapup, Call]),
-			{ok, NewState} = Callback:handle_queue_transfer({"default_queue", Qpid}, oncall, BaseState#base_state.callrec, Internal, BaseState#base_state.substate),
-			cdr:queue_transfer(Call, "default_queue"),
-			cdr:inqueue(Call, "default_queue"),
+	case enqueue(Queue, reprioritize_for_requeue(Call#call{skills=[]}), BaseState) of
+		{ok, {NewBase, 
+			  #inqueue_state{queue_pid = {_QN, Qpid}} = NewInternal}} ->
+			async_set_agent_state(Apid, [wrapup, Call]),
+			{ok, NewState} = Callback:handle_queue_transfer({Queue, Qpid}, oncall, Call, NewInternal, NewBase#base_state.substate),
 			cdr:wrapup(Call, Ocagent),
 			erlang:demonitor(Mon),
-			NewMon = erlang:monitor(process, Qpid),
-			NewInternal = #inqueue_state{
-				queue_mon = NewMon, queue_pid = {Queue, Qpid}
-			},
-			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
+			% cdr:queue_transfer(Call, Queue),
+			% cdr:queue_transfer(NewCall, Queue),
+			FinalBase = NewBase#base_state{substate = NewState},			
+			lager:info("NewSubstate in qxfer: ~p", [NewState]),
 			set_gproc_prop(oncall, inqueue, NewBase),
-			set_cpx_mon({NewBase, NewInternal}, []),
-			{reply, ok, inqueue, {NewBase, NewInternal}};
-		Qpid when is_pid(Qpid) ->
-			set_agent_state(Apid, [wrapup, Call]),
-			{ok, NewState} = Callback:handle_queue_transfer({Queue, Qpid}, oncall, Call, Internal, BaseState#base_state.substate),
-			cdr:queue_transfer(Call, Queue),
-			cdr:inqueue(Call, Queue),
-			cdr:wrapup(Call, Ocagent),
-			erlang:demonitor(Mon),
-			NewMon = erlang:monitor(process, Qpid),
-			NewBase = BaseState#base_state{substate = NewState, state_changes = StateChanges},
-			set_gproc_prop(oncall, inqueue, NewBase),
-			NewInternal = #inqueue_state{
-				queue_mon = NewMon, queue_pid = {Queue, Qpid}
-			},
-			set_cpx_mon({NewBase, NewInternal}, [{queue, Queue}]),
-			{reply, ok, inqueue, {NewBase, NewInternal}}
+			{reply, ok, inqueue, {FinalBase, NewInternal}};
+		_ -> {reply, invalid, {BaseState, Internal}}
 	end;
+
 
 oncall(?GM(agent_transfer, {{_Agent, Apid}, _Timeout}), _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
 	Call = BaseState#base_state.callrec,
@@ -1306,7 +1288,7 @@ oncall(?GM(agent_transfer, {{Agent, Apid}, Timeout}), _From, {BaseState, Interna
 	#base_state{callrec = Call, callback = Callback, url_pop_get_vars = GenPopopts} = BaseState,
 	#oncall_state{oncall_pid = {OcAgent, Ocpid}, oncall_mon = Mon} = Internal,
 	case set_agent_state(Apid, [ringing, Call]) of
-		ok ->
+		{ok, _RPid} ->
 			case Callback:handle_agent_transfer(Apid, Timeout, oncall, BaseState#base_state.callrec, Internal, BaseState#base_state.substate) of
 				Success when element(1, Success) == ok ->
 					Popopts = case Success of
@@ -2105,6 +2087,22 @@ set_agent_state(Apid, Args) ->
 			badagent
 	end.
 
+async_set_agent_state(Apid, Args) ->
+	try apply(agent_channel, async_set_state, [Apid | Args]) of
+		ok ->
+			ok;
+		Res ->
+			lager:error("Agent (~p) set state: ~p wasn't okay:  ~p", [Apid, Args, Res]),
+			Res
+	catch
+		exit:{noproc, _} ->
+			lager:warning("Agent ~p is a dead pid", [Apid]),
+			badagent;
+		exit:{max_ringouts, _} ->
+			lager:debug("Max ringouts reached for agent ~p", [Apid]),
+			badagent
+	end.
+
 stop_agent_channel(Apid) ->
 	try agent_channel:stop(Apid) of
 		_ -> ok
@@ -2176,6 +2174,7 @@ enqueue(QueueN, Call, BaseSt) ->
 			Call1 = Call#call{
 				skills = lists:usort(Call#call.skills ++ QSkills),
 				state_changes=StateChanges1,
+				call_segment=Call#call.call_segment + 1,
 				queue = QN
 			},
 
@@ -2190,6 +2189,7 @@ enqueue(QueueN, Call, BaseSt) ->
 			},
 
 			set_cpx_mon({BaseSt1, IntSt}, [{queue, QN}]),
+			cdr:loginit(Call1),
 			cdr:inqueue(Call1, QN),
 
 			{ok, {BaseSt1, IntSt}};
@@ -2297,6 +2297,7 @@ get_client_by_id(L) ->
 		_ -> get_client_by_id(undefined)
 	end.
 
+%% TODO: Will always fail
 correct_client_sub(undefined) ->
 	Client = try call_queue_config:get_default_client() of
 		{ok, C} ->

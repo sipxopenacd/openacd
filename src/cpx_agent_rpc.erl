@@ -53,7 +53,9 @@
 	hangup/2,
 	end_wrapup/2,
 	hold_channel/2,
-	unhold_channel/2]).
+	unhold_channel/2,
+	transfer_to_queue/3
+]).
 
 logout(_St) ->
 	send_exit(),
@@ -165,6 +167,15 @@ end_wrapup(St, ChanId) ->
 		case agent_channel:end_wrapup(ChanPid) of
 			ok -> {[{state, stopped}, {channel, ChanId}]};
 			_ -> err(invalid_state_change)
+		end
+	end).
+
+transfer_to_queue(St, ChanId, QueueName) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:queue_transfer(ChanPid, QueueName) of
+			ok -> {[{state, wrapup}, {channel, ChanId}]};
+			Err -> 	lager:info("Error : ~p", [Err]),
+					err(invalid_state_change)
 		end
 	end).
 
