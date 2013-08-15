@@ -453,6 +453,7 @@
 	hold/1,
 	unhold/1,
 	play/1,
+	play/2,
 	pause/1,
 	seek/2
 ]).
@@ -715,18 +716,23 @@ hold(Genmedia) ->
 unhold(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(unhold)).
 
-%% @doc Puts the media on hold
+%% @doc Starts or resumes the media playback
 -spec(play/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
 play(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(play)).
+
+%% @doc Starts or resumes the media playback at a specified location
+-spec(play/2 :: (Genmedia :: pid(), Location :: integer()) -> 'ok' | 'error').
+play(Genmedia, Location) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM({play, Location})).
 
 %% @doc Puts the media off hold
 -spec(pause/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
 pause(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(pause)).
 
-%% @doc Puts the media off hold
--spec(seek/2 :: (Genmedia :: pid(), Location :: non_neg_integer()) -> 'ok' | 'error').
+%% @doc Moves the media playback to a specified location
+-spec(seek/2 :: (Genmedia :: pid(), Location :: integer()) -> 'ok' | 'error').
 seek(Genmedia, Location) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM({seek, Location})).
 
@@ -1472,6 +1478,17 @@ oncall(?GM(play), _From, {BaseState, Internal}) ->
 	{Reply, NewState} = case erlang:function_exported(Callback, handle_play, 3) of
 		true ->
 			Callback:handle_play(BaseState#base_state.callrec, Internal, Substate);
+		false ->
+			{{error, not_supported}, Substate}
+	end,
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM({play, Location}), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_play, 4) of
+		true ->
+			Callback:handle_play(Location, BaseState#base_state.callrec, Internal, Substate);
 		false ->
 			{{error, not_supported}, Substate}
 	end,

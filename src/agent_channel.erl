@@ -130,6 +130,7 @@
 	hold/1,
 	unhold/1,
 	play/1,
+	play/2,
 	pause/1,
 	seek/2
 ]).
@@ -280,10 +281,15 @@ hold(Apid) ->
 unhold(Apid) ->
 	gen_fsm:sync_send_event(Apid, unhold).
 
-%% @doc Continues the channel playback
+%% @doc Starts or resumes the channel playback
 -spec(play/1 :: (Apid :: pid()) -> ok | error).
 play(Apid) ->
 	gen_fsm:sync_send_event(Apid, play).
+
+%% @doc Starts or resumes the channel playback at a specified location
+-spec(play/2 :: (Apid :: pid(), Location :: number()) -> ok | error).
+play(Apid, Location) ->
+	gen_fsm:sync_send_event(Apid, {play, Location}).
 
 %% @doc Pauses the channel playback
 -spec(pause/1 :: (Apid :: pid()) -> ok | error).
@@ -572,6 +578,11 @@ oncall(unhold, _From, #state{state_data = Call} = State) ->
 oncall(play, _From, #state{state_data = Call} = State) ->
 	MediaPid = Call#call.source,
 	gen_media:play(MediaPid),
+	{reply, ok, oncall, State};
+
+oncall({play, Location}, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:play(MediaPid, Location),
 	{reply, ok, oncall, State};
 
 oncall(pause, _From, #state{state_data = Call} = State) ->

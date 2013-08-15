@@ -56,6 +56,7 @@
 	unhold_channel/2,
 	transfer_to_queue/3,
 	play/2,
+	play/3,
 	pause/2,
 	seek/3]).
 
@@ -167,6 +168,14 @@ unhold_channel(St, ChanId) ->
 play(St, ChanId) ->
 	with_channel_do(St, ChanId, fun(ChanPid) ->
 		case agent_channel:play(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_play)
+		end
+	end).
+
+play(St, ChanId, Location) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:play(ChanPid, Location) of
 			ok -> {ok, success};
 			_ -> err(cannot_play)
 		end
