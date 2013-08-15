@@ -36,7 +36,8 @@
 -include("queue.hrl").
 
 %% encode
--export([enc_skills/1, enc_state_changes/1, enc_agent_state/1, enc_skill_recs/1]).
+-export([enc_skills/1, enc_state_changes/1, enc_agent_state/1, enc_skill_recs/1,
+		 enc_url_vars/1]).
 %% binutils
 -export([l2b/1, b2l/1, nob/1, nol/1]).
 
@@ -62,6 +63,11 @@ enc_state_changes(Changes) ->
 		fun({State, Timestamp}) ->
 			{[{State, util:now_ms(Timestamp)}]}
 		end, Changes)).
+
+-type url_vars() :: [{atom(), list()}].
+-spec enc_url_vars(url_vars()) -> json().
+enc_url_vars(UrlVars) ->
+	{[{K, l2b(V)} || {K, V} <- UrlVars]}.
 
 -spec enc_agent_state(available | {released, release_code()}) -> json().
 enc_agent_state({released, ReleaseCode}) ->
@@ -142,6 +148,12 @@ enc_state_changes_test() ->
 			{[{inqueue, 1352161998317}]}],
 		enc_state_changes([{inqueue, {1352,161998,317840}},
 			{init, {1352,161996,526276}}])).
+
+enc_url_vars_test() ->
+?assertEqual({[{key1, <<"value1">>},
+			  {key2, <<"value2">>}]}
+	,enc_url_vars([{key1, "value1"},
+				   {key2, "value2"}])).
 
 enc_agent_state_test_() ->
 	[?_assertEqual({[{released, {[{id, <<"RelID1">>}, {name, <<"Release 1">>}, {bias, negative}]}}]},

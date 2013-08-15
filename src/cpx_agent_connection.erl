@@ -1173,6 +1173,7 @@ encode_call(Call) ->
 		{<<"callid">>, list_to_binary(Call#call.id)},
 		{<<"source_module">>, Call#call.source_module},
 		{<<"type">>, Call#call.type},
+		{<<"url_vars">>, cpx_json_util:enc_url_vars(Call#call.url_vars)},
 		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
 
 %% doc Encode the given data into a structure suitable for ejrpc2_json:encode
