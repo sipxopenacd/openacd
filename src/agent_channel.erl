@@ -130,7 +130,8 @@
 	hold/1,
 	unhold/1,
 	play/1,
-	pause/1
+	pause/1,
+	seek/2
 ]).
 
 % ======================================================================
@@ -288,6 +289,11 @@ play(Apid) ->
 -spec(pause/1 :: (Apid :: pid()) -> ok | error).
 pause(Apid) ->
 	gen_fsm:sync_send_event(Apid, pause).
+
+%% @doc Moves the channel playback to a specified location
+-spec(seek/2 :: (Apid :: pid(), Location :: number()) -> ok | error).
+seek(Apid, Location) ->
+	gen_fsm:sync_send_event(Apid, {seek, Location}).
 
 % ======================================================================
 % INIT
@@ -571,6 +577,11 @@ oncall(play, _From, #state{state_data = Call} = State) ->
 oncall(pause, _From, #state{state_data = Call} = State) ->
 	MediaPid = Call#call.source,
 	gen_media:pause(MediaPid),
+	{reply, ok, oncall, State};
+
+oncall({seek, Location}, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:seek(MediaPid, Location),
 	{reply, ok, oncall, State};
 
 oncall(_Msg, _From, State) ->

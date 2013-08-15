@@ -453,7 +453,8 @@
 	hold/1,
 	unhold/1,
 	play/1,
-	pause/1
+	pause/1,
+	seek/2
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -723,6 +724,11 @@ play(Genmedia) ->
 -spec(pause/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
 pause(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(pause)).
+
+%% @doc Puts the media off hold
+-spec(seek/2 :: (Genmedia :: pid(), Location :: non_neg_integer()) -> 'ok' | 'error').
+seek(Genmedia, Location) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM({seek, Location})).
 
 %% @doc Do the equivalent of a `gen_server:call/2'.
 -spec(call/2 :: (Genmedia :: pid(), Request :: any()) -> any()).
@@ -1477,6 +1483,17 @@ oncall(?GM(pause), _From, {BaseState, Internal}) ->
 	{Reply, NewState} = case erlang:function_exported(Callback, handle_pause, 3) of
 		true ->
 			Callback:handle_pause(BaseState#base_state.callrec, Internal, Substate);
+		false ->
+			{{error, not_supported}, Substate}
+	end,
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM({seek, Location}), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_seek, 4) of
+		true ->
+			Callback:handle_seek(Location, BaseState#base_state.callrec, Internal, Substate);
 		false ->
 			{{error, not_supported}, Substate}
 	end,

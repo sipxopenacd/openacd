@@ -6,7 +6,8 @@
 behaviour_info(callbacks) ->
 	[
 		{handle_play, 3},
-		{handle_pause, 3}
+		{handle_pause, 3},
+		{handle_seek, 4}
 	];
 behaviour_info(_Other) ->
     undefined.

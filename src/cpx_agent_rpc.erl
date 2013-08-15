@@ -56,7 +56,8 @@
 	unhold_channel/2,
 	transfer_to_queue/3,
 	play/2,
-	pause/2]).
+	pause/2,
+	seek/3]).
 
 logout(_St) ->
 	send_exit(),
@@ -176,6 +177,14 @@ pause(St, ChanId) ->
 		case agent_channel:pause(ChanPid) of
 			ok -> {ok, success};
 			_ -> err(cannot_pause)
+		end
+	end).
+
+seek(St, ChanId, Location) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:seek(ChanPid, Location) of
+			ok -> {ok, success};
+			_ -> err(cannot_seek)
 		end
 	end).
 
