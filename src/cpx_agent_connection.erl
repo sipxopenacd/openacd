@@ -1178,6 +1178,7 @@ encode_call(Call) ->
 		{<<"source_module">>, Call#call.source_module},
 		{<<"type">>, Call#call.type},
 		{<<"info">>, encode_call_info(Call#call.info)},
+		{<<"url_vars">>, cpx_json_util:enc_url_vars(Call#call.url_vars)},
 		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
 
 

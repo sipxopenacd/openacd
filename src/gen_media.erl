@@ -2280,6 +2280,7 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 	Direction = ?get(direction, Ps, Base#call.direction),
 	Priority = ?get(priority, Ps, Base#call.priority),
 	Info = ?get(info, Ps, Base#call.info),
+	UrlVars = ?get(url_vars, Ps, Base#call.url_vars),
 
 	Client = case (ClientId =:= undefined) andalso
 		is_record(Base#call.client, client) of
@@ -2306,6 +2307,7 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 		direction = Direction,
 		priority = Priority,
 		info = Info,
+		url_vars = UrlVars,
 		state_changes = StateChanges
 	};
 ps_to_call(Ps, _, Callback, StateChanges) ->
