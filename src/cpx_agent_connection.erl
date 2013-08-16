@@ -1032,6 +1032,12 @@ handle_cast({mediapush, ChanPid, Call, Data}, State) ->
 		% one of two versions I'd like to see in the future
 		{struct, Props} when is_list(Props) ->
 			handle_cast({arbitrary_command, ChanPid, <<"mediaevent">>, Props}, State1);
+		{channel_playback_update, Props} ->
+			ChanId = cpx_conn_state:get_id_by_channel_pid(State, ChanPid),
+			Json = {struct, 
+				[{<<"event">>, <<"channel_playback_update">>},
+				{<<"data">>, {struct, [{<<"channelid">>, ChanId} | Props]}}]},
+			{ok, Json, State};
 		% and the second of the prefered versions
 		Props when is_list(Props) ->
 			handle_cast({arbitrary_command, ChanPid, <<"mediaevent">>, Props}, State1)
