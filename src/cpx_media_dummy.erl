@@ -29,6 +29,7 @@
 -module(cpx_media_dummy).
 
 -behaviour(gen_media).
+-behaviour(gen_media_playable).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -63,6 +64,12 @@
 
 	terminate/5,
 	code_change/6
+]).
+
+-export([
+	handle_play/4,
+	handle_pause/3,
+	from_json_opts/1
 ]).
 
 %% api
@@ -121,6 +128,15 @@ terminate(_Msg, _StName, _Call, _Extra, _St) ->
 
 code_change(_OldVsn, _Call, _StName, St, _GmInt, _Extra) ->
 	{ok, St}.
+
+handle_play(_Opts, _Call, _GMInt, St) ->
+	{ok, St}.
+
+handle_pause(_Call, _GMInt, St) ->
+	{ok, St}.
+
+from_json_opts(_) ->
+	[].
 
 -ifdef(TEST).
 
@@ -190,6 +206,18 @@ terminate_test() ->
 code_change_test() ->
 	?assertEqual({ok, []},
 		?M:code_change(oldvsn, t_call(), inqueue, [], t_internal(), [])).
+
+handle_play_test() ->
+	?assertEqual({ok, []},
+		?M:handle_play([], t_call(), t_internal(), [])).
+
+handle_pause_test() ->
+	?assertEqual({ok, []},
+		?M:handle_pause(t_call(), t_internal(), [])).
+
+from_json_opts_test() ->
+	?assertEqual([],
+		?M:from_json_opts({[]})).
 
 %% API
 

@@ -68,7 +68,7 @@
 		media_path = outband :: 'inband' | 'outband',
 		direction = inbound :: 'inbound' | 'outbound',
 		priority = 40 :: call_priority(),
-		arbitrary = [] :: [{string(), string()}],
+		info = [] :: [{atom(), atom() | number() | string()}],
 		url_vars = [] :: [{string(), string()}],
 		state_changes = [] :: [{atom(), tuple()}],
 		call_segment = 0 :: pos_integer()

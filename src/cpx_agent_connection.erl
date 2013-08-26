@@ -1021,6 +1021,10 @@ handle_cast({mediapush, ChanPid, Call, Data}, State) ->
 		{mediaload, Call, _Data} ->
 			Props = [{<<"media">>, Call#call.source_module}],
 			handle_cast({arbitrary_command, ChanPid, <<"mediaload">>, Props}, State1);
+		% freeswitch uses this
+		{mediastop, Call, _Data} ->
+			Props = [{<<"media">>, Call#call.source_module}],
+			handle_cast({arbitrary_command, ChanPid, <<"mediastop">>, Props}, State1);
 		% not sure what uses this.  It's still pretty messy.
 		{Command, Call, EventData} ->
 			Props = [{<<"event">>, EventData}, {<<"media">>, Call#call.type}],
@@ -1028,6 +1032,13 @@ handle_cast({mediapush, ChanPid, Call, Data}, State) ->
 		% one of two versions I'd like to see in the future
 		{struct, Props} when is_list(Props) ->
 			handle_cast({arbitrary_command, ChanPid, <<"mediaevent">>, Props}, State1);
+		{channel_playback_update, Props} ->
+			ChanId = cpx_conn_state:get_id_by_channel_pid(State, ChanPid),
+			Json = {struct,  [
+				{<<"event">>, <<"channel_playback_update">>},
+				{<<"data">>, {struct, [
+					{<<"channelid">>, ChanId} | Props]}}]},
+			{ok, Json, State};
 		% and the second of the prefered versions
 		Props when is_list(Props) ->
 			handle_cast({arbitrary_command, ChanPid, <<"mediaevent">>, Props}, State1)
@@ -1173,8 +1184,24 @@ encode_call(Call) ->
 		{<<"callid">>, list_to_binary(Call#call.id)},
 		{<<"source_module">>, Call#call.source_module},
 		{<<"type">>, Call#call.type},
+		{<<"info">>, encode_call_info(Call#call.info)},
 		{<<"url_vars">>, cpx_json_util:enc_url_vars(Call#call.url_vars)},
 		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
+
+
+encode_call_info(CallInfo) ->
+	encode_call_info(CallInfo, []).
+
+encode_call_info([], EncInfo) ->
+	EncInfo;
+encode_call_info([{K, V} | CallInfo], EncInfo) when is_atom(V) ->
+	encode_call_info(CallInfo, [{K, V} | EncInfo]);
+encode_call_info([{K, V} | CallInfo], EncInfo) when is_number(V) ->
+	encode_call_info(CallInfo, [{K, V} | EncInfo]);
+encode_call_info([{K, V} | CallInfo], EncInfo) when is_list(V) ->
+	encode_call_info(CallInfo, [{K, l2b(V)} | EncInfo]);
+encode_call_info([_ | CallInfo], EncInfo) ->
+	encode_call_info(CallInfo, EncInfo).
 
 %% doc Encode the given data into a structure suitable for ejrpc2_json:encode
 % -spec(encode_statedata/1 ::

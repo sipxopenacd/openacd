@@ -71,7 +71,7 @@
 %%                  | {media_path, inband | outband},
 %%                  | {direction, inbound | outbound}
 %%                  | {priority, pos_integer()},
-%%                  | {arbitrary, [{any(), any()}]}
+%%                  | {info, [{atom(), atom() | number() | string()}]}
 %%                  | {queue, string()}
 %%
 %%		When gen_media starts, this function is called.  It should
@@ -451,7 +451,10 @@
 	add_skills/2,
 	remove_skills/2,
 	hold/1,
-	unhold/1
+	unhold/1,
+	play/1,
+	play/2,
+	pause/1
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -711,6 +714,21 @@ hold(Genmedia) ->
 -spec(unhold/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
 unhold(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(unhold)).
+
+%% @doc Starts or resumes the media playback
+-spec(play/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
+play(Genmedia) ->
+	play(Genmedia, {[]}).
+
+%% @doc Starts or resumes the media playback at a specified location
+-spec(play/2 :: (Genmedia :: pid(), Opts :: json()) -> 'ok' | 'error').
+play(Genmedia, Opts) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM({play, Opts})).
+
+%% @doc Puts the media off hold
+-spec(pause/1 :: (Genmedia :: pid()) -> 'ok' | 'error').
+pause(Genmedia) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(pause)).
 
 %% @doc Do the equivalent of a `gen_server:call/2'.
 -spec(call/2 :: (Genmedia :: pid(), Request :: any()) -> any()).
@@ -1446,6 +1464,34 @@ oncall(?GM(hold), _From, {BaseState, Internal}) ->
 oncall(?GM(unhold), _From, {BaseState, Internal}) ->
 	Callback = BaseState#base_state.callback,
 	{Reply, NewState} = Callback:handle_unhold(Internal, BaseState#base_state.substate),
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM({play, JsonOpts}), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	Opts = case erlang:function_exported(Callback, from_json_opts, 1) of
+		true ->
+			Callback:from_json_opts(JsonOpts);
+		false ->
+			[]
+	end,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_play, 4) of
+		true ->
+			Callback:handle_play(Opts, BaseState#base_state.callrec, Internal, Substate);
+		false ->
+			{{error, not_supported}, Substate}
+	end,
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
+
+oncall(?GM(pause), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_pause, 3) of
+		true ->
+			Callback:handle_pause(BaseState#base_state.callrec, Internal, Substate);
+		false ->
+			{{error, not_supported}, Substate}
+	end,
 	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
 
 oncall(Msg, From, State) ->
@@ -2211,7 +2257,7 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 	MediaPath = ?get(media_path, Ps, Base#call.media_path),
 	Direction = ?get(direction, Ps, Base#call.direction),
 	Priority = ?get(priority, Ps, Base#call.priority),
-	Arbitrary = ?get(arbitrary, Ps, Base#call.arbitrary),
+	Info = ?get(info, Ps, Base#call.info),
 	UrlVars = ?get(url_vars, Ps, Base#call.url_vars),
 
 	Client = case (ClientId =:= undefined) andalso
@@ -2238,7 +2284,7 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 		media_path = MediaPath,
 		direction = Direction,
 		priority = Priority,
-		arbitrary = Arbitrary,
+		info = Info,
 		url_vars = UrlVars,
 		state_changes = StateChanges
 	};
@@ -4320,6 +4366,19 @@ hold_test_() ->
 	end}, {"unhold", fun() ->
 		St = t_st(),
 		?assertEqual({reply, ok, oncall, St}, oncall(?GM(unhold), from, St))
+	end}]}.
+
+playback_control_test_() ->
+	{setup, fun() ->
+		ok
+	end, fun(_) ->
+		ok
+	end, [{"play with opts", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(?GM({play, []}), from, St))
+	end}, {"pause", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(?GM(pause), from, St))
 	end}]}.
 
 -endif.

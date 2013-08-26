@@ -54,8 +54,14 @@
 	end_wrapup/2,
 	hold_channel/2,
 	unhold_channel/2,
-	transfer_to_queue/3
-]).
+	transfer_to_queue/3,
+	play/2,
+	play/3,
+	pause/2]).
+
+-type(cpx_conn_state() :: tuple()).
+-type(rpc_success() :: {error, integer(), binary()}).
+-type(rpc_error() :: {error, integer(), binary()}).
 
 logout(_St) ->
 	send_exit(),
@@ -146,6 +152,7 @@ hangup(St, ChanId) ->
 		end
 	end).
 
+-spec(hold_channel/2 :: (St :: cpx_conn_state(), ChanId :: binary()) -> rpc_success() | rpc_error()).
 hold_channel(St, ChanId) ->
 	with_channel_do(St, ChanId, fun(ChanPid) ->
 		case agent_channel:hold(ChanPid) of
@@ -154,11 +161,39 @@ hold_channel(St, ChanId) ->
 		end
 	end).
 
+-spec(unhold_channel/2 :: (St :: cpx_conn_state(), ChanId :: binary()) -> rpc_success() | rpc_error()).
 unhold_channel(St, ChanId) ->
 	with_channel_do(St, ChanId, fun(ChanPid) ->
 		case agent_channel:unhold(ChanPid) of
 			ok -> {ok, success};
 			_ -> err(cannot_unhold)
+		end
+	end).
+
+-spec(play/2 :: (St :: cpx_conn_state(), ChanId :: binary()) -> rpc_success() | rpc_error()).
+play(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:play(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_play)
+		end
+	end).
+
+-spec(play/3 :: (St :: cpx_conn_state(), ChanId :: binary(), Opts :: json()) -> rpc_success() | rpc_error()).
+play(St, ChanId, Opts) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:play(ChanPid, Opts) of
+			ok -> {ok, success};
+			_ -> err(cannot_play)
+		end
+	end).
+
+-spec(pause/2 :: (St :: cpx_conn_state(), ChanId :: binary()) -> rpc_success() | rpc_error()).
+pause(St, ChanId) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:pause(ChanPid) of
+			ok -> {ok, success};
+			_ -> err(cannot_pause)
 		end
 	end).
 
@@ -403,6 +438,32 @@ hold_channel_test_() ->
 		St = t_st(),
 		?assertEqual({ok, success}, unhold_channel(St, ChId)),
 		?assert(meck:called(agent_channel, unhold, [t_cpid()], self()))
+	end}]}.
+
+playback_control_test_() ->
+	{setup, fun() ->
+		meck:new(agent_channel),
+		meck:expect(agent_channel, play, 1, ok),
+		meck:expect(agent_channel, play, 2, ok),
+		meck:expect(agent_channel, pause, 1, ok)
+	end, fun(_) ->
+		meck:unload(agent_channel)
+	end, [{"play", fun() ->
+		ChId = <<"ch1">>,
+		St = t_st(),
+		?assertEqual({ok, success}, play(St, ChId)),
+		?assert(meck:called(agent_channel, play, [t_cpid()], self()))
+	end}, {"play with location", fun() ->
+		ChId = <<"ch1">>,
+		Opts = {[{<<"location">>, 1000}]},
+		St = t_st(),
+		?assertEqual({ok, success}, play(St, ChId, Opts)),
+		?assert(meck:called(agent_channel, play, [t_cpid(), Opts], self()))
+	end}, {"pause", fun() ->
+		ChId = <<"ch1">>,
+		St = t_st(),
+		?assertEqual({ok, success}, pause(St, ChId)),
+		?assert(meck:called(agent_channel, pause, [t_cpid()], self()))
 	end}]}.
 
 get_all_skills_test_() ->

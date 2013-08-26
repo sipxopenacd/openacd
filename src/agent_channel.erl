@@ -128,7 +128,10 @@
 	subscribe_events/2,
 	subscribe_events/3,
 	hold/1,
-	unhold/1
+	unhold/1,
+	play/1,
+	play/2,
+	pause/1
 ]).
 
 % ======================================================================
@@ -276,6 +279,21 @@ hold(Apid) ->
 -spec(unhold/1 :: (Apid :: pid()) -> ok | error).
 unhold(Apid) ->
 	gen_fsm:sync_send_event(Apid, unhold).
+
+%% @doc Starts or resumes the channel playback
+-spec(play/1 :: (Apid :: pid()) -> ok | error).
+play(Apid) ->
+	play(Apid, {[]}).
+
+%% @doc Starts or resumes the channel playback at a specified location
+-spec(play/2 :: (Apid :: pid(), Opts :: json()) -> ok | error).
+play(Apid, Opts) ->
+	gen_fsm:sync_send_event(Apid, {play, Opts}).
+
+%% @doc Pauses the channel playback
+-spec(pause/1 :: (Apid :: pid()) -> ok | error).
+pause(Apid) ->
+	gen_fsm:sync_send_event(Apid, pause).
 
 % ======================================================================
 % INIT
@@ -549,6 +567,16 @@ oncall(hold, _From, #state{state_data = Call} = State) ->
 oncall(unhold, _From, #state{state_data = Call} = State) ->
 	MediaPid = Call#call.source,
 	gen_media:unhold(MediaPid),
+	{reply, ok, oncall, State};
+
+oncall({play, Opts}, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:play(MediaPid, Opts),
+	{reply, ok, oncall, State};
+
+oncall(pause, _From, #state{state_data = Call} = State) ->
+	MediaPid = Call#call.source,
+	gen_media:pause(MediaPid),
 	{reply, ok, oncall, State};
 
 oncall(_Msg, _From, State) ->
@@ -980,6 +1008,22 @@ hold_test_() ->
 		St = t_st(),
 		?assertEqual({reply, ok, oncall, St}, oncall(unhold, from, St)),
 		?assert(meck:called(gen_media, unhold, [t_call_pid()], self()))
+	end}]}.
+
+playback_control_test_() ->
+	{setup, fun() ->
+		meck:new(gen_media),
+		meck:expect(gen_media, play, 1, ok),
+		meck:expect(gen_media, play, 2, ok),
+		meck:expect(gen_media, pause, 1, ok)
+	end, fun(_) ->
+		meck:unload(gen_media)
+	end, [{"play with opts", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall({play, {[]}}, from, St))
+	end}, {"pause", fun() ->
+		St = t_st(),
+		?assertEqual({reply, ok, oncall, St}, oncall(pause, from, St))
 	end}]}.
 
 -endif.
