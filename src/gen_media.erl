@@ -1008,7 +1008,7 @@ inqueue_ringing(?GM(voicemail), _From, {BaseState, Internal}) ->
 	lager:info("trying to send media ~p to voicemail", [Call#call.id]),
 	case erlang:function_exported(Callback, handle_voicemail, 4) of
 		false ->
-			{reply, invalid, inqueue_ringing, {BaseState, Internal}};
+			{reply, {error, invalid}, inqueue_ringing, {BaseState, Internal}};
 		true ->
 			case Callback:handle_voicemail(inqueue_ringing, Call, Internal, BaseState#base_state.substate) of
 				{ok, Substate} ->
@@ -1024,7 +1024,7 @@ inqueue_ringing(?GM(voicemail), _From, {BaseState, Internal}) ->
 					set_gproc_prop(inqueue_ringing, inqueue, NewBase),
 					{reply, ok, inqueue, {NewBase, NewInternal}};
 				{invalid, Substate} ->
-					{reply, invalid, inqueue_ringing, {BaseState#base_state{substate = Substate}, Internal}}
+					{reply, {error, invalid}, inqueue_ringing, {BaseState#base_state{substate = Substate}, Internal}}
 			end
 	end;
 inqueue_ringing(?GM(transfer_outband, Addr), _From, {BaseState, Internal}) ->
