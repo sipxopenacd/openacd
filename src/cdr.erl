@@ -536,26 +536,26 @@ add_cdr_mod(Mod, Call) ->
 add_log_mod(Mod, Call) ->
 	CallId = Call#call.id,
 	CallSegment = Call#call.call_segment,
-	Id = CallId ++ "-" ++ CallSegment,
+	Id = {CallId, CallSegment},
 	try lists:member({Mod, Id}, gen_event:which_handlers(cdr)) of
 		false ->
 			try gen_event:add_handler(cdr, {Mod, Id}, [Call]) of
 				ok ->
-					lager:info("Initializing CDR for ~s success", [Call#call.id]),
+					lager:info("Initializing CDR_MONGO for ~s success", [Call#call.id]),
 					ok;
 				Else ->
-					lager:error("Initializing CDR for ~s erred with: ~p", [Call#call.id, Else]),
+					lager:error("Initializing CDR_MONGO for ~s erred with: ~p", [Call#call.id, Else]),
 					error
 				catch
 					What:Why ->
-						lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+						lager:error("Initializing CDR_MONGO for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
 						error
 			end;
 		true ->
-			lager:warning("CDR already initialized for ~s", [Call#call.id])
+			lager:warning("CDR_MONGO already initialized for ~s", [Call#call.id])
 	catch
 		What:Why ->
-			lager:error("Initializing CDR for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
+			lager:error("Initializing CDR_MONGO for ~s erred with: ~p:~p", [Call#call.id, What, Why]),
 			error
 	end.
 
