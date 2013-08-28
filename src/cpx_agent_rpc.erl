@@ -54,6 +54,7 @@
 	end_wrapup/2,
 	hold_channel/2,
 	unhold_channel/2,
+	transfer_to_agent/3,
 	transfer_to_queue/3,
 	play/2,
 	play/3,
@@ -205,9 +206,18 @@ end_wrapup(St, ChanId) ->
 		end
 	end).
 
-transfer_to_queue(St, ChanId, QueueName) ->
+transfer_to_agent(St, ChanId, AgentLogin) ->
 	with_channel_do(St, ChanId, fun(ChanPid) ->
-		case agent_channel:queue_transfer(ChanPid, QueueName) of
+		case agent_channel:agent_transfer(ChanPid, b2l(AgentLogin)) of
+			ok -> {[{state, wrapup}, {channel, ChanId}]};
+			Err -> 	lager:info("Error : ~p", [Err]),
+					err(cannot_transfer)
+		end
+	end).
+
+transfer_to_queue(St, ChanId, Queue) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:queue_transfer(ChanPid, b2l(Queue)) of
 			ok -> {[{state, wrapup}, {channel, ChanId}]};
 			Err -> 	lager:info("Error : ~p", [Err]),
 					err(invalid_state_change)

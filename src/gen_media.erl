@@ -436,8 +436,9 @@
 	end_call/1,
 	stop_ringing/1,
 	oncall/1,
-	agent_transfer/3,
 	queue/2,
+	queue/3,
+	agent_transfer/2,
 	call/2,
 	call/3,
 	cast/2,
@@ -642,29 +643,39 @@ stop_ringing(Genmedia, Reason) ->
 oncall(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(agent_oncall), infinity).
 
-%% @doc Transfer the call from the agent it is associated with to a new agent.
--spec(agent_transfer/3 :: (Genmedia :: pid(), Apid :: pid() | string() | {string(), pid()}, Timeout :: pos_integer()) -> 'ok' | 'invalid').
-agent_transfer(Genmedia, {_Login, Apid} = Agent, Timeout) when is_pid(Apid) ->
-	gen_fsm:sync_send_event(Genmedia, ?GM(agent_transfer, {Agent, Timeout}));
-agent_transfer(Genmedia, Apid, Timeout) when is_pid(Apid) ->
-	case agent_manager:find_by_pid(Apid) of
-		notfound ->
-			invalid;
-		Agent ->
-			agent_transfer(Genmedia, {Agent, Apid}, Timeout)
-	end;
-agent_transfer(Genmedia, Agent, Timeout) ->
-	case agent_manager:query_agent(Agent) of
-		false ->
-			invalid;
-		{true, Apid} ->
-			agent_transfer(Genmedia, {Agent, Apid}, Timeout)
-	end.
+%% doc Transfer the call from the agent it is associated with to a new agent.
+% -spec(agent_transfer/3 :: (Genmedia :: pid(), Apid :: pid() | string() | {string(), pid()}, Timeout :: pos_integer()) -> 'ok' | 'invalid').
+% agent_transfer(Genmedia, {_Login, Apid} = Agent, Timeout) when is_pid(Apid) ->
+% 	gen_fsm:sync_send_event(Genmedia, ?GM(agent_transfer, {Agent, Timeout}));
+% agent_transfer(Genmedia, Apid, Timeout) when is_pid(Apid) ->
+% 	case agent_manager:find_by_pid(Apid) of
+% 		notfound ->
+% 			invalid;
+% 		Agent ->
+% 			agent_transfer(Genmedia, {Agent, Apid}, Timeout)
+% 	end;
+% agent_transfer(Genmedia, Agent, Timeout) ->
+% 	case agent_manager:query_agent(Agent) of
+% 		false ->
+% 			invalid;
+% 		{true, Apid} ->
+% 			agent_transfer(Genmedia, {Agent, Apid}, Timeout)
+% 	end.
 
 %% @doc Transfer the passed media into the given queue.
 -spec(queue/2 :: (Genmedia :: pid(), Queue :: string()) -> 'ok' | 'invalid').
 queue(Genmedia, Queue) ->
-	gen_fsm:sync_send_event(Genmedia, ?GM(queue, Queue)).
+	queue(Genmedia, Queue, []).
+
+%% @doc Transfer the passed media into the given queue.
+-spec(queue/3 :: (Genmedia :: pid(), Queue :: string(), Opts :: list()) -> 'ok' | 'invalid').
+queue(Genmedia, Queue, Opts) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(queue, {Queue, Opts})).
+
+-spec(agent_transfer/2 :: (Genmedia :: pid(), AgentLogin :: list()) -> ok | error).
+agent_transfer(Genmedia, AgentLogin) ->
+	Opts = [{new_skills, [{'_agent', AgentLogin}]}],
+	queue(Genmedia, "transfer_queue", Opts).
 
 %% @doc Attempt to spy on the agent oncall with the given media.  `Spy' is
 %% the pid to send media events/load data to, and `AgentRec' is an
@@ -1276,11 +1287,12 @@ inqueue_ringing(Msg, State) ->
 
 %% sync
 
-oncall(?GM(queue, Queue), From, {BaseState, Internal}) ->
+oncall(?GM(queue, {Queue, Opts}), From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call} = BaseState,
 	#oncall_state{oncall_pid = {Ocagent, Apid}, oncall_mon = Mon} = Internal,
 	lager:info("Request to queue ~p from ~p", [Call#call.id, From]),
-	case enqueue(Queue, reprioritize_for_requeue(Call#call{skills=[]}), BaseState) of
+	NewSkills = proplists:get_value(new_skills, Opts, []),
+	case enqueue(Queue, reprioritize_for_requeue(Call#call{skills=NewSkills}), BaseState) of
 		{ok, {NewBase, 
 			  #inqueue_state{queue_pid = {_QN, Qpid}} = NewInternal}} ->
 			async_set_agent_state(Apid, [wrapup, Call]),
@@ -1297,56 +1309,56 @@ oncall(?GM(queue, Queue), From, {BaseState, Internal}) ->
 	end;
 
 
-oncall(?GM(agent_transfer, {{_Agent, Apid}, _Timeout}), _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
-	Call = BaseState#base_state.callrec,
-	lager:notice("Can't transfer to yourself, silly ~p! ~p", [Apid, Call#call.id]),
-	{reply, invalid, oncall, State};
+% oncall(?GM(agent_transfer, {{_Agent, Apid}, _Timeout}), _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
+% 	Call = BaseState#base_state.callrec,
+% 	lager:notice("Can't transfer to yourself, silly ~p! ~p", [Apid, Call#call.id]),
+% 	{reply, invalid, oncall, State};
 
-oncall(?GM(agent_transfer, {{Agent, Apid}, Timeout}), _From, {BaseState, Internal}) ->
-	#base_state{callrec = Call, callback = Callback, url_pop_get_vars = GenPopopts} = BaseState,
-	#oncall_state{oncall_pid = {OcAgent, Ocpid}, oncall_mon = Mon} = Internal,
-	case set_agent_state(Apid, [ringing, Call]) of
-		{ok, _RPid} ->
-			case Callback:handle_agent_transfer(Apid, Timeout, oncall, BaseState#base_state.callrec, Internal, BaseState#base_state.substate) of
-				Success when element(1, Success) == ok ->
-					Popopts = case Success of
-						{ok, Substate} ->
-							[];
-						{ok, Opts, Substate} ->
-							lists:ukeymerge(1, lists:ukeysort(1, GenPopopts), lists:ukeysort(1, Opts))
-					end,
-					% dummy is there because the structure of internally handled
-					% messages is ?GM(command}, CommandData}.
-					% Even if the command doesn't take any arguments, something
-					% needs to be there to make it a 2 element tuple, thus dummy
-					% here.
-					Tref = gen_fsm:send_event_after(Timeout, ?GM(stop_ring, dummy)),
-					cdr:agent_transfer(Call, {OcAgent, Agent}),
-					AgentInfo = [{agent_login, Agent}, {agent_pid, Apid}],
-					cdr:ringing(Call, AgentInfo),
-					url_pop(Call, Apid, Popopts),
-					RingMon = erlang:monitor(process, Apid),
-					StateChanges = [{oncall_ringing, os:timestamp()} | BaseState#base_state.state_changes],
-					NewBase = BaseState#base_state{substate = Substate, state_changes = StateChanges},
-					NewInternal = #oncall_ringing_state{
-						ring_pid = {Agent, Apid},
-						ringout = Tref,
-						ring_mon = RingMon,
-						oncall_pid = {OcAgent, Ocpid},
-						oncall_mon = Mon
-					},
-					set_gproc_prop(oncall, oncall_ringing, NewBase),
-					{reply, ok, oncall_ringing, {NewBase, NewInternal}};
-				{error, Error, NewState} ->
-					lager:notice("Could not set agent ringing for transfer ~p due to ~p", [Error, Call#call.id]),
-					set_agent_state(Apid, [idle]),
-					NewBase = BaseState#base_state{substate = NewState},
-					{reply, invalid, oncall, {NewBase, Internal}}
-			end;
-		invalid ->
-			lager:notice("Could not ring ~p to target agent ~p", [Call#call.id, Apid]),
-			{reply, invalid, oncall, {BaseState, Internal}}
-	end;
+% oncall(?GM(agent_transfer, {{Agent, Apid}, Timeout}), _From, {BaseState, Internal}) ->
+% 	#base_state{callrec = Call, callback = Callback, url_pop_get_vars = GenPopopts} = BaseState,
+% 	#oncall_state{oncall_pid = {OcAgent, Ocpid}, oncall_mon = Mon} = Internal,
+% 	case set_agent_state(Apid, [ringing, Call]) of
+% 		{ok, _RPid} ->
+% 			case Callback:handle_agent_transfer(Apid, Timeout, oncall, BaseState#base_state.callrec, Internal, BaseState#base_state.substate) of
+% 				Success when element(1, Success) == ok ->
+% 					Popopts = case Success of
+% 						{ok, Substate} ->
+% 							[];
+% 						{ok, Opts, Substate} ->
+% 							lists:ukeymerge(1, lists:ukeysort(1, GenPopopts), lists:ukeysort(1, Opts))
+% 					end,
+% 					% dummy is there because the structure of internally handled
+% 					% messages is ?GM(command}, CommandData}.
+% 					% Even if the command doesn't take any arguments, something
+% 					% needs to be there to make it a 2 element tuple, thus dummy
+% 					% here.
+% 					Tref = gen_fsm:send_event_after(Timeout, ?GM(stop_ring, dummy)),
+% 					cdr:agent_transfer(Call, {OcAgent, Agent}),
+% 					AgentInfo = [{agent_login, Agent}, {agent_pid, Apid}],
+% 					cdr:ringing(Call, AgentInfo),
+% 					url_pop(Call, Apid, Popopts),
+% 					RingMon = erlang:monitor(process, Apid),
+% 					StateChanges = [{oncall_ringing, os:timestamp()} | BaseState#base_state.state_changes],
+% 					NewBase = BaseState#base_state{substate = Substate, state_changes = StateChanges},
+% 					NewInternal = #oncall_ringing_state{
+% 						ring_pid = {Agent, Apid},
+% 						ringout = Tref,
+% 						ring_mon = RingMon,
+% 						oncall_pid = {OcAgent, Ocpid},
+% 						oncall_mon = Mon
+% 					},
+% 					set_gproc_prop(oncall, oncall_ringing, NewBase),
+% 					{reply, ok, oncall_ringing, {NewBase, NewInternal}};
+% 				{error, Error, NewState} ->
+% 					lager:notice("Could not set agent ringing for transfer ~p due to ~p", [Error, Call#call.id]),
+% 					set_agent_state(Apid, [idle]),
+% 					NewBase = BaseState#base_state{substate = NewState},
+% 					{reply, invalid, oncall, {NewBase, Internal}}
+% 			end;
+% 		invalid ->
+% 			lager:notice("Could not ring ~p to target agent ~p", [Call#call.id, Apid]),
+% 			{reply, invalid, oncall, {BaseState, Internal}}
+% 	end;
 
 oncall(?GM(warm_transfer_hold), _From, {BaseState, Internal}) ->
 	#base_state{callback = Callback, callrec = Call, substate = Substate} = BaseState,

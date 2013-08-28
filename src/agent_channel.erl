@@ -116,8 +116,8 @@
 	end_wrapup/1,
 	list_to_state/1,
 	set_connection/2,
-	agent_transfer/2,
 	queue_transfer/2,
+	agent_transfer/2,
 	media_call/2, % conn asking the media stuff
 	media_cast/2, % conn telling media stuff
 	media_push/3, % media telling conn stuff
@@ -239,15 +239,15 @@ list_to_state(String) ->
 		false -> erlang:error(badarg)
 	end.
 
-%% @doc Start the agent_transfer procedure.  Gernally the media will handle it from here.
--spec(agent_transfer/2 :: (Pid :: pid(), Target :: pid()) -> 'ok' | 'invalid').
-agent_transfer(Pid, Target) ->
-	gen_fsm:sync_send_event(Pid, {agent_transfer, Target}).
-
 %% @doc Start the queue_transfer procedure.  Gernally the media will handle it from here.
 -spec(queue_transfer/2 :: (Pid :: pid(), Queue :: string()) -> 'ok' | 'invalid').
 queue_transfer(Pid, Queue) ->
-	gen_fsm:sync_send_event(Pid, {queue_transfer, Queue}).
+	gen_fsm:sync_send_event(Pid, {queue_transfer, Queue, []}).
+
+%% @doc Transfer call to an agent
+-spec(agent_transfer/2 :: (Pid :: pid(), AgentLogin :: list()) -> ok | error).
+agent_transfer(Pid, AgentLogin) ->
+	gen_fsm:sync_send_event(Pid, {agent_transfer, AgentLogin}).
 
 %% @doc Inform the agent that it's failed a ring, usually an outbound.
 %% Used by gen_media, prolly not anywhere else.
@@ -518,24 +518,19 @@ oncall({warmtransfer_3rd_party, Data}, From, State) ->
 % 	oncall({queue_transfer, binary_to_list(QueueBin)}, From, State);
 
 
-oncall({queue_transfer, QueueBin}, _From, 
-	#state{agent_rec = Agent, state_data = Call} = State)->
-	#call{source = CallPid} = Call, 
-	Queue = binary_to_list(QueueBin),
-	Now = ouc_time:now(),
-	lager:info("CallPid is ~p", [CallPid]),
-	case gen_media:queue(CallPid, Queue) of
-		ok -> 
-			lager:info("Moving from oncall to wrapup due to queue transfer", []),
-			conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
-			cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
-			prep_autowrapup(Call),
-			set_gproc_prop({State, oncall, wrapup}),
-			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
-		Else -> 
-			lager:warning("Didn't queue transfer:  ~p", [Else]),
-			{reply, {error, Else}, oncall, State}
-	end;
+oncall({queue_transfer, Queue, Opts}, _From,
+	#state{state_data = #call{source = CallPid}} = State) ->
+	QueueTransfer = fun() ->
+		gen_media:queue(CallPid, Queue, Opts)
+	end,
+	handle_transfer_wrapup(QueueTransfer, State);
+
+oncall({agent_transfer, AgentLogin}, _From,
+	#state{state_data = #call{source = CallPid}} = State) ->
+	AgentTransfer = fun() ->
+		gen_media:agent_transfer(CallPid, AgentLogin)
+	end,
+	handle_transfer_wrapup(AgentTransfer, State);
 
 %% -----
 oncall(wrapup, From, #state{state_data = Call} = State) ->
@@ -903,6 +898,21 @@ handle_endpoint_exit(StName, State, Reason) ->
 	lager:info("Exit of endpoint due to ~p while ~p. exit", [StName, Reason]),
 	{stop, Reason, State}.
 
+handle_transfer_wrapup(TransferFun, #state{agent_rec=Agent,
+	agent_connection=AgentConn, state_data=Call} = State) ->
+	Now = ouc_time:now(),
+	case TransferFun() of
+		ok ->
+			lager:info("Moving from oncall to wrapup after call transfer"),
+			conn_cast(AgentConn, set_channel_msg(wrapup, Call)),
+			cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
+			prep_autowrapup(Call),
+			set_gproc_prop({State, oncall, wrapup}),
+			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
+		Else ->
+			lager:warning("Didn't queue transfer:  ~p", [Else]),
+			{reply, {error, Else}, oncall, State}
+	end.
 
 % ======================================================================
 % TESTS
