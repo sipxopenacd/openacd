@@ -220,7 +220,11 @@ transfer_to_agent(St, ChanId, AgentLogin) ->
 
 transfer_to_queue(St, ChanId, Queue, Opts) ->
 	with_channel_do(St, ChanId, fun(ChanPid) ->
-		case agent_channel:queue_transfer(ChanPid, b2l(Queue), Opts) of
+		%% TODO write better conversion script from JSON -> proplist
+		SkillBins = ej:get({"skills"}, Opts),
+		Skills = [binary_to_existing_atom(SkillBin, utf8) || SkillBin <- SkillBins],
+		NewOpts = [{skills, Skills}],
+		case agent_channel:queue_transfer(ChanPid, b2l(Queue), NewOpts) of
 			ok -> {[{state, wrapup}, {channel, ChanId}]};
 			Err -> 	lager:info("Error : ~p", [Err]),
 					err(invalid_state_change)
@@ -300,9 +304,12 @@ call_queue_apis_test_() ->
 		meck:unload(call_queue_config)
 	end, [{"get_queues", fun() ->
 		meck:expect(call_queue_config, get_queues, 0, {ok, [
-			#call_queue{name="q1"}, #call_queue{name="q2"}]}),
+			#call_queue{name="q1", skills=[english]},
+			#call_queue{name="q2", skills=[technical]}]}),
 
-		?assertEqual({[{queues, [<<"q1">>, <<"q2">>]}]},
+		?assertEqual({[{queues, [{[{name, <<"q1">>},{skills, [english]}]},
+								 {[{name, <<"q2">>},{skills, [technical]}]}
+					]}]},
 			get_queues(t_st()))
 	end}, {"get_clients", fun() ->
 		meck:expect(call_queue_config, get_clients, 0, {ok, [
