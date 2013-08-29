@@ -55,7 +55,7 @@
 	hold_channel/2,
 	unhold_channel/2,
 	transfer_to_agent/3,
-	transfer_to_queue/3,
+	transfer_to_queue/4,
 	play/2,
 	play/3,
 	pause/2]).
@@ -73,7 +73,10 @@ ping(_St) ->
 
 get_queues(_St) ->
 	{ok, Qs} = call_queue_config:get_queues(),
-	{[{queues, [l2b(Q#call_queue.name) || Q <- Qs]}]}.
+	Queues = [{[{name, l2b(Q#call_queue.name)},
+				{skills, cpx_json_util:enc_skills(Q#call_queue.skills)}]} ||
+				Q <- Qs],
+	{[{queues, Queues}]}.
 
 get_clients(_St) ->
 	ClientToEntry = fun(Cl) -> {[{id, l2b(Cl#client.id)},
@@ -215,9 +218,9 @@ transfer_to_agent(St, ChanId, AgentLogin) ->
 		end
 	end).
 
-transfer_to_queue(St, ChanId, Queue) ->
+transfer_to_queue(St, ChanId, Queue, Opts) ->
 	with_channel_do(St, ChanId, fun(ChanPid) ->
-		case agent_channel:queue_transfer(ChanPid, b2l(Queue)) of
+		case agent_channel:queue_transfer(ChanPid, b2l(Queue), Opts) of
 			ok -> {[{state, wrapup}, {channel, ChanId}]};
 			Err -> 	lager:info("Error : ~p", [Err]),
 					err(invalid_state_change)

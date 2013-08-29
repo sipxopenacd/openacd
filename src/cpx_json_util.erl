@@ -39,7 +39,7 @@
 -export([enc_skills/1, enc_state_changes/1, enc_agent_state/1, enc_skill_recs/1,
 		 enc_url_vars/1]).
 %% binutils
--export([l2b/1, b2l/1, nob/1, nol/1]).
+-export([l2b/1, b2l/1, nob/1, nol/1, noi/1]).
 
 -spec enc_skills(skills()) -> json().
 enc_skills(Skills) ->
@@ -98,6 +98,13 @@ nol(undefined) ->
 	null;
 nol(L) when is_binary(L) ->
 	binary_to_list(L).
+
+noi(null) ->
+	null;
+noi(undefined) ->
+	null;
+noi(I) when is_integer(I) ->
+	I.
 
 % Internal functions
 

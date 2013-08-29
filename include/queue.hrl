@@ -29,6 +29,9 @@
 
 %% @hidden
 -define(DEFAULT_WEIGHT, 5).
+-define(DEFAULT_WRAPUP_ENABLED, true).
+-define(DEFAULT_WRAPUP_TIMER, 60000). %% in milliseconds
+-define(DEFAULT_AUTO_WRAPUP, 120000).
 -ifdef(TEST).
 -define(DEFAULT_RECIPE, [{[{ticks, 3}], [{remove_skills, ['_node']}], run_once, <<"Default Recipe">>}]).
 -else.
@@ -88,6 +91,9 @@
 	skills = [english, '_node'] :: [atom()],
 	recipe = ?DEFAULT_RECIPE :: recipe(),
 	hold_music :: string() | undefined,
+	wrapup_enabled = true :: 'true' | 'false',
+	wrapup_timer = undefined :: pos_integer() | undefined,
+	auto_wrapup = undefined :: pos_integer() | undefined,
 	group = "Default" :: string()
 }).
 

@@ -70,6 +70,9 @@
 		priority = 40 :: call_priority(),
 		info = [] :: [{atom(), atom() | number() | string()}],
 		url_vars = [] :: [{string(), string()}],
+		wrapup_enabled = true :: 'true' | 'false',
+		wrapup_timer = undefined :: pos_integer() | undefined,
+		auto_wrapup = undefined :: pos_integer() | undefined,
 		state_changes = [] :: [{atom(), tuple()}],
 		call_segment = 0 :: pos_integer()
 }).

@@ -41,6 +41,7 @@
 
 -include("call.hrl").
 -include("agent.hrl").
+-include("queue.hrl").
 %-include_lib("stdlib/include/qlc.hrl").
 
 
@@ -117,6 +118,7 @@
 	list_to_state/1,
 	set_connection/2,
 	queue_transfer/2,
+	queue_transfer/3,
 	agent_transfer/2,
 	media_call/2, % conn asking the media stuff
 	media_cast/2, % conn telling media stuff
@@ -242,7 +244,11 @@ list_to_state(String) ->
 %% @doc Start the queue_transfer procedure.  Gernally the media will handle it from here.
 -spec(queue_transfer/2 :: (Pid :: pid(), Queue :: string()) -> 'ok' | 'invalid').
 queue_transfer(Pid, Queue) ->
-	gen_fsm:sync_send_event(Pid, {queue_transfer, Queue, []}).
+	queue_transfer(Pid, Queue, []).
+
+-spec(queue_transfer/3 :: (Pid :: pid(), Queue :: string(), Opts :: any()) -> 'ok' | 'invalid').
+queue_transfer(Pid, Queue, Opts) ->
+	gen_fsm:sync_send_event(Pid, {queue_transfer, Queue, Opts}).
 
 %% @doc Transfer call to an agent
 -spec(agent_transfer/2 :: (Pid :: pid(), AgentLogin :: list()) -> ok | error).
@@ -517,7 +523,6 @@ oncall({warmtransfer_3rd_party, Data}, From, State) ->
 % oncall({queue_transfer, QueueBin}, From, State) when is_binary(QueueBin) ->
 % 	oncall({queue_transfer, binary_to_list(QueueBin)}, From, State);
 
-
 oncall({queue_transfer, Queue, Opts}, _From,
 	#state{state_data = #call{source = CallPid}} = State) ->
 	QueueTransfer = fun() ->
@@ -538,20 +543,40 @@ oncall(wrapup, From, #state{state_data = Call} = State) ->
 
 oncall({wrapup, #call{id = Id}=Call}, {From, _Tag}, #state{agent_rec = Agent, state_data = #call{id = Id}} = State) ->
 	Now = ouc_time:now(),
-	case Call#call.source of
-		From ->
-			%% hmm. should be avoided... this means gen_media called wrapup on agent_channel
-			%% ideally, only agent_channel should be the one calling wrapup to gen_media
 
-			lager:debug("Moving from oncall to wrapup", []),
-			conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
-			cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
-			prep_autowrapup(Call),
-			set_gproc_prop({State, oncall, wrapup}),
-			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
-		_CallSource ->
-			{Rep, Next, State1} = try_wrapup(State, Now),
-			{reply, Rep, Next, State1}
+	% {ok, Queue} = call_queue_config:get_queue(Call#call.queue),
+	% TestQueue = Queue#call_queue{wrapup_enabled = true, auto_wrapup = 5000},
+	case Call#call.wrapup_enabled of
+		true ->
+			case Call#call.source of
+				From ->
+					%% hmm. should be avoided... this means gen_media called wrapup on agent_channel
+					%% ideally, only agent_channel should be the one calling wrapup to gen_media
+
+					lager:debug("Moving from oncall to wrapup", []),
+
+					conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
+					cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
+					prep_autowrapup(Call),
+					set_gproc_prop({State, oncall, wrapup}),
+					{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
+				_CallSource ->
+					{Rep, Next, State1} = try_wrapup(State, Now),
+					{reply, Rep, Next, State1}
+			end;
+		false ->
+			CallPid = Call#call.source,
+			try gen_media:wrapup(CallPid) of
+				ok ->
+					lager:debug("Ending call; Skipping wrapup", []),
+					{stop, normal, ok, State#state{state_data = update_state(stop, Call)}};
+				_ ->
+					{reply, ok, oncall, State}
+			catch
+				exit:{noproc, _} ->
+					lager:info("gen_media: ~p is gone, proceeding anyway", [CallPid]),
+					{stop, normal, ok, State#state{state_data = update_state(stop, Call)}}
+			end
 	end;
 
 oncall(hold, _From, #state{state_data = Call} = State) ->
@@ -791,11 +816,15 @@ start_endpoint({EndpointCbk, Opts}, Agent, Call) ->
 start_endpoint(E, _, _) ->
 	{error, {badendpoint, E}}.
 
-prep_autowrapup(#call{client = Client}) ->
-	case proplists:get_value(?WRAPUP_AUTOEND_KEY, Client#client.options) of
+prep_autowrapup(#call{auto_wrapup = AutoWrapup} = _Call) ->
+	lager:debug("Prep AutoWrapup called with value: ~p", [AutoWrapup]),
+	case AutoWrapup of
 		N when is_integer(N) andalso N > 0 ->
 			Self = self(),
-			erlang:send_after(N * 1000, Self, end_wrapup);
+
+			lager:debug("Sending EndWrapup after ~p, Time is: ~p",
+				[AutoWrapup,util:now_ms()]),
+			erlang:send_after(N, Self, end_wrapup);
 		_ ->
 			ok
 	end.

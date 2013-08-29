@@ -56,6 +56,7 @@
 	get_recipe/1,
 	set_weight/2,
 	get_weight/1,
+	get_props/1,
 	add/4,
 	add/3,
 	add/2,
@@ -67,6 +68,7 @@
 	get_qcall/2,
 	get_qcall_priority/2,
 	dump/1,
+	update/2,
 	remove/2,
 	bgremove/2,
 	migrate/2,
@@ -90,6 +92,9 @@
 	recipe = ?DEFAULT_RECIPE :: recipe(),
 	weight = ?DEFAULT_WEIGHT :: pos_integer(),
 	call_skills = [english, '_node'] :: [atom()],
+	wrapup_enabled = true :: 'true' | 'false',
+	wrapup_timer = undefined :: pos_integer() | undefined,
+	auto_wrapup = undefined :: pos_integer() | undefined,
 	last_service = os:timestamp() ::{pos_integer(), pos_integer(), pos_integer()},
 	flag = undefined
 }).
@@ -206,6 +211,10 @@ get_qcall_priority(Pid, Callid) when is_pid(Pid) ->
 		{{Priority, _}, _} -> Priority
 	end.
 
+-spec(get_props/1 :: (Pid :: pid()) -> any()).
+get_props(Pid) when is_pid(Pid) ->
+	gen_server:call(Pid, get_props).
+
 %% @doc Query the queue at `pid()' `Pid' for the queued_call with the ID `string()'
 %% or `pid()' of `Callid'.
 -spec(get_qcall/2 :: (Pid :: pid(), Callid :: pid()) -> #queued_call{} | 'none';
@@ -279,6 +288,11 @@ to_list(Pid) ->
 -spec(dump/1 :: (Pid :: pid()) -> any()).
 dump(Pid) ->
 	gen_server:call(Pid, dump).
+
+%% @doc updates the state of the queue at `pid()' `Pid' with `opts()' `Opts'.
+-spec(update/2 :: (Pid :: pid(), Opts :: opts()) -> 'ok').
+update(Pid, Opts) ->
+	gen_server:cast(Pid, {update, Opts}).
 
 %% @doc Remove the call with id `string()' of `Calldata' or `pid()'
 %% `Callpid' from the queue at `Pid'.  Returns `ok' on success, `none' on
@@ -418,13 +432,16 @@ selection_info(Qpid) ->
 
 %% @private
 init([Name, Opts]) ->
-	lager:debug("Starting queue ~p at ~p", [Name, node()]),
+	lager:debug("Starting queue ~p at ~p with opts : ~p", [Name, node(), Opts]),
 	process_flag(trap_exit, true),
 	State = #state{
 		name = Name,
 		group = proplists:get_value(group, Opts, "Default"),
 		recipe = proplists:get_value(recipe, Opts, ?DEFAULT_RECIPE),
 		weight = proplists:get_value(weight, Opts, ?DEFAULT_WEIGHT),
+		wrapup_enabled = proplists:get_value(wrapup_enabled, Opts, ?DEFAULT_WRAPUP_ENABLED),
+		wrapup_timer = proplists:get_value(wrapup_timer, Opts),
+		auto_wrapup = proplists:get_value(auto_wrapup, Opts),
 		call_skills = proplists:get_value(skills, Opts, []),
 		flag = case proplists:get_value(default_queue, Opts) of
 			true -> default_queue;
@@ -579,6 +596,16 @@ handle_call(to_list, _From, State) ->
 handle_call(get_calls, _From, #state{queue = Calls} = State) ->
 	{reply, gb_trees:to_list(Calls), State};
 
+handle_call(get_props, _From, State) ->
+	Props = [{name, State#state.name},
+			 {group, State#state.group},
+			 {skills, lists:sort(State#state.call_skills)},
+			 {recipe, State#state.recipe},
+			 {wrapup_enabled, State#state.wrapup_enabled},
+			 {wrapup_timer, State#state.wrapup_timer},
+			 {auto_wrapup, State#state.auto_wrapup}],
+	{reply, Props, State};
+
 handle_call(call_count, _From, State) ->
 	{reply, gb_trees:size(State#state.queue), State};
 
@@ -648,7 +675,10 @@ handle_cast({update, Opts}, State) ->
 		group = proplists:get_value(group, Opts, State#state.group),
 		recipe = proplists:get_value(recipe, Opts, State#state.recipe),
 		weight = proplists:get_value(weight, Opts, State#state.weight),
-		call_skills = proplists:get_value(skills, Opts, State#state.call_skills)
+		call_skills = proplists:get_value(skills, Opts, State#state.call_skills),
+		wrapup_enabled = proplists:get_value(wrapup_enabled, Opts, State#state.wrapup_enabled),
+		wrapup_timer = proplists:get_value(wrapup_timer, Opts, State#state.wrapup_timer),
+		auto_wrapup = proplists:get_value(auto_wrapup, Opts, State#state.auto_wrapup)
 	},
 	{noreply, Newstate};
 handle_cast(Msg, State) ->

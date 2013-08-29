@@ -1186,6 +1186,7 @@ encode_call(Call) ->
 		{<<"type">>, Call#call.type},
 		{<<"info">>, encode_call_info(Call#call.info)},
 		{<<"url_vars">>, cpx_json_util:enc_url_vars(Call#call.url_vars)},
+		{<<"time_limit">>, cpx_json_util:noi(Call#call.wrapup_timer)},
 		{<<"state_changes">>, cpx_json_util:enc_state_changes(Call#call.state_changes)}]}.
 
 

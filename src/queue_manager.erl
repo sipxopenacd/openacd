@@ -103,20 +103,20 @@ add_queue(Name, Opts) when is_list(Name) ->
 load_queue(Name) ->
 	case call_queue_config:get_merged_queue(Name) of
 		{ok, Qrec} when is_record(Qrec, call_queue) ->
+			Opts = [{weight, Qrec#call_queue.weight},
+					{skills, Qrec#call_queue.skills},
+					{recipe, Qrec#call_queue.recipe},
+					{group, Qrec#call_queue.group},
+					{wrapup_enabled, Qrec#call_queue.wrapup_enabled},
+					{wrapup_timer, Qrec#call_queue.wrapup_timer},
+					{auto_wrapup, Qrec#call_queue.auto_wrapup}],
 			case get_queue(Name) of
 				Qpid when is_pid(Qpid) ->
 					lager:notice("Updating running queue configuration for ~p at ~p", [Name, Qpid]),
-					gen_server:cast(Qpid, {update, [{group, Qrec#call_queue.group},
-								{recipe, Qrec#call_queue.recipe}, {weight, Qrec#call_queue.weight},
-								{skills, Qrec#call_queue.skills}]}),
+					call_queue:update(Qpid, Opts),
 					ok;
 				_ ->
-					add_queue(Name, [
-						{weight, Qrec#call_queue.weight},
-						{skills, Qrec#call_queue.skills},
-						{recipe, Qrec#call_queue.recipe},
-						{group, Qrec#call_queue.group}
-					])
+					add_queue(Name, Opts)
 			end,
 			gproc:send({p, l, cpx_queue_config_change}, {cpx_queue_config_change, {loaded_queue, Name}});
 		_Else ->
@@ -217,7 +217,10 @@ init([]) ->
 			{recipe, Queuerec#call_queue.recipe},
 			{weight, Queuerec#call_queue.weight},
 			{skills, Queuerec#call_queue.skills},
-			{group, Queuerec#call_queue.group}
+			{group, Queuerec#call_queue.group},
+			{wrapup_enabled, Queuerec#call_queue.wrapup_enabled},
+			{wrapup_timer, Queuerec#call_queue.wrapup_timer},
+			{auto_wrapup, Queuerec#call_queue.auto_wrapup}
 		]),
 		dict:store(Queuerec#call_queue.name, Pid, Acc)
 	end,
