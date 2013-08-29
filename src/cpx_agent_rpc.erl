@@ -39,6 +39,7 @@
 
 -export([logout/1,
 	ping/1,
+	sleep/2,
 	get_queues/1,
 	get_clients/1,
 	get_skills/1,
@@ -57,7 +58,8 @@
 	transfer_to_queue/3,
 	play/2,
 	play/3,
-	pause/2]).
+	pause/2
+]).
 
 -type(cpx_conn_state() :: tuple()).
 -type(rpc_success() :: {error, integer(), binary()}).
@@ -66,6 +68,11 @@
 logout(_St) ->
 	send_exit(),
 	{[{status, logged_out}]}.
+
+-spec(sleep/2 :: (St :: cpx_conn_state(), TimeoutMs :: integer()) -> rpc_success() | rpc_error()).
+sleep(_St, TimeoutMs) ->
+	self() ! {wsock_sleep, TimeoutMs},
+	{[{status, sleep}]}.
 
 ping(_St) ->
 	{[{pong, util:now_ms()}]}.
@@ -482,5 +489,10 @@ get_all_skills_test_() ->
 		?assertEqual({[{skills, [english, support, '_all', '_brand', '_node', '_profile', '_queue']}]},
 			get_all_skills(t_st()))
 	end}]}.
+
+sleep_test() ->
+	?assertEqual({[{status, sleep}]}, sleep(any, 123)),
+	Rcvd = receive {wsock_sleep, 123} -> true after 10 -> false end,
+	?assert(Rcvd).
 
 -endif.
