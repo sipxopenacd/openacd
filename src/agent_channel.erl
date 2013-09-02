@@ -523,19 +523,19 @@ oncall({warmtransfer_3rd_party, Data}, From, State) ->
 % oncall({queue_transfer, QueueBin}, From, State) when is_binary(QueueBin) ->
 % 	oncall({queue_transfer, binary_to_list(QueueBin)}, From, State);
 
-oncall({queue_transfer, Queue, Opts}, _From,
+oncall({queue_transfer, Queue, Opts}, From,
 	#state{state_data = #call{source = CallPid}} = State) ->
 	QueueTransfer = fun() ->
 		gen_media:queue(CallPid, Queue, Opts)
 	end,
-	handle_transfer_wrapup(QueueTransfer, State);
+	handle_transfer_wrapup(QueueTransfer, From, State);
 
-oncall({agent_transfer, AgentLogin}, _From,
+oncall({agent_transfer, AgentLogin}, From,
 	#state{state_data = #call{source = CallPid}} = State) ->
 	AgentTransfer = fun() ->
 		gen_media:agent_transfer(CallPid, AgentLogin)
 	end,
-	handle_transfer_wrapup(AgentTransfer, State);
+	handle_transfer_wrapup(AgentTransfer, From, State);
 
 %% -----
 oncall(wrapup, From, #state{state_data = Call} = State) ->
@@ -900,6 +900,20 @@ try_wrapup(State, Now) ->
 
 	{Rep, Next, State1}.
 
+force_wrapup(State, Now) ->
+		Call = State#state.state_data,
+	CallPid = Call#call.source,
+	Agent = State#state.agent_rec,
+	lager:debug("Moving from oncall to wrapup", []),
+
+	conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
+	cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
+	prep_autowrapup(Call),
+	set_gproc_prop({State, oncall, wrapup}),
+	State1 = State#state{state_data = update_state(wrapup, Call)},
+
+	{ok, wrapup, State1}.
+
 handle_endpoint_exit(ringing, State, call_expired) ->
 	lager:info("Exit of endpoint ~p due to ~p while ringing, setting agent to released before stopping", [State#state.endpoint, call_expired]),
 	ConnMsg = {forced_release, ring_init_failed},
@@ -927,17 +941,39 @@ handle_endpoint_exit(StName, State, Reason) ->
 	lager:info("Exit of endpoint due to ~p while ~p. exit", [StName, Reason]),
 	{stop, Reason, State}.
 
-handle_transfer_wrapup(TransferFun, #state{agent_rec=Agent,
+handle_transfer_wrapup(TransferFun, From, #state{agent_rec=Agent,
 	agent_connection=AgentConn, state_data=Call} = State) ->
 	Now = ouc_time:now(),
 	case TransferFun() of
 		ok ->
-			lager:info("Moving from oncall to wrapup after call transfer"),
-			conn_cast(AgentConn, set_channel_msg(wrapup, Call)),
-			cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
-			prep_autowrapup(Call),
-			set_gproc_prop({State, oncall, wrapup}),
-			{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
+			% lager:info("Moving from oncall to wrapup after call transfer"),
+			% conn_cast(AgentConn, set_channel_msg(wrapup, Call)),
+			% cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
+			% prep_autowrapup(Call),
+			% set_gproc_prop({State, oncall, wrapup}),
+			% {reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
+			case Call#call.wrapup_enabled of
+				true ->
+					case Call#call.source of
+						From ->
+							%% hmm. should be avoided... this means gen_media called wrapup on agent_channel
+							%% ideally, only agent_channel should be the one calling wrapup to gen_media
+
+							lager:debug("Moving from oncall to wrapup after call transfer", []),
+
+							conn_cast(AgentConn, set_channel_msg(wrapup, Call)),
+							cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
+							prep_autowrapup(Call),
+							set_gproc_prop({State, oncall, wrapup}),
+							{reply, ok, wrapup, State#state{state_data = update_state(wrapup, Call)}};
+						_CallSource ->
+							{Rep, Next, State1} = force_wrapup(State, Now),
+							{reply, Rep, Next, State1}
+					end;
+				false ->
+					lager:debug("Ending channel; Skipping wrapup", []),
+					{stop, normal, ok, State#state{state_data = update_state(stop, Call)}}
+			end;
 		Else ->
 			lager:warning("Didn't queue transfer:  ~p", [Else]),
 			{reply, {error, Else}, oncall, State}
