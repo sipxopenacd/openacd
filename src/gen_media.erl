@@ -2237,6 +2237,7 @@ enqueue(QueueN, Call, BaseSt) ->
 				wrapup_enabled = Queue#call_queue.wrapup_enabled,
 				wrapup_timer = Queue#call_queue.wrapup_timer,
 				auto_wrapup = Queue#call_queue.auto_wrapup,
+				url_vars = Call#call.url_vars,
 				queue = QN
 			},
 

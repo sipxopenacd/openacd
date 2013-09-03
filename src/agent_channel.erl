@@ -901,8 +901,7 @@ try_wrapup(State, Now) ->
 	{Rep, Next, State1}.
 
 force_wrapup(State, Now) ->
-		Call = State#state.state_data,
-	CallPid = Call#call.source,
+	Call = State#state.state_data,
 	Agent = State#state.agent_rec,
 	lager:debug("Moving from oncall to wrapup", []),
 
