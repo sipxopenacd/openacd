@@ -14,6 +14,7 @@ Source: %{name}-%{version}.tar.gz
 BuildRequires: erlang = R15B
 BuildRequires: erlang-rebar
 BuildRequires: erlang-ejrpc2
+BuildRequires: erlang-ej
 BuildRequires: erlang-gen_leader
 BuildRequires: erlang-gen_server_mock
 BuildRequires: erlang-lager
@@ -89,6 +90,8 @@ fi
 %{_libdir}/erlang/lib/%{name}-%{version}/include/*.hrl
 
 %changelog
+* Thu Sep 05 2013 Lou Allen Uysison <luysison@ezuce.com>
+- Add ej package
 * Fri Feb 08 2013 Jan Vincent Liwanag <jvliwanag@ezuce.com>
 - Separate lib files, remove keys, change openacd home
 * Thu Jan 28 2013 Douglas Hubler <dhubler@ezuce.com>

@@ -1291,7 +1291,7 @@ oncall(?GM(queue, {Queue, Opts}), From, {BaseState, Internal}) ->
 	#oncall_state{oncall_pid = {Ocagent, Apid}, oncall_mon = Mon} = Internal,
 	lager:info("Request to queue ~p from ~p", [Call#call.id, From]),
 	NewSkills = proplists:get_value(skills, Opts, []),
-	case enqueue(Queue, reprioritize_for_requeue(Call#call{skills=NewSkills}), BaseState) of
+	case enqueue(Queue, reprioritize_for_requeue(Call#call{skills=NewSkills}), BaseState#base_state{agent = undefined}) of
 		{ok, {NewBase,
 			  #inqueue_state{queue_pid = {_QN, Qpid}} = NewInternal}} ->
 			async_set_agent_state(Apid, [wrapup, Call]),
@@ -1301,7 +1301,6 @@ oncall(?GM(queue, {Queue, Opts}), From, {BaseState, Internal}) ->
 			% cdr:queue_transfer(Call, Queue),
 			% cdr:queue_transfer(NewCall, Queue),
 			FinalBase = NewBase#base_state{substate = NewState},
-			lager:info("NewSubstate in qxfer: ~p", [NewState]),
 			set_gproc_prop(oncall, inqueue, NewBase),
 			{reply, ok, inqueue, {FinalBase, NewInternal}};
 		_ -> {reply, invalid, {BaseState, Internal}}

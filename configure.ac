@@ -17,6 +17,7 @@ EZ_NEED_PROG([SSH_KEYGEN], [ssh-keygen], [authentication key generation, managem
 
 EZ_ERLANG_NEED_LIB(gen_leader)
 EZ_ERLANG_NEED_LIB(ejrpc2)
+EZ_ERLANG_NEED_LIB(ej)
 EZ_ERLANG_NEED_LIB(gproc)
 EZ_ERLANG_NEED_LIB(lager)
 
