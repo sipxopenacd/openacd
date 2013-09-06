@@ -676,7 +676,7 @@ queue(Genmedia, Queue, Opts) ->
 -spec(agent_transfer/2 :: (Genmedia :: pid(), AgentLogin :: list()) -> ok | error).
 agent_transfer(Genmedia, AgentLogin) ->
 	Opts = [{new_skills, [{'_agent', AgentLogin}]}],
-	queue(Genmedia, "transfer_queue", Opts).
+	queue(Genmedia, ?TRANSFER_QUEUE, Opts).
 
 %% @doc Attempt to spy on the agent oncall with the given media.  `Spy' is
 %% the pid to send media events/load data to, and `AgentRec' is an
@@ -2307,48 +2307,48 @@ ps_to_call(Ps, Base, Callback, StateChanges) when is_record(Base, call) ->
 ps_to_call(Ps, _, Callback, StateChanges) ->
 	ps_to_call(Ps, #call{id="",source=Callback}, Callback, StateChanges).
 
-url_pop(#call{client = Client} = Call, Agent, Addedopts) ->
-	#client{options = DefaultOptions} = correct_client_sub(undefined),
-	String = case {proplists:get_value(url_pop, Client#client.options), proplists:get_value(url_pop, DefaultOptions)} of
-		{undefined, undefined} ->
-			undefined;
-		{undefined, []} ->
-			undefined;
-		{undefined, L} ->
-			L;
-		{[], []} ->
-			undefined;
-		{[], L} ->
-			L;
-		{L, _} ->
-			L
-	end,
-	case String of
-		undefined ->
-			ok;
-		_ ->
-			Words = [
-				{"label", (case is_atom(Client#client.label) of true -> atom_to_list(Client#client.label); false -> Client#client.label end)},
-				{"clientid", (case is_atom(Client#client.id) of true -> atom_to_list(Client#client.id);
-					false -> Client#client.id end)},
-				{"callerid", element(1, Call#call.callerid) ++ " " ++ element(2, Call#call.callerid)},
-				{"calleridname", element(1, Call#call.callerid)},
-				{"calleridnum", element(2, Call#call.callerid)},
-				{"callid", Call#call.id},
-				{"destination", ""},
-				{"ivroption", ""},
-				{"media_type", atom_to_list(Call#call.type)},
-				{"direction", atom_to_list(Call#call.direction)}
-			],
-			BaseUrl = util:string_interpolate(String, Words),
-			Appender = fun({_Key, undefined}, Midurl) ->
-					Midurl;
-				({Key, Value}, Midurl) ->
-				lists:append([Midurl, [$& | Key], [$= | Value]])
-			end,
-			Url = lists:foldl(Appender, BaseUrl, Addedopts),
-			agent_channel:url_pop(Agent, Url, "ring")
-	end.
+% url_pop(#call{client = Client} = Call, Agent, Addedopts) ->
+% 	#client{options = DefaultOptions} = correct_client_sub(undefined),
+% 	String = case {proplists:get_value(url_pop, Client#client.options), proplists:get_value(url_pop, DefaultOptions)} of
+% 		{undefined, undefined} ->
+% 			undefined;
+% 		{undefined, []} ->
+% 			undefined;
+% 		{undefined, L} ->
+% 			L;
+% 		{[], []} ->
+% 			undefined;
+% 		{[], L} ->
+% 			L;
+% 		{L, _} ->
+% 			L
+% 	end,
+% 	case String of
+% 		undefined ->
+% 			ok;
+% 		_ ->
+% 			Words = [
+% 				{"label", (case is_atom(Client#client.label) of true -> atom_to_list(Client#client.label); false -> Client#client.label end)},
+% 				{"clientid", (case is_atom(Client#client.id) of true -> atom_to_list(Client#client.id);
+% 					false -> Client#client.id end)},
+% 				{"callerid", element(1, Call#call.callerid) ++ " " ++ element(2, Call#call.callerid)},
+% 				{"calleridname", element(1, Call#call.callerid)},
+% 				{"calleridnum", element(2, Call#call.callerid)},
+% 				{"callid", Call#call.id},
+% 				{"destination", ""},
+% 				{"ivroption", ""},
+% 				{"media_type", atom_to_list(Call#call.type)},
+% 				{"direction", atom_to_list(Call#call.direction)}
+% 			],
+% 			BaseUrl = util:string_interpolate(String, Words),
+% 			Appender = fun({_Key, undefined}, Midurl) ->
+% 					Midurl;
+% 				({Key, Value}, Midurl) ->
+% 				lists:append([Midurl, [$& | Key], [$= | Value]])
+% 			end,
+% 			Url = lists:foldl(Appender, BaseUrl, Addedopts),
+% 			agent_channel:url_pop(Agent, Url, "ring")
+% 	end.
 
 get_client_by_id(undefined) ->
 	case catch call_queue_config:get_default_client() of
@@ -2362,43 +2362,43 @@ get_client_by_id(L) ->
 	end.
 
 %% TODO: Will always fail
-correct_client_sub(undefined) ->
-	Client = try call_queue_config:get_default_client() of
-		{ok, C} ->
-			C
-	catch
-		error:{case_clause, {aborted, {node_not_running, _Node}}} ->
-			#client{}
-	end,
-	Client;
-correct_client_sub({Id,Opts}) ->
-	#client{options = Defaults} = Client = try call_queue_config:get_client_by_id(Id) of
-		{ok, C} ->
-			C;
-		none ->
-			correct_client_sub(undefined)
-	catch
-		error:{case_clause, {aborted, {node_not_running, _Node}}} ->
-			#client{}
-	end,
-	Opts0 = lists:sort(Opts),
-	Defs0 = lists:sort(Defaults),
-	Opts1 = merge_defaults(Opts0,Defs0),
-	Client#client{options = Opts1}.
+% correct_client_sub(undefined) ->
+% 	Client = try call_queue_config:get_default_client() of
+% 		{ok, C} ->
+% 			C
+% 	catch
+% 		error:{case_clause, {aborted, {node_not_running, _Node}}} ->
+% 			#client{}
+% 	end,
+% 	Client;
+% correct_client_sub({Id,Opts}) ->
+% 	#client{options = Defaults} = Client = try call_queue_config:get_client_by_id(Id) of
+% 		{ok, C} ->
+% 			C;
+% 		none ->
+% 			correct_client_sub(undefined)
+% 	catch
+% 		error:{case_clause, {aborted, {node_not_running, _Node}}} ->
+% 			#client{}
+% 	end,
+% 	Opts0 = lists:sort(Opts),
+% 	Defs0 = lists:sort(Defaults),
+% 	Opts1 = merge_defaults(Opts0,Defs0),
+% 	Client#client{options = Opts1}.
 
-merge_defaults(Opts,Defaults) ->
-	merge_defaults(Opts,Defaults,[]).
+% merge_defaults(Opts,Defaults) ->
+% 	merge_defaults(Opts,Defaults,[]).
 
-merge_defaults([],Rest,Acc) ->
-	lists:append(Rest,Acc);
-merge_defaults(Rest,[],Acc) ->
-	lists:append(Rest,Acc);
-merge_defaults([{Key,_Val} = H | OTail], [{Key,_Val1} | DTail], Acc) ->
-	merge_defaults(OTail,DTail,[H|Acc]);
-merge_defaults([{OKey,_} = H | OTail], [{DKey,_} | _] = Defs, Acc) when OKey > DKey ->
-	merge_defaults(OTail,Defs,[H | Acc]);
-merge_defaults(Opts, [H | Tail], Acc) ->
-	merge_defaults(Opts, Tail, [H | Acc]).
+% merge_defaults([],Rest,Acc) ->
+% 	lists:append(Rest,Acc);
+% merge_defaults(Rest,[],Acc) ->
+% 	lists:append(Rest,Acc);
+% merge_defaults([{Key,_Val} = H | OTail], [{Key,_Val1} | DTail], Acc) ->
+% 	merge_defaults(OTail,DTail,[H|Acc]);
+% merge_defaults([{OKey,_} = H | OTail], [{DKey,_} | _] = Defs, Acc) when OKey > DKey ->
+% 	merge_defaults(OTail,Defs,[H | Acc]);
+% merge_defaults(Opts, [H | Tail], Acc) ->
+% 	merge_defaults(Opts, Tail, [H | Acc]).
 
 -spec(set_cpx_mon/2 :: (State :: {#base_state{}, any()}, Action :: proplist() | 'delete') -> 'ok').
 set_cpx_mon({#base_state{callrec = Call}, _}, delete) ->

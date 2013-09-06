@@ -143,6 +143,8 @@
 ]).
 -export([
 	get_queue/1,
+	get_default_queue/0,
+	get_transfer_queue/0,
 	get_merged_queue/1,
 	get_queues/0,
 	get_queues_by_group/1
@@ -206,8 +208,30 @@ start() ->
 
 %% @doc Get the configuration for the passed `string()' `Queue' name.
 -spec get_queue(Name::string()) -> {ok, #call_queue{}} | none | {error, any()}.
+get_queue(?DEFAULT_QUEUE) ->
+	?STORE:get_default_queue();
+get_queue(?TRANSFER_QUEUE) ->
+	?STORE:get_transfer_queue();
 get_queue(Name) ->
 	?STORE:get_queue(Name).
+
+get_default_queue() ->
+	{ok, Store} = application:get_env(openacd, call_queue_config_storage),
+	case Store:get_default_queue() of
+		{ok, Q} ->
+			{ok, Q};
+		_ ->
+			{ok, default_queue_fallback()}
+	end.
+
+get_transfer_queue() ->
+	{ok, Store} = application:get_env(openacd, call_queue_config_storage),
+	case Store:get_transfer_queue() of
+		{ok, Q} ->
+			{ok, Q};
+		_ ->
+			{ok, transfer_queue_fallback()}
+	end.
 
 %% @doc Get the configureation for the passed `string()' `Queue' name and
 %% merge it with the queue group's skills and recipe.
@@ -218,7 +242,11 @@ get_merged_queue(Queue) ->
 %% @doc Get all the queue configurations (`[#call_queue{}]').
 -spec get_queues() -> {ok, [#call_queue{}]} | {error, any()}.
 get_queues() ->
-	?STORE:get_queues().
+	{ok, Store} = application:get_env(openacd, call_queue_config_storage),
+	{ok, Qs} = Store:get_queues(),
+	Qs2 = add_queue(?DEFAULT_QUEUE, Qs, default_queue_fallback()),
+	Qs3 = add_queue(?TRANSFER_QUEUE, Qs2, transfer_queue_fallback()),
+	{ok, Qs3}.
 
 %% @doc Get all the queues that are members of the specified Group (`string()').
 -spec get_queues_by_group(Group::string()) -> {ok, [#call_queue{}]} | none | {error, any()}.
@@ -304,6 +332,34 @@ get_clients() ->
 	?STORE:get_clients().
 
 %% =====
+%% Internal functions
+%% =====
+
+default_queue_fallback() ->
+	#call_queue{
+		name = ?DEFAULT_QUEUE,
+		group = "Default"}.
+
+transfer_queue_fallback() ->
+	#call_queue{
+		name = ?TRANSFER_QUEUE,
+		weight = 50,
+		skills = [],
+		recipe = [],
+		group = "Default"}.
+
+find_queue(Name, Qs) ->
+	lists:keyfind(Name, #call_queue.name, Qs).
+
+add_queue(Name, Qs, DefaultConf) ->
+	case find_queue(Name, Qs) of
+		false ->
+			[DefaultConf | Qs];
+		_ ->
+			Qs
+	end.
+
+%% =====
 %% Tests
 %% =====
 
@@ -316,7 +372,9 @@ t_merged_queue() ->
 	#call_queue{name="queue0", skills=[english, chinese]}.
 
 t_queues() ->
-	[#call_queue{name="queue0", skills=[english], group="qgroupA"},
+	[#call_queue{name="default_queue", group="Default"},
+	#call_queue{name="transfer_queue", skills=[], group="Default"},
+	#call_queue{name="queue0", skills=[english], group="qgroupA"},
 	#call_queue{name="queue1", skills=[japanese], group="qgroupA"},
 	#call_queue{name="queue2", skills=[japanese], group="qgroupB"}].
 

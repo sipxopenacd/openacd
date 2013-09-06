@@ -38,6 +38,9 @@
 -define(DEFAULT_RECIPE, [{[{ticks, 15}], [{remove_skills, ['_node']}], run_once, <<"Default Recipe">>}]).
 -endif.
 
+-define(DEFAULT_QUEUE, "default_queue").
+-define(TRANSFER_QUEUE, "transfer_queue").
+
 %-type(recipe_step() :: {non_neg_integer(),
 	%'new_queue' | 'add_skills' | 'remove_skills' | 'set_priority' | 'prioritize' | 'deprioritize' | 'voicemail' | 'announce' | 'add_recipe',
 	%[any()],
