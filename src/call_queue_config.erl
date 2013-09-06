@@ -209,9 +209,9 @@ start() ->
 %% @doc Get the configuration for the passed `string()' `Queue' name.
 -spec get_queue(Name::string()) -> {ok, #call_queue{}} | none | {error, any()}.
 get_queue(?DEFAULT_QUEUE) ->
-	?STORE:get_default_queue();
+	get_default_queue();
 get_queue(?TRANSFER_QUEUE) ->
-	?STORE:get_transfer_queue();
+	get_transfer_queue();
 get_queue(Name) ->
 	?STORE:get_queue(Name).
 
