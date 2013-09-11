@@ -120,6 +120,7 @@
 	queue_transfer/2,
 	queue_transfer/3,
 	agent_transfer/2,
+	outband_transfer/2,
 	media_call/2, % conn asking the media stuff
 	media_cast/2, % conn telling media stuff
 	media_push/3, % media telling conn stuff
@@ -254,6 +255,10 @@ queue_transfer(Pid, Queue, Opts) ->
 -spec(agent_transfer/2 :: (Pid :: pid(), AgentLogin :: list()) -> ok | error).
 agent_transfer(Pid, AgentLogin) ->
 	gen_fsm:sync_send_event(Pid, {agent_transfer, AgentLogin}).
+
+-spec(outband_transfer/2 :: (Pid :: pid(), AgentLogin :: list()) -> ok | error).
+outband_transfer(Pid, Addr) ->
+	gen_fsm:sync_send_event(Pid, {outband_transfer, Addr}).
 
 %% @doc Inform the agent that it's failed a ring, usually an outbound.
 %% Used by gen_media, prolly not anywhere else.
@@ -542,6 +547,13 @@ oncall({agent_transfer, AgentLogin}, From,
 	#state{state_data = #call{source = CallPid}} = State) ->
 	AgentTransfer = fun() ->
 		gen_media:agent_transfer(CallPid, AgentLogin)
+	end,
+	handle_transfer_wrapup(AgentTransfer, From, State);
+
+oncall({outband_transfer, AgentLogin}, From,
+	#state{state_data = #call{source = CallPid}} = State) ->
+	AgentTransfer = fun() ->
+		gen_media:transfer_outband(CallPid, AgentLogin)
 	end,
 	handle_transfer_wrapup(AgentTransfer, From, State);
 

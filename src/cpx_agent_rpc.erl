@@ -56,6 +56,7 @@
 	unhold_channel/2,
 	transfer_to_agent/3,
 	transfer_to_queue/4,
+	transfer_outband/3,
 	play/2,
 	play/3,
 	pause/2]).
@@ -228,6 +229,17 @@ transfer_to_queue(St, ChanId, Queue, Opts) ->
 			ok -> {[{state, wrapup}, {channel, ChanId}]};
 			Err -> 	lager:info("Error : ~p", [Err]),
 					err(invalid_state_change)
+		end
+	end).
+
+transfer_outband(St, ChanId, Number) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:outband_transfer(ChanPid, b2l(Number)) of
+			ok ->
+				{[{state, wrapup}, {channel, ChanId}]};
+			Err ->
+				lager:info("Error : ~p", [Err]),
+				err(cannot_transfer)
 		end
 	end).
 

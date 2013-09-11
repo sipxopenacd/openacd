@@ -1306,6 +1306,12 @@ oncall(?GM(queue, {Queue, Opts}), From, {BaseState, Internal}) ->
 		_ -> {reply, invalid, {BaseState, Internal}}
 	end;
 
+oncall(?GM(transfer_outband, Addr), _From, St) ->
+	% lager:info("trying to transfer ~p to ~p", [Call#call.id, Addr]),
+	sync_call_cbk(inqueue, St, handle_transfer_outband, [Addr],
+		fun(#cbkr{cbk_res=ok}=R) ->
+			R#cbkr{action={stop, normal}};
+		(R) -> R end);
 
 % oncall(?GM(agent_transfer, {{_Agent, Apid}, _Timeout}), _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
 % 	Call = BaseState#base_state.callrec,
