@@ -933,9 +933,18 @@ handle_endpoint_exit(oncall, State, Reason) ->
 	Call = State#state.state_data,
 	CallPid = Call#call.source,
 	lager:info("Exit of endpoint ~p due to ~p while oncall; moving ~p to wrapup.", [State#state.endpoint, Reason, CallPid]),
-	{_Rep, Next, State1} = try_wrapup(State, Now),
+	{Rep, Next, State1} =
+		case Call#call.wrapup_enabled of
+			true -> try_wrapup(State, Now);
+			false ->
+				{stop, normal, State#state{state_data = update_state(stop, Call)}}
+		end,
 	State2 = State1#state{endpoint = undefined},
-	{next_state, Next, State2};
+	Out = case Rep of
+					stop -> stop;
+					_ -> next_state
+				end,
+	{Out, Next, State2};
 handle_endpoint_exit(StName, State, Reason) ->
 	lager:info("Exit of endpoint due to ~p while ~p. exit", [StName, Reason]),
 	{stop, Reason, State}.
