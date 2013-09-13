@@ -302,17 +302,15 @@ handle_json(State, Bin) ->
 	handle_json(State, Bin, []).
 
 handle_json(State, Bin, Mods) ->
-	Resp = case ejrpc2:handle_req([cpx_agent_rpc|Mods], Bin, [{preargs, [State]}]) of
-		ok -> undefined;
-		{ok, R} -> R
-	end,
+	{ok, Resp, State1} = ejrpc2:handle_req([cpx_agent_rpc|Mods],
+		Bin, [{preargs, [State]}, {default_eterm, State}]),
 
 	E = receive
 		{'$cpx_agent_rpc', exit} -> exit
 		after 0 -> ok
 	end,
 
-	{E, Resp, State}.
+	{E, Resp, State1}.
 
 %% Internal
 
