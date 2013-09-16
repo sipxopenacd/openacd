@@ -650,7 +650,7 @@ handle_info({'EXIT', Pid, Reason}, StateName, #state{agent_rec = Agent} = State)
 				_ ->
 					ok
 			end,
-			inform_connection(Agent, {channel_died, Pid, NewAvail}),
+			inform_connection(Agent, {channel_died, Pid, NewAvail, util:now_ms()}),
 			% cpx_agent_event:change_agent_channel(Pid, exit, exit),
 			{next_state, StateName, State#state{agent_rec = NewAgent}}
 	end;

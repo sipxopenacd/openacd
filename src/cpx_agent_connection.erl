@@ -1072,7 +1072,7 @@ handle_cast({set_channel, Pid, ChanState, Call}, State) ->
 	]},
 	{ok, Headjson, State1};
 
-handle_cast({channel_died, Pid, NewAvail}, State) ->
+handle_cast({channel_died, Pid, NewAvail, Time}, State) ->
 	{ChanId, State1} = cpx_conn_state:remove_channel(State, Pid),
 	Resp = case ChanId of
 		none ->
@@ -1081,7 +1081,8 @@ handle_cast({channel_died, Pid, NewAvail}, State) ->
 			{struct, [
 				{<<"command">>, <<"endchannel">>},
 				{<<"channelid">>, ChanId},
-				{<<"availableChannels">>, NewAvail}]}
+				{<<"availableChannels">>, NewAvail},
+				{<<"timestamp">>, Time}]}
 	end,
 	{ok, Resp, State1};
 
