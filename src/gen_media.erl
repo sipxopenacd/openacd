@@ -431,6 +431,7 @@
 	takeover_ring/2,
 	get_call/1,
 	voicemail/1,
+	make_voicemail_outbound/3,
 	transfer_outband/2,
 	announce/2,
 	%% TODO added for testing only (implemented with focus on real Calls - no other media)
@@ -610,6 +611,9 @@ get_call(Genmedia) ->
 -spec(voicemail/1 :: (Genmedia :: pid()) -> 'ok' | 'invalid').
 voicemail(Genmedia) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM(voicemail)).
+
+make_voicemail_outbound(Genmedia, Dest, AgentRec) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM(voicemail_outbound, {Dest, AgentRec})).
 
 %% @doc Pass `any() Annouce' message to `pid() Genmedia'.
 -spec(announce/2 :: (Genmedia :: pid(), Annouce :: any()) -> 'ok').
@@ -1313,6 +1317,17 @@ oncall(?GM(transfer_outband, Addr), _From, St) ->
 			R#cbkr{action={stop, normal}};
 		(R) -> R end);
 
+oncall(?GM(voicemail_outbound, {Dest, AgentRec}), _From, {BaseState, Internal}) ->
+	#base_state{callback = Callback, callrec = Call} = BaseState,
+	lager:debug("in gen_media oncall -> voicemail_outbound", []),
+	case erlang:function_exported(Callback, handle_voicemail_outbound, 6) of
+		true -> case Callback:handle_voicemail_outbound(Dest, AgentRec, oncall, Call, Internal, BaseState#base_state.substate) of
+					{ok, NewState} -> NewBase = BaseState#base_state{substate = NewState},
+									{reply, ok, oncall, {NewBase, Internal}};
+					{error, _NewState} -> {reply, invalid, {BaseState, Internal}}
+				end;
+		_ -> {reply, invalid, {BaseState, Internal}}
+	end;
 % oncall(?GM(agent_transfer, {{_Agent, Apid}, _Timeout}), _From, {BaseState, #oncall_state{oncall_pid = {_, Apid}}} = State) ->
 % 	Call = BaseState#base_state.callrec,
 % 	lager:notice("Can't transfer to yourself, silly ~p! ~p", [Apid, Call#call.id]),
