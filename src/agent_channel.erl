@@ -117,6 +117,7 @@
 	end_wrapup/1,
 	list_to_state/1,
 	set_connection/2,
+	make_voicemail_outbound/2,
 	queue_transfer/2,
 	queue_transfer/3,
 	agent_transfer/2,
@@ -240,6 +241,9 @@ list_to_state(String) ->
 		true -> Atom;
 		false -> erlang:error(badarg)
 	end.
+
+make_voicemail_outbound(Pid, Dest) ->
+	gen_fsm:sync_send_event(Pid, {make_voicemail_outbound, Dest}).
 
 %% @doc Start the queue_transfer procedure.  Gernally the media will handle it from here.
 -spec(queue_transfer/2 :: (Pid :: pid(), Queue :: string()) -> 'ok' | 'invalid').
@@ -518,6 +522,13 @@ oncall({warmtransfer_3rd_party, Data}, From, State) ->
 		Else ->
 			Else
 	end;
+
+oncall({make_voicemail_outbound, Dest}, _From,
+	#state{state_data = #call{source = CallPid},
+	agent_rec = AgentRec} = State) ->
+	lager:debug("in oncall -> make_voicemail_outbound", []),
+	gen_media:make_voicemail_outbound(CallPid, Dest, AgentRec),
+	{reply, ok, oncall, State};
 
 %% -----
 % oncall({queue_transfer, QueueBin}, From, State) when is_binary(QueueBin) ->
