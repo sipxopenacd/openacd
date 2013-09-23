@@ -456,7 +456,9 @@
 	unhold/1,
 	play/1,
 	play/2,
-	pause/1
+	pause/1,
+
+	conference_to_agent/2
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -495,7 +497,8 @@
 	queue_failover,
 	url_pop_get_vars = [],
 	state_changes = [],
-	agent :: #agent{}
+	agent :: #agent{},
+	conference_channel
 }).
 
 %% callback response
@@ -756,6 +759,11 @@ call(Genmedia, Request, Timeout) ->
 -spec(cast/2 :: (Genmedia :: pid(), Request:: any()) -> 'ok').
 cast(Genmedia, Request) ->
 	gen_fsm:send_all_state_event(Genmedia, Request).
+
+%% @doc Puts the media off hold
+-spec(conference_to_agent/2 :: (Genmedia :: pid(), AgentLogin :: string()) -> 'ok' | 'error').
+conference_to_agent(Genmedia, AgentLogin) ->
+	gen_fsm:sync_send_event(Genmedia, ?GM({conference_to_agent, AgentLogin})).
 
 %%====================================================================
 %% API
@@ -1510,6 +1518,37 @@ oncall(?GM(pause), _From, {BaseState, Internal}) ->
 	end,
 	{reply, Reply, oncall, {BaseState#base_state{substate = NewState}, Internal}};
 
+oncall(?GM({conference_to_agent, AgentLogin}), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	Call = BaseState#base_state.callrec,
+	{Reply, NewState} = case erlang:function_exported(Callback, handle_conference_to_agent, 4) of
+		true ->
+			{R, NSt} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
+			case agent_manager:query_agent(AgentLogin) of
+				{true, AgentPid} ->
+					case agent:offer_conference(AgentPid, Call) of
+						{ok, ChannelPid} ->
+							{_Agent, Apid} = Internal#oncall_state.oncall_pid,
+							agent_channel:set_conference(Apid),
+							% agent_channel:set_conference(ChannelPid),
+							% erlang:demonitor(Internal#oncall_state.oncall_mon),
+							ConferenceChannel = ChannelPid;
+						_ ->
+							ConferenceChannel = undefined
+					end;
+				_ ->
+					ConferenceChannel = undefined
+			end,
+
+			% erlang:demonitor(Internal#oncall_state.oncall_mon),
+			{R, NSt};
+		false ->
+			ConferenceChannel = undefined,
+			{{error, not_supported}, Substate}
+	end,
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewState, conference_channel = ConferenceChannel}, Internal}};
+
 oncall(Msg, From, State) ->
 	fallback_sync(oncall, Msg, From, State).
 
@@ -1825,6 +1864,13 @@ handle_info({'DOWN', Ref, process, Pid, Info}, oncall, {BaseState,
 			},
 			{next_state, inqueue, {NewBase, NewInternal}}
 	end;
+
+handle_info({conference_result,{Status,Reply}}, oncall, {BaseState,
+		#oncall_state{oncall_pid = {_Agent, Pid}, oncall_mon = Ref} =
+		Internal}) ->
+	ConferenceChannel = BaseState#base_state.conference_channel,
+	agent_channel:set_state(ConferenceChannel, {oncall, BaseState#base_state.callrec}),
+	{next_state, oncall, {BaseState, Internal}};
 
 handle_info(Msg, StateName, {#base_state{callback = Callback,
 		callrec = Call} = BaseState, Extra} = State) ->

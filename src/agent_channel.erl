@@ -56,7 +56,9 @@
 	endpoint = inband :: any(),
 	client :: undefined | #client{} | {Id :: string(), Opts :: [{atom(), any()}]} | (Id :: string()),
 	callerid :: {string(), string()},
-	state_data :: any()
+	state_data :: any(),
+
+	is_conference = false :: boolean()
 }).
 
 -type(state() :: #state{}).
@@ -134,7 +136,9 @@
 	unhold/1,
 	play/1,
 	play/2,
-	pause/1
+	pause/1,
+
+	set_conference/1
 ]).
 
 % ======================================================================
@@ -305,6 +309,11 @@ play(Apid, Opts) ->
 -spec(pause/1 :: (Apid :: pid()) -> ok | error).
 pause(Apid) ->
 	gen_fsm:sync_send_event(Apid, pause).
+
+%% @doc Pauses the channel playback
+-spec(set_conference/1 :: (Apid :: pid()) -> ok | error).
+set_conference(Apid) ->
+	gen_fsm:sync_send_event(Apid, set_conference).
 
 % ======================================================================
 % INIT
@@ -611,6 +620,9 @@ oncall(pause, _From, #state{state_data = Call} = State) ->
 	gen_media:pause(MediaPid),
 	{reply, ok, oncall, State};
 
+oncall(set_conference, _From, #state{state_data = Call} = State) ->
+	{reply, ok, oncall, State#state{is_conference = true}};
+
 oncall(_Msg, _From, State) ->
 	lager:info("Msg ~p not understood", [_Msg]),
 	{reply, {error, invalid}, oncall, State}.
@@ -884,19 +896,27 @@ set_channel_msg(NewSt, Call) ->
 	{set_channel, self(), NewSt, update_state(NewSt, Call)}.
 
 try_wrapup(State, Now) ->
+	lager:info("TRYING WRAPUP"),
 	Call = State#state.state_data,
 	CallPid = Call#call.source,
 	Agent = State#state.agent_rec,
-	{Rep, Next} = try gen_media:wrapup(CallPid) of
-		ok ->
-			lager:debug("Moving from oncall to wrapup", []),
-			{ok, wrapup};
-		Else ->
-			{Else, oncall}
-	catch
-		exit:{noproc, _} ->
-			lager:info("gen_media: ~p is gone, proceeding anyway", [CallPid]),
-			{ok, wrapup}
+	case State#state.is_conference of
+		false ->
+			{Rep, Next} = try gen_media:wrapup(CallPid) of
+				ok ->
+					lager:info("Moving from oncall to wrapup"),
+					{ok, wrapup};
+				Else ->
+					{Else, oncall}
+			catch
+				exit:{noproc, _} ->
+					lager:info("gen_media: ~p is gone, proceeding anyway", [CallPid]),
+					{ok, wrapup}
+			end;
+		_ ->
+			lager:info("SKIPPING WRAPUP"),
+
+			{Rep, Next} = {ok, wrapup}
 	end,
 
 	State1 = case Next of

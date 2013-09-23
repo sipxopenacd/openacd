@@ -116,7 +116,9 @@
 	blab/2,
 	subscribe_events/2,
 	subscribe_events/3,
-	call_event_handler/3
+	call_event_handler/3,
+
+	offer_conference/2
 ]).
 
 %% Channel Starters
@@ -299,6 +301,9 @@ subscribe_events(Pid, Handler, Args) ->
 call_event_handler(Pid, Handler, Request) ->
 	gen_fsm:sync_send_all_state_event(Pid, {call_event_handler, Handler, Request}).
 
+offer_conference(Apid, Call) ->
+	gen_fsm:sync_send_event(Apid, {offer_conference, Call}).
+
 % ======================================================================
 % INIT
 % ======================================================================
@@ -412,6 +417,16 @@ idle({ringing, Call}, _From, #state{agent_rec = Agent, event_manager = EventMana
 			{reply, Else, idle, State}
 	end;
 
+idle({offer_conference, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+	case start_channel(Agent, Call, ringing, EventManager) of
+		{ok, Pid, NewAgent} ->
+			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
+			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
+			{reply, {ok, Pid}, idle, State#state{agent_rec = NewAgent}};
+		Else ->
+			{reply, Else, idle, State}
+	end;
+
 idle(Msg, _From, State) ->
 	{reply, {invalid, Msg}, idle, State}.
 
@@ -449,6 +464,16 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, last_avail = LastAvail, agent = NewAgent}}),
 	{reply, ok, released, NewState};
+
+released({offer_conference, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+	case start_channel(Agent, Call, ringing, EventManager) of
+		{ok, Pid, NewAgent} ->
+			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
+			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
+			{reply, {ok, Pid}, released, State#state{agent_rec = NewAgent}};
+		Else ->
+			{reply, Else, released, State}
+	end;
 
 released(Msg, _From, State) ->
 	{reply, {error, Msg}, released, State}.
