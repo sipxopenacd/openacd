@@ -896,7 +896,6 @@ set_channel_msg(NewSt, Call) ->
 	{set_channel, self(), NewSt, update_state(NewSt, Call)}.
 
 try_wrapup(State, Now) ->
-	lager:info("TRYING WRAPUP"),
 	Call = State#state.state_data,
 	CallPid = Call#call.source,
 	Agent = State#state.agent_rec,
@@ -904,7 +903,7 @@ try_wrapup(State, Now) ->
 		false ->
 			{Rep, Next} = try gen_media:wrapup(CallPid) of
 				ok ->
-					lager:info("Moving from oncall to wrapup"),
+					lager:info("Call to gen_media:wrapup successful"),
 					{ok, wrapup};
 				Else ->
 					{Else, oncall}
@@ -914,7 +913,7 @@ try_wrapup(State, Now) ->
 					{ok, wrapup}
 			end;
 		_ ->
-			lager:info("SKIPPING WRAPUP"),
+			lager:info("Agent channel part of conference, skipping gen_media:wrapup"),
 
 			{Rep, Next} = {ok, wrapup}
 	end,

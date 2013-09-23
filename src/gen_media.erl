@@ -1522,35 +1522,32 @@ oncall(?GM({conference_to_agent, AgentLogin}), _From, {BaseState, Internal}) ->
 	Callback = BaseState#base_state.callback,
 	Substate = BaseState#base_state.substate,
 	Call = BaseState#base_state.callrec,
-	{Reply, NewState} = case erlang:function_exported(Callback, handle_conference_to_agent, 4) of
+	{Reply, NewSub, ConferenceChannel} = case erlang:function_exported(Callback, handle_conference_to_agent, 4) of
 		true ->
-			{R, NSt} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
-			case agent_manager:query_agent(AgentLogin) of
-				{true, AgentPid} ->
-					case agent:offer_conference(AgentPid, Call) of
-						{ok, ChannelPid} ->
-							{_Agent, Apid} = Internal#oncall_state.oncall_pid,
-							agent_channel:set_conference(Apid),
-							% agent_channel:set_conference(ChannelPid),
-							% erlang:demonitor(Internal#oncall_state.oncall_mon),
-							ConferenceChannel = ChannelPid;
-						_ ->
-							ConferenceChannel = undefined
-					end;
-				_ ->
-					ConferenceChannel = undefined
-			end,
-
-			% erlang:demonitor(Internal#oncall_state.oncall_mon),
-			{R, NSt};
+			offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate);
 		false ->
-			ConferenceChannel = undefined,
-			{{error, not_supported}, Substate}
+			{{error, not_supported}, Substate, undefined}
 	end,
-	{reply, Reply, oncall, {BaseState#base_state{substate = NewState, conference_channel = ConferenceChannel}, Internal}};
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewSub, conference_channel = ConferenceChannel}, Internal}};
 
 oncall(Msg, From, State) ->
 	fallback_sync(oncall, Msg, From, State).
+
+offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
+	{Reply, NewSub} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
+	case agent_manager:query_agent(AgentLogin) of
+		{true, AgentPid} ->
+			case agent:offer_conference(AgentPid, Call) of
+				{ok, ChannelPid} ->
+					{_Agent, Apid} = Internal#oncall_state.oncall_pid,
+					agent_channel:set_conference(Apid),
+					{Reply, NewSub, ChannelPid};
+				_ ->
+					{Reply, NewSub, undefined}
+			end;
+		_ ->
+			{Reply, NewSub, undefined}
+	end.
 
 %% async
 
