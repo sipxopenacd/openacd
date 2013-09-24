@@ -465,15 +465,15 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, last_avail = LastAvail, agent = NewAgent}}),
 	{reply, ok, released, NewState};
 
-released({offer_conference, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
-	case start_channel(Agent, Call, ringing, EventManager) of
-		{ok, Pid, NewAgent} ->
-			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
-			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
-			{reply, {ok, Pid}, released, State#state{agent_rec = NewAgent}};
-		Else ->
-			{reply, Else, released, State}
-	end;
+% released({offer_conference, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
+% 	case start_channel(Agent, Call, ringing, EventManager) of
+% 		{ok, Pid, NewAgent} ->
+% 			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
+% 			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
+% 			{reply, {ok, Pid}, released, State#state{agent_rec = NewAgent}};
+% 		Else ->
+% 			{reply, Else, released, State}
+% 	end;
 
 released(Msg, _From, State) ->
 	{reply, {error, Msg}, released, State}.

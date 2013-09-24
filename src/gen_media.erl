@@ -1534,19 +1534,20 @@ oncall(Msg, From, State) ->
 	fallback_sync(oncall, Msg, From, State).
 
 offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
-	{Reply, NewSub} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
 	case agent_manager:query_agent(AgentLogin) of
 		{true, AgentPid} ->
 			case agent:offer_conference(AgentPid, Call) of
 				{ok, ChannelPid} ->
+					{Reply, NewSub} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
+					% agent_channel:set_state(ChannelPid, ringing, Call),
 					{_Agent, Apid} = Internal#oncall_state.oncall_pid,
 					agent_channel:set_conference(Apid),
 					{Reply, NewSub, ChannelPid};
 				_ ->
-					{Reply, NewSub, undefined}
+					{error, Substate, undefined}
 			end;
 		_ ->
-			{Reply, NewSub, undefined}
+			{error, Substate, undefined}
 	end.
 
 %% async
@@ -1862,11 +1863,18 @@ handle_info({'DOWN', Ref, process, Pid, Info}, oncall, {BaseState,
 			{next_state, inqueue, {NewBase, NewInternal}}
 	end;
 
-handle_info({conference_result,{Status,Reply}}, oncall, {BaseState,
+handle_info(conference_accepted, oncall, {BaseState,
 		#oncall_state{oncall_pid = {_Agent, Pid}, oncall_mon = Ref} =
 		Internal}) ->
 	ConferenceChannel = BaseState#base_state.conference_channel,
 	agent_channel:set_state(ConferenceChannel, {oncall, BaseState#base_state.callrec}),
+	{next_state, oncall, {BaseState, Internal}};
+
+handle_info(third_party_hangup, oncall, {BaseState,
+		#oncall_state{oncall_pid = {_Agent, Pid}, oncall_mon = Ref} =
+		Internal}) ->
+	ConferenceChannel = BaseState#base_state.conference_channel,
+	agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec),
 	{next_state, oncall, {BaseState, Internal}};
 
 handle_info(Msg, StateName, {#base_state{callback = Callback,
