@@ -138,7 +138,7 @@
 	play/2,
 	pause/1,
 
-	set_conference/1
+	conference_to_agent/2
 ]).
 
 % ======================================================================
@@ -311,9 +311,9 @@ pause(Apid) ->
 	gen_fsm:sync_send_event(Apid, pause).
 
 %% @doc Pauses the channel playback
--spec(set_conference/1 :: (Apid :: pid()) -> ok | error).
-set_conference(Apid) ->
-	gen_fsm:sync_send_event(Apid, set_conference).
+-spec(conference_to_agent/2 :: (Apid :: pid(), AgentLogin :: string()) -> ok | error).
+conference_to_agent(Apid, AgentLogin) ->
+	gen_fsm:sync_send_event(Apid, {conference_to_agent, AgentLogin}).
 
 % ======================================================================
 % INIT
@@ -620,8 +620,20 @@ oncall(pause, _From, #state{state_data = Call} = State) ->
 	gen_media:pause(MediaPid),
 	{reply, ok, oncall, State};
 
-oncall(set_conference, _From, #state{state_data = Call} = State) ->
-	{reply, ok, oncall, State#state{is_conference = true}};
+oncall({conference_to_agent, AgentLogin}, _From, #state{state_data = Call, is_conference = IsConf} = State) ->
+	MediaPid = Call#call.source,
+	{IsConf2, Reply} = case IsConf of
+		false ->
+			case gen_media:conference_to_agent(MediaPid, AgentLogin) of
+				ok ->
+					{true, ok};
+				Err ->
+					{false, Err}
+			end;
+		true ->
+			{true, {error, already_in_conference}}
+	end,
+	{reply, Reply, oncall, State#state{is_conference = IsConf2}};
 
 oncall(_Msg, _From, State) ->
 	lager:info("Msg ~p not understood", [_Msg]),

@@ -60,7 +60,9 @@
 	transfer_outband/3,
 	play/2,
 	play/3,
-	pause/2
+	pause/2,
+
+	conference_to_agent/3
 ]).
 
 -type(cpx_conn_state() :: tuple()).
@@ -250,6 +252,20 @@ transfer_outband(St, ChanId, Number) ->
 		end
 	end).
 
+conference_to_agent(St, ChanId, AgentLogin) ->
+	with_channel_do(St, ChanId, fun(ChanPid) ->
+		case agent_channel:conference_to_agent(ChanPid, b2l(AgentLogin)) of
+			ok ->
+				{[{state, oncall}, {channel, ChanId}]};
+			{error, agent_unavailable} ->
+				err(agent_unavailable);
+			{error, already_in_conference} ->
+				err(already_in_conference);
+			_ ->
+				err(unable_to_start_conference)
+		end
+	end).
+
 %% Internal
 
 send_exit() ->
@@ -278,7 +294,13 @@ err(invalid_rel) ->
 err(channel_not_found) ->
 	{error, 4002, <<"Channel not found">>};
 err(invalid_state_change) ->
-	{error, 4003, <<"Invalid state change">>}.
+	{error, 4003, <<"Invalid state change">>};
+err(agent_unavailable) ->
+	{error, 4004, <<"Agent unavailable">>};
+err(already_in_conference) ->
+	{error, 4005, <<"Channel already in conference">>};
+err(unable_to_start_conference) ->
+	{error, 4006, <<"Unable to start conference">>}.
 
 -ifdef(TEST).
 

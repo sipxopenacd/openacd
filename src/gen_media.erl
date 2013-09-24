@@ -1541,13 +1541,12 @@ offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
 					{Reply, NewSub} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
 					% agent_channel:set_state(ChannelPid, ringing, Call),
 					{_Agent, Apid} = Internal#oncall_state.oncall_pid,
-					agent_channel:set_conference(Apid),
 					{Reply, NewSub, ChannelPid};
 				_ ->
-					{error, Substate, undefined}
+					{{error, agent_unavailable}, Substate, undefined}
 			end;
 		_ ->
-			{error, Substate, undefined}
+			{{error, agent_unavailable}, Substate, undefined}
 	end.
 
 %% async
