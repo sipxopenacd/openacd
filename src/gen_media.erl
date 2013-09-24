@@ -2665,10 +2665,11 @@ agent_interact({hangup, Who}, inqueue_ringing, #base_state{
 	erlang:demonitor(Qmon),
 	{wrapup, {BaseState, #wrapup_state{}}};
 
-agent_interact({hangup, Who}, oncall, #base_state{callrec = Callrec} =
-		BaseState, _Internal, {Mon, {Agent, _Apid}}) ->
+agent_interact({hangup, Who}, oncall, #base_state{callrec = Callrec, conference_channel = ConferenceChannel} =
+		BaseState, _Internal, {Mon, {Agent, Apid}}) ->
 	lager:info("hangup by ~p for ~p when only oncall is a pid; skipping wrapup call to agent_channel", [Who, Callrec#call.id]),
 	% set_agent_state(Apid, [wrapup, Callrec]),
+	agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec),
 	cdr:wrapup(Callrec, Agent),
 	cdr:hangup(Callrec, Who),
 	erlang:demonitor(Mon),
