@@ -418,9 +418,9 @@ idle({ringing, Call}, _From, #state{agent_rec = Agent, event_manager = EventMana
 	end;
 
 idle({offer_conference, Call}, _From, #state{agent_rec = Agent, event_manager = EventManager} = State) ->
-	case start_channel(Agent, Call, ringing, EventManager) of
+	case start_channel(Agent, Call, preconf, EventManager) of
 		{ok, Pid, NewAgent} ->
-			lager:debug("Started ringing (~s) ~p", [Agent#agent.login, Pid]),
+			lager:debug("Started prering for agent ~p, pid ~p", [Agent#agent.login, Pid]),
 			%inform_connection(Agent, {set_channel, Pid, ringing, Call}),
 			{reply, {ok, Pid}, idle, State#state{agent_rec = NewAgent}};
 		Else ->

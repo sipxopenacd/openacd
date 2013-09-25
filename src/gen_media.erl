@@ -1541,7 +1541,7 @@ offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
 			case agent:offer_conference(AgentPid, Call) of
 				{ok, ChannelPid} ->
 					{Reply, NewSub} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
-					% agent_channel:set_state(ChannelPid, ringing, Call),
+					agent_channel:set_state(ChannelPid, ringing, Call),
 					{_Agent, Apid} = Internal#oncall_state.oncall_pid,
 					lager:info("Sending conference_update ringing"),
 					Update = {conference_update, [
@@ -1602,6 +1602,11 @@ offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
 
 %% async
 
+oncall(?GM(takeover_ring, {{_Agent, ConfChannel}, OutbandRinger}), {#base_state{conference_channel = ConfChannel} = BaseState,
+		#oncall_state{oncall_pid = {Agent, Apid}} = Internal}) when is_pid(ConfChannel) ->
+	lager:info("agent and apid are ~p ~p, conf chan ~p", [Agent, Apid, ConfChannel]),
+	agent_channel:set_state(ConfChannel, ringing, BaseState#base_state.callrec),
+	{next_state, oncall, {BaseState, Internal}};
 oncall(Msg, State) ->
 	fallback_async(oncall, Msg, State).
 
@@ -1928,6 +1933,25 @@ handle_info(conference_accepted, oncall, {BaseState,
 		{<<"agent">>, list_to_binary(AgentLogin)},
 		{<<"source_module">>, Callback},
 		{<<"state">>, oncall}
+	]},
+	agent_channel:media_push(Apid, Call, Update),
+	{next_state, oncall, {BaseState, Internal}};
+
+handle_info(conference_declined, oncall, {BaseState,
+		#oncall_state{oncall_pid = {_Agent, Apid}, oncall_mon = Ref} =
+		Internal}) ->
+	Call = BaseState#base_state.callrec,
+	Callback = BaseState#base_state.callback,
+	ConferenceChannel = BaseState#base_state.conference_channel,
+	lager:info("Sending conference_update declined ~p", [ConferenceChannel]),
+	{ok, Agent} = agent_channel:get_agent(ConferenceChannel),
+	AgentLogin = Agent#agent.login,
+	agent_channel:stop(ConferenceChannel),
+	Update = {conference_update, [
+		{<<"type">>, agent},
+		{<<"agent">>, list_to_binary(AgentLogin)},
+		{<<"source_module">>, Callback},
+		{<<"state">>, declined}
 	]},
 	agent_channel:media_push(Apid, Call, Update),
 	{next_state, oncall, {BaseState, Internal}};

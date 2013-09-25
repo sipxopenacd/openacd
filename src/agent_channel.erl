@@ -375,6 +375,11 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 				{error, Error} ->
 					{stop, {error, Error}}
 			end;
+		preconf when is_record(Call, call); Call =:= undefined ->
+			lager:info("try preconf"),
+			conn_cast(Agent, set_channel_msg(prering, Call)),
+			cpx_agent_event:agent_channel_init(Agent, self(), prering, Call, Now),
+			{ok, prering, State#state{state_data = update_state(prering, Call)}};
 		% precall when is_record(Call, client) ->
 		% 	lager:debug("Starting in precall", []),
 		% 	conn_cast(Agent, {set_channel, self(), precall, Call}),

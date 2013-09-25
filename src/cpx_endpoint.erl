@@ -76,7 +76,9 @@ hangup(Ep) ->
 %% internal
 
 send_endpoint_event(#ep{pid=Pid}, Event) ->
-	Pid ! {cpx_endpoint, Event}.
+	Pid ! {cpx_endpoint, Event};
+send_endpoint_event(_, Event) ->
+	ignore.
 
 -ifdef(TEST).
 
