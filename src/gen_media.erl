@@ -1913,7 +1913,7 @@ sync_call_cbk(Zt, {BaseSt, IntSt}, F, PreA, H) ->
 
 fallback_sync(S, ?GM(Command, _Args), _From, State) ->
 	lager:debug("Invalid sync event ~s while ~s", [Command, S]),
-	{reply, invalid, S, State};
+	{reply, {error, invalid}, S, State};
 fallback_sync(S, Msg, From, {#base_state{callback = Callback} = BaseState, Internal} = State) ->
 	Return = Callback:handle_call(Msg, From, S, BaseState#base_state.callrec, Internal, BaseState#base_state.substate),
 	handle_custom_return(Return, S, reply, State).
