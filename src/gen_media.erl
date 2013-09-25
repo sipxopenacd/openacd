@@ -1522,12 +1522,14 @@ oncall(?GM({conference_to_agent, AgentLogin}), _From, {BaseState, Internal}) ->
 	Callback = BaseState#base_state.callback,
 	Substate = BaseState#base_state.substate,
 	Call = BaseState#base_state.callrec,
+	% {_Agent, Apid} = Internal#oncall_state.oncall_pid,
 	{Reply, NewSub, ConferenceChannel} = case erlang:function_exported(Callback, handle_conference_to_agent, 4) of
 		true ->
 			offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate);
 		false ->
 			{{error, not_supported}, Substate, undefined}
 	end,
+	lager:info("whywhywhy"),
 	{reply, Reply, oncall, {BaseState#base_state{substate = NewSub, conference_channel = ConferenceChannel}, Internal}};
 
 oncall(Msg, From, State) ->
@@ -1541,6 +1543,14 @@ offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
 					{Reply, NewSub} = Callback:handle_conference_to_agent(AgentLogin, Call, Internal, Substate),
 					% agent_channel:set_state(ChannelPid, ringing, Call),
 					{_Agent, Apid} = Internal#oncall_state.oncall_pid,
+					lager:info("Sending conference_update ringing"),
+					Update = {conference_update, [
+						{<<"type">>, agent},
+						{<<"agent">>, list_to_binary(AgentLogin)},
+						{<<"source_module">>, Callback},
+						{<<"state">>, ringing}
+					]},
+					agent_channel:media_push(Apid, Call, Update),
 					{Reply, NewSub, ChannelPid};
 				_ ->
 					{{error, agent_unavailable}, Substate, undefined}
@@ -1548,6 +1558,47 @@ offer_conference_to_agent(Callback, AgentLogin, Call, Internal, Substate) ->
 		_ ->
 			{{error, agent_unavailable}, Substate, undefined}
 	end.
+
+% inqueuez(?GM(ring, {{Agent, Apid}, #queued_call{
+% 		cook = Requester, skills = ESkills} = _QCall, _Timeout}), {Requester, _Tag}, {
+% 		#base_state{callrec = Call} = BaseState,
+% 		Internal}) ->
+% 	lager:debug("Queued call: ~p", [_QCall]),
+% 	ClientOpts = Call#call.client#client.options,
+% 	TimeoutSec = proplists:get_value("ringout", ClientOpts, 60),
+% 	Timeout = TimeoutSec * 1000,
+% 	{Queue, _QPid} = Internal#inqueue_state.queue_pid,
+% 	StateChanges = BaseState#base_state.state_changes,
+% 	Call1 = Call#call{skills = ESkills, queue=Queue, state_changes = StateChanges},
+% 	BaseState1 = BaseState#base_state{callrec = Call1},
+% 	lager:info("Trying to ring ~p with ~p with timeout ~p", [Agent, Call1#call.id, Timeout]),
+% 	try agent:prering(Apid, Call1) of
+% 		{ok, RPid} ->
+% 			Rmon = erlang:monitor(process, RPid),
+% 			Tref = gen_fsm:send_event_after(Timeout, ?GM(ringout)),
+% 			#inqueue_state{ queue_pid = Qpid, queue_mon = Qmon,
+% 				cook_mon = CookMon} = Internal,
+% 			NewInternal = #inqueue_ringing_state{
+% 				queue_pid = Qpid, queue_mon = Qmon, ring_pid = {Agent, RPid},
+% 				ring_mon = Rmon, cook = Requester, cook_mon = CookMon,
+% 				ringout = Tref
+% 			},
+% 			BaseState2 = BaseState1#base_state{state_changes = [{inqueue_ringing, os:timestamp()} | StateChanges]},
+% 			set_gproc_prop(inqueue, inqueue_ringing, BaseState2),
+% 			AgentInfo = [{agent_login, Agent}, {agent_pid, Apid}],
+% 			cdr:ringing(Call1, AgentInfo),
+% 			{reply, ok, inqueue_ringing, {BaseState2, NewInternal}};
+% 		RingErr ->
+% 			lager:info("Agent ~p prering response:  ~p for ~p", [Agent, RingErr, Call1#call.id]),
+% 			{reply, invalid, inqueue, {BaseState1, Internal}}
+% 	catch
+% 		exit:{noproc, _} ->
+% 			lager:warning("Agent ~p is a dead pid", [Apid]),
+% 			{reply, invalid, inqueue, {BaseState1, Internal}};
+% 		exit:{max_ringouts, _} ->
+% 			lager:debug("Max ringouts reached for agent ~p", [Apid]),
+% 			{reply, invalid, inqueue, {BaseState1, Internal}}
+% 	end.
 
 %% async
 
@@ -1863,16 +1914,41 @@ handle_info({'DOWN', Ref, process, Pid, Info}, oncall, {BaseState,
 	end;
 
 handle_info(conference_accepted, oncall, {BaseState,
-		#oncall_state{oncall_pid = {_Agent, Pid}, oncall_mon = Ref} =
+		#oncall_state{oncall_pid = {_Agent, Apid}, oncall_mon = Ref} =
 		Internal}) ->
+	Call = BaseState#base_state.callrec,
+	Callback = BaseState#base_state.callback,
 	ConferenceChannel = BaseState#base_state.conference_channel,
-	agent_channel:set_state(ConferenceChannel, {oncall, BaseState#base_state.callrec}),
+	lager:info("Sending conference_update oncall ~p", [ConferenceChannel]),
+	{ok, Agent} = agent_channel:get_agent(ConferenceChannel),
+	AgentLogin = Agent#agent.login,
+	agent_channel:set_state(ConferenceChannel, {oncall, Call}),
+	Update = {conference_update, [
+		{<<"type">>, agent},
+		{<<"agent">>, list_to_binary(AgentLogin)},
+		{<<"source_module">>, Callback},
+		{<<"state">>, oncall}
+	]},
+	agent_channel:media_push(Apid, Call, Update),
 	{next_state, oncall, {BaseState, Internal}};
 
 handle_info(third_party_hangup, oncall, {BaseState,
-		#oncall_state{oncall_pid = {_Agent, Pid}, oncall_mon = Ref} =
+		#oncall_state{oncall_pid = {_Agent, Apid}, oncall_mon = Ref} =
 		Internal}) ->
 	ConferenceChannel = BaseState#base_state.conference_channel,
+	Call = BaseState#base_state.callrec,
+	Callback = BaseState#base_state.callback,
+	{ok, Agent} = agent_channel:get_agent(ConferenceChannel),
+	AgentLogin = Agent#agent.login,
+	{_Agent, Apid} = Internal#oncall_state.oncall_pid,
+	lager:info("Sending conference_update wrapup"),
+	Update = {conference_update, [
+		{<<"type">>, agent},
+		{<<"agent">>, list_to_binary(AgentLogin)},
+		{<<"source_module">>, Callback},
+		{<<"state">>, wrapup}
+	]},
+	agent_channel:media_push(Apid, Call, Update),
 	agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec),
 	{next_state, oncall, {BaseState, Internal}};
 
@@ -2673,10 +2749,28 @@ agent_interact({hangup, Who}, inqueue_ringing, #base_state{
 	{wrapup, {BaseState, #wrapup_state{}}};
 
 agent_interact({hangup, Who}, oncall, #base_state{callrec = Callrec, conference_channel = ConferenceChannel} =
-		BaseState, _Internal, {Mon, {Agent, Apid}}) ->
+		BaseState, Internal, {Mon, {Agent, Apid}}) ->
 	lager:info("hangup by ~p for ~p when only oncall is a pid; skipping wrapup call to agent_channel", [Who, Callrec#call.id]),
 	% set_agent_state(Apid, [wrapup, Callrec]),
-	agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec),
+	lager:info("Sending conference_update oncall"),
+	case is_pid(ConferenceChannel) of
+		true ->
+			Call = BaseState#base_state.callrec,
+			Callback = BaseState#base_state.callback,
+			{ok, Agent2} = agent_channel:get_agent(ConferenceChannel),
+			AgentLogin = Agent2#agent.login,
+			{_Agent, Apid} = Internal#oncall_state.oncall_pid,
+			agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec),
+			Update = {conference_update, [
+				{<<"type">>, agent},
+				{<<"agent">>, list_to_binary(AgentLogin)},
+				{<<"source_module">>, Callback},
+				{<<"state">>, oncall}
+			]},
+			agent_channel:media_push(Apid, Call, Update);
+		_ ->
+			ok
+	end,
 	cdr:wrapup(Callrec, Agent),
 	cdr:hangup(Callrec, Who),
 	erlang:demonitor(Mon),

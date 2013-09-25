@@ -368,7 +368,7 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 		prering when is_record(Call, call); Call =:= undefined ->
 			case start_endpoint(Endpoint, Agent, Call) of
 				{ok, Pid} ->
-					lager:debug("Starting in prering", []),
+					lager:info("Starting in prering", []),
 					conn_cast(Agent, set_channel_msg(prering, Call)),
 					cpx_agent_event:agent_channel_init(Agent, self(), prering, Call, Now),
 					{ok, prering, State#state{endpoint = Pid, state_data = update_state(prering, Call)}};
@@ -381,13 +381,13 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 		% 	% cpx_agent_event:agent_channel_init(Agent,self(),precall,Call),
 		% 	{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		precall when is_record(Call, call) ->
-			lager:debug("Starting in precall with media rather than client", []),
+			lager:info("Starting in precall with media rather than client", []),
 			conn_cast(Agent, set_channel_msg(precall, Call)),
 			cpx_agent_event:agent_channel_init(Agent, self(), precall, Call, Now),
 			{ok, precall, State#state{state_data = update_state(precall, Call)}};
 		ringing when is_record(Call, call) ->
 			% TODO tell media to ring
-			lager:debug("Starting in ringing", []),
+			lager:info("Starting in ringing", []),
 			conn_cast(Agent, set_channel_msg(ringing, Call)),
 			cpx_agent_event:agent_channel_init(Agent,self(),ringing, Call, Now),
 			{ok, ringing, State#state{state_data = update_state(ringing, Call)}};
@@ -404,7 +404,7 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 prering({ringing, Call}, From, #state{agent_rec = Agent} = State) ->
 	% TODO check if valid
 	Now = ouc_time:now(),
-	lager:debug("Moving from prering to ringing state request from ~p", [From]),
+	lager:info("Moving from prering to ringing state request from ~p", [From]),
 	conn_cast(State#state.agent_connection, set_channel_msg(ringing, Call)),
 	cpx_agent_event:change_agent_channel(Agent, self(), ringing, Call, Now),
 	set_gproc_prop({State, prering, ringing}),
@@ -486,7 +486,7 @@ ringing(_Msg, State) ->
 
 precall({oncall, #call{client = Client} = Call}, _From, #state{agent_rec = Agent, state_data = Client} = State) ->
 	Now = ouc_time:now(),
-	lager:debug("Moving from precall to oncall state", []),
+	lager:info("Moving from precall to oncall state", []),
 	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	cpx_agent_event:change_agent_channel(Agent, self(), oncall, Call, Now),
 	set_gproc_prop({State, precall, oncall}),
@@ -494,7 +494,7 @@ precall({oncall, #call{client = Client} = Call}, _From, #state{agent_rec = Agent
 
 precall({oncall, #call{id = Id} = Call}, _From, #state{agent_rec = Agent, state_data = #call{id = Id}} = State) ->
 	Now = ouc_time:now(),
-	lager:debug("Moving from precall to oncall", []),
+	lager:info("Moving from precall to oncall", []),
 	conn_cast(State#state.agent_connection, set_channel_msg(oncall, Call)),
 	cpx_agent_event:change_agent_channel(Agent, self(), oncall, Call, Now),
 	set_gproc_prop({State, precall, oncall}),

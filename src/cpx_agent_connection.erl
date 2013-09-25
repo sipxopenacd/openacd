@@ -1039,6 +1039,13 @@ handle_cast({mediapush, ChanPid, Call, Data}, State) ->
 				{<<"data">>, {struct, [
 					{<<"channelid">>, ChanId} | Props]}}]},
 			{ok, Json, State};
+		{conference_update, Props} ->
+			ChanId = cpx_conn_state:get_id_by_channel_pid(State, ChanPid),
+			Json = {struct,  [
+				{<<"event">>, <<"conference_update">>},
+				{<<"data">>, {struct, [
+					{<<"channelid">>, ChanId} | Props]}}]},
+			{ok, Json, State};
 		% and the second of the prefered versions
 		Props when is_list(Props) ->
 			handle_cast({arbitrary_command, ChanPid, <<"mediaevent">>, Props}, State1)
