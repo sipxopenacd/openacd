@@ -108,6 +108,7 @@
 	get_profile/1,
 	query_state/1,
 	dump_state/1,
+	set_avail/2,
 	get_release_state/1,
 	register_rejected/1,
 	set_connection/2,
@@ -212,6 +213,9 @@ expand_magic_skills(State, Skills) ->
 -spec(dump_state/1 :: (Pid :: pid()) -> #agent{}).
 dump_state(Pid) ->
 	gen_fsm:sync_send_all_state_event(Pid, dump_state).
+
+set_avail(Pid, AvailChan) ->
+	gen_fsm:sync_send_all_state_event(Pid, {set_avail, AvailChan}).
 
 get_release_state(Pid) ->
 	gen_fsm:sync_send_all_state_event(Pid, get_release_state).
@@ -494,6 +498,13 @@ handle_sync_event({set_connection, Pid}, _From, StateName, #state{agent_rec = #a
 
 handle_sync_event(dump_state, _From, StateName, #state{agent_rec = Agent} = State) ->
 	{reply, Agent, StateName, State};
+
+handle_sync_event({set_avail, AvailChan}, _From, StateName, #state{agent_rec = Agent} = State) ->
+	AgentLogin = Agent#agent.login,
+	agent_manager:set_avail(AgentLogin, AvailChan),
+	NewAgent = Agent#agent{available_channels=AvailChan},
+	NewState = State#state{agent_rec=NewAgent},
+	{reply, ok, StateName, NewState};
 
 handle_sync_event(get_release_state, _From, Statename, #state{agent_rec = Agent} = State) ->
 	{reply, Agent#agent.release_data, Statename, State};
