@@ -52,7 +52,8 @@
 	time_avail,
 	agent_rec :: #agent{},
 	original_endpoints = dict:new(),
-	event_manager :: pid()
+	event_manager :: pid(),
+	agent_prop_state :: #agent_prop_state{}
 }).
 
 -type(state() :: #state{}).
@@ -128,6 +129,10 @@
 	ringing/2
 ]).
 
+%% for agent_channel use only
+-export([
+	set_channel/3
+]).
 % ======================================================================
 % API
 % ======================================================================
@@ -304,6 +309,10 @@ call_event_handler(Pid, Handler, Request) ->
 offer_conference(Apid, Call) ->
 	gen_fsm:sync_send_event(Apid, {offer_conference, Call}).
 
+-spec(set_channel/3 :: (Pid :: pid(), Channel :: pid(), State :: #cpx_agent_prop{}) -> ok).
+set_channel(Pid, Channel, State) ->
+	gen_fsm:send_all_state_event(Pid, {set_channel, {Channel, State}}).
+
 % ======================================================================
 % INIT
 % ======================================================================
@@ -339,12 +348,18 @@ init([Agent, _Options]) when is_record(Agent, agent) ->
 			released
 	end,
 	cpx_agent_event:agent_init(Agent2),
+	AgentProp = agent_prop:init(Agent2, StateName),
 	{ok, EventMgr} = gen_event:start_link(),
 	{ok, EventHandlers} = cpx_hooks:trigger_hooks(agent_feed_subscribe, [Agent2], all),
 	lists:foreach(fun({Handler, Args}) ->
 		gen_event:add_handler(EventMgr, Handler, Args)
 	end, EventHandlers),
-	State = #state{start_time = os:timestamp(), agent_rec = Agent2, original_endpoints = OriginalEnds, event_manager = EventMgr},
+	State = #state{
+		start_time = os:timestamp(),
+		agent_rec = Agent2,
+		original_endpoints = OriginalEnds,
+		event_manager = EventMgr,
+		agent_prop_state = AgentProp},
 	init_gproc_prop({init, State}),
 	gproc:reg({p,l,{cpx_profile, Profile}}, now()),
 	{ok, StateName, State}.
@@ -366,7 +381,8 @@ idle({set_release, {_Id, _Reason, Bias} = Release}, _From, #state{agent_rec = Ag
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
 	cpx_agent_event:change_release_state(NewAgent#agent.id, {released, Release}, Now),
-	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
+	AgentProp = agent_prop:set_release_state(Agent, released, State#state.agent_prop_state),
+	NewState = State#state{agent_rec = NewAgent, time_avail = undefined, agent_prop_state = AgentProp},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, last_avail = LastAvail, agent = NewAgent}}),
@@ -444,8 +460,9 @@ released({set_release, none}, _From, #state{agent_rec = Agent} = State) ->
 	Now = util:now(),
 	NewAgent = Agent#agent{release_data = undefined, last_change = Now},
 	cpx_agent_event:change_release_state(NewAgent#agent.id, available, Now),
+	AgentProp = agent_prop:set_release_state(Agent, available, State#state.agent_prop_state),
 	inform_connection(Agent, {set_release, none, Now}),
-	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp()},
+	NewState = State#state{agent_rec = NewAgent, time_avail = os:timestamp(), agent_prop_state = AgentProp},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = undefined, old_state = Agent#agent.release_data, agent = NewAgent}}),
@@ -459,7 +476,8 @@ released({set_release, {_Id, _Label, _Bias} = Release}, _From, #state{agent_rec 
 	NewAgent = Agent#agent{release_data = Release, last_change = Now},
 	inform_connection(Agent, {set_release, Release, Now}),
 	cpx_agent_event:change_release_state(NewAgent#agent.id, Release, Now),
-	NewState = State#state{agent_rec = NewAgent, time_avail = undefined},
+	AgentProp = agent_prop:set_release_state(Agent, released, State#state.agent_prop_state),
+	NewState = State#state{agent_rec = NewAgent, time_avail = undefined, agent_prop_state = AgentProp},
 	set_gproc_prop({Agent#agent.release_data, NewState}),
 	gen_event:notify(State#state.event_manager, {agent_feed,
 		#cpx_agent_state_update{pid = self(), state = Release, old_state = Agent#agent.release_data, last_avail = LastAvail, agent = NewAgent}}),
@@ -614,6 +632,10 @@ handle_event({subscribe_events, Handler, Args}, StateName, State) ->
 	gen_event:add_handler(State#state.event_manager, Handler, Args),
 	{next_state, StateName, State};
 
+handle_event({set_channel, {Channel, ChanSt}}, StateName, State) ->
+	AgentProp = agent_prop:set_channel_state(State#state.agent_rec, Channel, ChanSt, State#state.agent_prop_state),
+	{next_state, StateName, State#state{agent_prop_state = AgentProp}};
+
 handle_event(_Msg, StateName, State) ->
 	{next_state, StateName, State}.
 
@@ -693,6 +715,8 @@ handle_info(Msg, Statename, State) ->
 terminate(Reason, StateName, #state{agent_rec = Agent} = State) ->
 	lager:notice("Agent terminating:  ~p, State:  ~p", [Reason, StateName]),
 	cpx_monitor:drop({agent, Agent#agent.id}),
+	Prop = State#state.agent_prop_state,
+	agent_prop:set_offline(Agent, Prop),
 	send_gproc_logout({Agent#agent.release_data, State}),
 	ok.
 

@@ -262,3 +262,14 @@
 	firstname = "" :: string() | 'undefined',
 	lastname = "" :: string() | 'undefined'
 }).
+
+-record(agent_prop_state, {
+	login,
+	profile,
+
+	ustate :: released | idle | ringing | oncall | wrapup,
+	rstate :: available | released,
+
+	firstname,
+	lastname
+}).

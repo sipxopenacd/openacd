@@ -679,7 +679,7 @@ queue(Genmedia, Queue, Opts) ->
 -spec(agent_transfer/2 :: (Genmedia :: pid(), AgentLogin :: list()) -> ok | error).
 agent_transfer(Genmedia, AgentLogin) ->
 	Opts = [{new_skills, [{'_agent', AgentLogin}]}],
-	queue(Genmedia, "transfer_queue", Opts).
+	queue(Genmedia, ?TRANSFER_QUEUE, Opts).
 
 %% @doc Attempt to spy on the agent oncall with the given media.  `Spy' is
 %% the pid to send media events/load data to, and `AgentRec' is an
