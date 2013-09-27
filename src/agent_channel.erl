@@ -379,7 +379,7 @@ init([Agent, Call, Endpoint, StateName, EventManager]) ->
 			lager:info("try preconf"),
 			conn_cast(Agent, set_channel_msg(prering, Call)),
 			cpx_agent_event:agent_channel_init(Agent, self(), prering, Call, Now),
-			{ok, prering, State#state{state_data = update_state(prering, Call)}};
+			{ok, prering, State#state{state_data = update_state(prering, Call), is_conference = true}};
 		% precall when is_record(Call, client) ->
 		% 	lager:debug("Starting in precall", []),
 		% 	conn_cast(Agent, {set_channel, self(), precall, Call}),
@@ -579,7 +579,7 @@ oncall({wrapup, #call{id = Id}=Call}, {From, _Tag}, #state{agent_rec = Agent, st
 					%% hmm. should be avoided... this means gen_media called wrapup on agent_channel
 					%% ideally, only agent_channel should be the one calling wrapup to gen_media
 
-					lager:debug("Moving from oncall to wrapup", []),
+					lager:info("Moving from oncall to wrapup", []),
 
 					conn_cast(State#state.agent_connection, set_channel_msg(wrapup, Call)),
 					cpx_agent_event:change_agent_channel(Agent, self(), wrapup, Call, Now),
@@ -594,7 +594,7 @@ oncall({wrapup, #call{id = Id}=Call}, {From, _Tag}, #state{agent_rec = Agent, st
 			CallPid = Call#call.source,
 			try gen_media:wrapup(CallPid) of
 				ok ->
-					lager:debug("Ending call; Skipping wrapup", []),
+					lager:info("Ending call; Skipping wrapup", []),
 					{stop, normal, ok, State#state{state_data = update_state(stop, Call)}};
 				_ ->
 					{reply, ok, oncall, State}
