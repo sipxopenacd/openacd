@@ -1977,24 +1977,29 @@ handle_info(conference_declined, oncall, {BaseState,
 	agent_channel:media_push(Apid, Call, Update),
 	{next_state, oncall, {BaseState, Internal}};
 
-handle_info(third_party_hangup, oncall, {BaseState,
+handle_info({third_party_hangup, Agent}, oncall, {BaseState,
 		#oncall_state{oncall_pid = {_Agent, Apid}, oncall_mon = Ref} =
 		Internal}) ->
 	ConferenceChannel = BaseState#base_state.conference_channel,
 	Call = BaseState#base_state.callrec,
 	Callback = BaseState#base_state.callback,
-	{ok, Agent} = agent_channel:get_agent(ConferenceChannel),
-	AgentLogin = Agent#agent.login,
-	{_Agent, Apid} = Internal#oncall_state.oncall_pid,
+	% {ok, Agent} = agent_channel:get_agent(ConferenceChannel),
+	% AgentLogin = Agent#agent.login,
+	{_Agt, Apid} = Internal#oncall_state.oncall_pid,
 	lager:info("Sending conference_update wrapup"),
 	Update = {conference_update, [
 		{<<"type">>, agent},
-		{<<"agent">>, list_to_binary(AgentLogin)},
+		{<<"agent">>, list_to_binary(Agent)},
 		{<<"source_module">>, Callback},
 		{<<"state">>, wrapup}
 	]},
 	agent_channel:media_push(Apid, Call, Update),
-	agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec),
+	case ConferenceChannel of
+		undefined ->
+			skip;
+		_ ->
+			agent_channel:set_state(ConferenceChannel, wrapup, BaseState#base_state.callrec)
+	end,
 	{next_state, oncall, {BaseState, Internal}};
 
 handle_info(Msg, StateName, {#base_state{callback = Callback,
