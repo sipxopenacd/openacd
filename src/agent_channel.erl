@@ -940,7 +940,8 @@ try_wrapup(State, Now) ->
 					{ok, wrapup}
 			end;
 		_ ->
-			lager:info("Agent channel part of conference, skipping gen_media:wrapup"),
+			lager:info("Agent channel part of conference, skipping gen_media:wrapup from ~p to ~p", [self(), CallPid]),
+			gen_media:leave_conference(CallPid, Agent),
 
 			{Rep, Next} = {ok, wrapup}
 	end,

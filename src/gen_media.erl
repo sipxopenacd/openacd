@@ -458,7 +458,8 @@
 	play/2,
 	pause/1,
 
-	conference_to_agent/2
+	conference_to_agent/2,
+	leave_conference/2 % only agent_channel
 ]).
 
 % TODO - add these to a global .hrl, cpx perhaps?
@@ -764,6 +765,10 @@ cast(Genmedia, Request) ->
 -spec(conference_to_agent/2 :: (Genmedia :: pid(), AgentLogin :: string()) -> 'ok' | 'error').
 conference_to_agent(Genmedia, AgentLogin) ->
 	gen_fsm:sync_send_event(Genmedia, ?GM({conference_to_agent, AgentLogin})).
+
+leave_conference(Genmedia, Agent) ->
+	lager:info("leave conf ~p ~p", [self(), Genmedia]),
+	gen_fsm:sync_send_event(Genmedia, ?GM({leave_conference, self(), Agent})).
 
 %%====================================================================
 %% API
@@ -1531,6 +1536,23 @@ oncall(?GM({conference_to_agent, AgentLogin}), _From, {BaseState, Internal}) ->
 	end,
 	lager:info("whywhywhy"),
 	{reply, Reply, oncall, {BaseState#base_state{substate = NewSub, conference_channel = ConferenceChannel}, Internal}};
+
+oncall(?GM({leave_conference, Chan, Agent}), _From, {BaseState, Internal}) ->
+	Callback = BaseState#base_state.callback,
+	Substate = BaseState#base_state.substate,
+	Call = BaseState#base_state.callrec,
+	ConfChan = BaseState#base_state.conference_channel,
+
+	{Reply, NewSub} = case Chan of
+		ConfChan ->
+			Callback:handle_leave_conference(Agent, Call, Internal, Substate);
+		_ -> % todo first agent
+			{OrigAgent, _Apid} = Internal#oncall_state.oncall_pid,
+			OrigLogin = Agent#agent.login,
+			Callback:handle_leave_conference(OrigLogin, Call, Internal, Substate),
+			{ok, Substate}
+	end,
+	{reply, Reply, oncall, {BaseState#base_state{substate = NewSub, conference_channel = undefined}, Internal}};
 
 oncall(Msg, From, State) ->
 	fallback_sync(oncall, Msg, From, State).
