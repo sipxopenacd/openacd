@@ -159,7 +159,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
--import(cpx_json_util, [l2b/1, b2l/1]).
+-import(cpx_json_util, [l2b/1, b2l/1, nob/1]).
 
 -define(json(Struct), ejrpc2_json:encode(Struct)).
 -define(reply_err(Id, Message, Code), ?json({struct, [{request_id, Id},
@@ -1041,10 +1041,11 @@ handle_cast({mediapush, ChanPid, Call, Data}, State) ->
 			{ok, Json, State};
 		{conference_update, Props} ->
 			ChanId = cpx_conn_state:get_id_by_channel_pid(State, ChanPid),
+			{FName, LName} = cpx_conn_state:get(State, agent_name),
 			Json = {struct,  [
 				{<<"event">>, <<"conference_update">>},
 				{<<"data">>, {struct, [
-					{<<"channelid">>, ChanId} | Props]}}]},
+					{<<"channelid">>, ChanId}, {<<"first_name">>, nob(FName)}, {<<"last_name">>, nob(LName)} | Props]}}]},
 			{ok, Json, State};
 		% and the second of the prefered versions
 		Props when is_list(Props) ->

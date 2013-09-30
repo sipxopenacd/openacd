@@ -72,6 +72,9 @@ get(#state{agent_login=ALogin}, agent_login) ->
 	ALogin;
 get(#state{agent_pid=APid}, agent) ->
 	agent:dump_state(APid);
+get(#state{agent_pid=APid}, agent_name) ->
+	Agent = agent:dump_state(APid),
+	{Agent#agent.firstname, Agent#agent.lastname};
 get(#state{channels=Channels}, channels) ->
 	Channels;
 get(#state{security_level=Level}, security_level) ->

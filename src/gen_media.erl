@@ -1545,11 +1545,10 @@ oncall(?GM({leave_conference, Chan, Agent}), _From, {BaseState, Internal}) ->
 
 	{Reply, NewSub} = case Chan of
 		ConfChan ->
-			Callback:handle_leave_conference(Agent, Call, Internal, Substate);
+			Callback:handle_leave_conference(Agent#agent.login, Call, Internal, Substate);
 		_ -> % todo first agent
 			{OrigAgent, _Apid} = Internal#oncall_state.oncall_pid,
-			OrigLogin = Agent#agent.login,
-			Callback:handle_leave_conference(OrigLogin, Call, Internal, Substate),
+			Callback:handle_leave_conference(OrigAgent, Call, Internal, Substate),
 			{ok, Substate}
 	end,
 	{reply, Reply, oncall, {BaseState#base_state{substate = NewSub, conference_channel = undefined}, Internal}};
